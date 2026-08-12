@@ -15,7 +15,6 @@ curl -sf "$base/health" >/dev/null
 viq=(node dist/bin/viq.js --server "$base" --json)
 out="evidence/e2e-output.txt"
 : >"$out"
-record() { printf '$ %q' "$1" >>"$out"; shift; printf ' %q' "$@" >>"$out"; printf '\n' >>"$out"; "$@" >>"$out" 2>&1; }
 record_viq() { printf '$ viq' >>"$out"; printf ' %q' "$@" >>"$out"; printf '\n' >>"$out"; "${viq[@]}" "$@" >>"$out" 2>&1; }
 
 record_viq project create ABC
@@ -37,7 +36,5 @@ printf 'exit=%s\n' "$fenced_status" >>"$out"
 test "$fenced_status" -eq 3
 record_viq ticket submit ABC-1 --actor worker-b --claim-token "$new_token" --generation 2 --evidence '{"tests":"green"}'
 
-# Normalize opaque tokens and absolute temporary storage so evidence is stable.
-sed -E -i 's/"claim_token":"[^"]+"/"claim_token":"<opaque>"/g; s/"token":"[^"]+"/"token":"<opaque>"/g; s/--claim-token [^ ]+/--claim-token <opaque>/g' "$out"
 printf 'E2E_OK\n' >>"$out"
 cat "$out"
