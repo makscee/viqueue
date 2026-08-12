@@ -1,0 +1,74 @@
+
+> viqueue@0.0.0-phase0 test
+> node --test
+
+TAP version 13
+# Subtest: built CLI emits one stable JSON document and useful exit codes
+ok 1 - built CLI emits one stable JSON document and useful exit codes
+  ---
+  duration_ms: 325.488028
+  type: 'test'
+  ...
+# Subtest: project ticket numbering starts at one and survives reopening durable storage
+ok 2 - project ticket numbering starts at one and survives reopening durable storage
+  ---
+  duration_ms: 10.135727
+  type: 'test'
+  ...
+# Subtest: claim is pull-based and removes ticket from availability
+ok 3 - claim is pull-based and removes ticket from availability
+  ---
+  duration_ms: 3.875549
+  type: 'test'
+  ...
+# Subtest: expired claim becomes stale and stays unavailable
+ok 4 - expired claim becomes stale and stays unavailable
+  ---
+  duration_ms: 6.176243
+  type: 'test'
+  ...
+# Subtest: explicit authorized takeover increments generation and fences old owner
+ok 5 - explicit authorized takeover increments generation and fences old owner
+  ---
+  duration_ms: 9.733999
+  type: 'test'
+  ...
+# Subtest: current owner can submit textual or JSON evidence
+ok 6 - current owner can submit textual or JSON evidence
+  ---
+  duration_ms: 5.188924
+  type: 'test'
+  ...
+# Subtest: competing claims are serialized and exactly one wins
+ok 7 - competing claims are serialized and exactly one wins
+  ---
+  duration_ms: 2.427041
+  type: 'test'
+  ...
+# Subtest: HTTP JSON API runs the claim-expiry-takeover-fencing contract
+ok 8 - HTTP JSON API runs the claim-expiry-takeover-fencing contract
+  ---
+  duration_ms: 66.890569
+  type: 'test'
+  ...
+# Subtest: HTTP errors are stable JSON and malformed JSON is rejected
+ok 9 - HTTP errors are stable JSON and malformed JSON is rejected
+  ---
+  duration_ms: 15.028206
+  type: 'test'
+  ...
+# Subtest: canonical project name is lowercase everywhere in repository content
+ok 10 - canonical project name is lowercase everywhere in repository content
+  ---
+  duration_ms: 4.70679
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 392.23622

@@ -1,0 +1,15 @@
+RED cycle 1: node --test test/domain.test.js
+Observed: ERR_MODULE_NOT_FOUND for src/store.js; exit 1.
+GREEN: 6 domain tests passed.
+
+RED cycle 2: node --test test/http.test.js
+Observed: ERR_MODULE_NOT_FOUND for src/server.js; exit 1.
+GREEN after implementation and a test-harness correction for empty 204 bodies: 2 HTTP tests passed.
+
+RED cycle 3: node --test test/cli.test.js
+Observed: MODULE_NOT_FOUND for bin/viq.js; exit 1.
+GREEN after implementation and moving the test server to a child process: CLI test passed.
+
+RED cycle 4: claim response secrecy
+Observed: domain test reported token present in public ticket (true !== false); exit 1.
+GREEN: public ticket omits token while top-level claim_token remains available to claimant.
