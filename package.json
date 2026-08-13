@@ -1,7 +1,6 @@
 {
   "name": "viqueue",
   "version": "0.2.0",
-  "private": true,
   "description": "Minimal pull-based central ticket dispatcher for agents and humans",
   "type": "module",
   "bin": {
@@ -12,6 +11,7 @@
     "test": "node --test test/*.test.js",
     "build": "node scripts/build.js",
     "bundle": "npm run build && node scripts/bundle.js",
+    "scan:secrets": "node scripts/scan-secrets.js",
     "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
     "e2e:mcp": "bash test/mcp-e2e.sh",
     "e2e:browser": "node test/browser-e2e.js"
@@ -19,7 +19,18 @@
   "engines": {
     "node": ">=22"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
+  "files": [
+    "bin",
+    "src",
+    "web",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "docs"
+  ],
   "devDependencies": {
     "playwright": "^1.62.1"
   }

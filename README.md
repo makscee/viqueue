@@ -2,7 +2,7 @@
 
 viqueue is a minimalist, customizable central ticket dispatcher for agents and humans. The CLI command is `viq`. Tickets use human-readable IDs such as `ABC-123`.
 
-Naming has been selected, but trademark clearance is **not complete**. A license choice is **pending**; no open-source license grant is made by this repository.
+viqueue is licensed under the [Apache License 2.0](LICENSE). Trademark/name clearance is **not complete**. This source tree and local release-candidate bundle have not been published and are not production-ready.
 
 ## Application contract
 
@@ -12,10 +12,11 @@ Only the tracer states `ready`, `claimed`, `stale`, and `submitted` exist. The H
 
 ## Run
 
-Requires Node.js 22+; there are no third-party runtime or development dependencies.
+Requires Node.js 22+. Runtime code has no third-party dependencies; browser development/E2E uses Playwright.
 
 ```sh
 npm test
+npm run scan:secrets
 npm run build
 VIQ_TAKEOVER_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.json
 # Open http://127.0.0.1:7373 for the local Kanban board.
@@ -50,7 +51,7 @@ cd unpacked/viqueue-local-rc
 ./install-local.sh
 ```
 
-This installs `viq`, `viqueue-server`, and `viqueue-mcp` under `~/.local` without elevated privileges. Ensure `~/.local/bin` is on `PATH`. Override the destination with `VIQ_PREFIX=/some/path`. Remove only installed program files with `./uninstall-local.sh`; ticket storage passed to the server is intentionally preserved. This is a local evaluation artifact, not a published package or licensed release.
+This installs `viq`, `viqueue-server`, and `viqueue-mcp` under `~/.local` without elevated privileges. Ensure `~/.local/bin` is on `PATH`. Override the destination with `VIQ_PREFIX=/some/path`. Remove only installed program files with `./uninstall-local.sh`; ticket storage passed to the server is intentionally preserved. The bundle includes Apache-2.0 license information and public-source documentation. It is a local evaluation artifact, not a published package or production release.
 
 ## Attach an MCP host
 
@@ -90,3 +91,7 @@ The board refreshes its read-only projection every five seconds while visible. P
 Run `npm run e2e` to exercise the CLI, MCP, and real Chromium board tracer bullets. Exact raw outputs are written under `evidence/`; desktop/mobile acceptance screenshots are under `evidence/screenshots/`. Browser installation for a new development machine is `npx playwright install chromium`.
 
 See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), [board projection ADR](docs/adr-0003-phase2-board-projection.md), [responsive navigation ADR](docs/adr-0004-phase21-responsive-navigation.md), and [local bundle ADR](docs/adr-0005-local-release-bundle.md).
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md). No public issue tracker, private vulnerability address, package publication, or hosted release is claimed by this repository snapshot.

@@ -1,0 +1,6 @@
+Phase 2.3 RED — licensing metadata and release contents
+Command: node --test test/release-hygiene.test.js
+Observed: package license was UNLICENSED and LICENSE was absent from the bundle; 2 failures, exit 1.
+GREEN: canonical Apache-2.0 text and SPDX metadata are consistent; bundle/install integration verifies LICENSE and public-source docs.
+
+A temporary parallel-test failure exposed both bundle tests writing release/ concurrently. Bundle-content assertions were consolidated into the existing install integration test, leaving one archive writer and restoring deterministic GREEN.

@@ -1,0 +1,11 @@
+
+> viqueue@0.2.0 bundle
+> npm run build && node scripts/bundle.js
+
+
+> viqueue@0.2.0 build
+> node scripts/build.js
+
+built dist/
+built /root/work/viqueue/release/viqueue-local-rc.tar.gz
+sha256 569d8fcc843c2039573b71da74626d3ca7381f63d74d229646d0c9f665a62c40

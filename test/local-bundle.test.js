@@ -13,6 +13,11 @@ async function port() {
 
 test('local release bundle installs, runs all surfaces, preserves data, and uninstalls', async (t) => {
   execFileSync('npm', ['run', 'bundle'], { stdio: 'pipe' });
+  const bundleFiles = execFileSync('tar', ['-tzf', 'release/viqueue-local-rc.tar.gz'], { encoding: 'utf8' }).trim().split('\n');
+  for (const file of ['LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adr-0006-apache-public-source-preparation.md']) {
+    assert.ok(bundleFiles.includes(`viqueue-local-rc/${file}`), `${file} missing from bundle`);
+  }
+  assert.equal(bundleFiles.includes('viqueue-local-rc/NOTICE'), false);
   const work = await mkdtemp(path.join(tmpdir(), 'viq-bundle-'));
   const extracted = path.join(work, 'extracted'); const prefix = path.join(work, 'prefix');
   execFileSync('mkdir', ['-p', extracted]);
@@ -25,6 +30,8 @@ test('local release bundle installs, runs all surfaces, preserves data, and unin
   t.after(() => server.kill()); const base = `http://127.0.0.1:${listen}`;
   for (let tries = 0; tries < 100; tries += 1) { try { if ((await fetch(`${base}/health`)).ok) break; } catch {} await new Promise((resolve) => setTimeout(resolve, 10)); }
   assert.equal((await fetch(base)).status, 200);
+  assert.match(await readFile(path.join(prefix, 'lib', 'viqueue', 'LICENSE'), 'utf8'), /Apache License\n                           Version 2\.0/);
+  assert.equal(JSON.parse(await readFile(path.join(prefix, 'lib', 'viqueue', 'package.json'), 'utf8')).license, 'Apache-2.0');
 
   const viq = (...args) => spawnSync(path.join(prefix, 'bin', 'viq'), ['--server', base, '--json', ...args], { encoding: 'utf8' });
   assert.equal(viq('project', 'create', 'ABC').status, 0);

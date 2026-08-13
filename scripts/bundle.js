@@ -10,11 +10,15 @@ await rm(root, { recursive: true, force: true });
 await mkdir(path.join(stage, 'bin'), { recursive: true });
 await mkdir(path.join(stage, 'src'), { recursive: true });
 await mkdir(path.join(stage, 'web'), { recursive: true });
+await mkdir(path.join(stage, 'docs'), { recursive: true });
 for (const file of ['bin/viq.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
   await cp(path.join('dist', file), path.join(stage, file));
 }
 await cp('dist/web', path.join(stage, 'web'), { recursive: true });
-await cp('README.md', path.join(stage, 'README.md'));
+for (const file of ['README.md', 'LICENSE', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md']) {
+  await cp(file, path.join(stage, file));
+}
+await cp('docs', path.join(stage, 'docs'), { recursive: true });
 await cp('scripts/install-local.sh', path.join(stage, 'install-local.sh'));
 await cp('scripts/uninstall-local.sh', path.join(stage, 'uninstall-local.sh'));
 await chmod(path.join(stage, 'install-local.sh'), 0o755);

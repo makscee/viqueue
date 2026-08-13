@@ -1,0 +1,55 @@
+
+> viqueue@0.2.0 e2e
+> VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh
+
+$ viq project create ABC
+{"project":{"key":"ABC","next_number":1}}
+$ viq ticket create ABC phase\ zero\ tracer
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"ready","evidence":null,"claim":null}}
+$ viq ticket next --actor worker-a
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"ready","evidence":null,"claim":null}}
+$ viq ticket claim ABC-1 --actor worker-a --ttl-ms 1
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786610294170}},"claim_token":"K0oSSSQwcMtvWfo3daFnUbTbwY4wgAA8"}
+$ viq ticket next --actor worker-b
+{"ticket":null}
+$ viq ticket show ABC-1
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786610294170}}}
+$ viq ticket takeover ABC-1 --actor worker-b --ttl-ms 60000 --auth secret
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786610354401}},"claim_token":"Li955yxKnN0y-GaswdgfiaUh8t1cy347"}
+$ viq ticket submit ABC-1 --actor worker-a --claim-token K0oSSSQwcMtvWfo3daFnUbTbwY4wgAA8 --generation 1 --evidence old
+{"error":{"code":"stale_claim","message":"claim token or generation is no longer current"}}
+exit=3
+$ viq ticket submit ABC-1 --actor worker-b --claim-token Li955yxKnN0y-GaswdgfiaUh8t1cy347 --generation 2 --evidence \{\"tests\":\"green\"\}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"submitted","evidence":{"tests":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786610354401}}}
+E2E_OK
+$ mcp create
+{"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1}}}
+$ mcp ticket-create
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"ready\",\"evidence\":null,\"claim\":null}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"ready","evidence":null,"claim":null}}}
+$ viq ticket next --actor worker-a
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"ready","evidence":null,"claim":null}}
+$ viq ticket claim ABC-1 --actor worker-a --ttl-ms 1000
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786610296214}},"claim_token":"9aIXL1lkKjRZhOOGo-bbpji5xqFblUZJ"}
+$ mcp renew worker-a 9aIXL1lkKjRZhOOGo-bbpji5xqFblUZJ 1 100
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"claimed\",\"evidence\":null,\"claim\":{\"actor\":\"worker-a\",\"generation\":1,\"expires_at\":1786610295436}},\"claim_token\":\"9aIXL1lkKjRZhOOGo-bbpji5xqFblUZJ\"}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786610295436}},"claim_token":"9aIXL1lkKjRZhOOGo-bbpji5xqFblUZJ"}}
+$ viq ticket next --actor worker-b
+{"ticket":null}
+$ mcp get
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"stale\",\"evidence\":null,\"claim\":{\"actor\":\"worker-a\",\"generation\":1,\"expires_at\":1786610295436}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786610295436}}}}
+$ mcp takeover worker-b 60000
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"claimed\",\"evidence\":null,\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786610355746}},\"claim_token\":\"-7cS9EknJ07Udi_PpPsZUVlV-JmHJ98D\"}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786610355746}},"claim_token":"-7cS9EknJ07Udi_PpPsZUVlV-JmHJ98D"}}
+$ viq ticket submit ABC-1 --actor worker-a --claim-token 9aIXL1lkKjRZhOOGo-bbpji5xqFblUZJ --generation 1 --evidence old
+{"error":{"code":"stale_claim","message":"claim token or generation is no longer current"}}
+exit=3
+$ mcp submit worker-b -7cS9EknJ07Udi_PpPsZUVlV-JmHJ98D 2 \{\"parity\":\"green\"\}
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"submitted\",\"evidence\":{\"parity\":\"green\"},\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786610355746}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"submitted","evidence":{"parity":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786610355746}}}}
+MCP_E2E_OK
+browser rendered deterministic loading and empty-project states
+browser rendered an accessible deterministic refresh error
+desktop populated all states with long title, actor, and structured evidence fixtures
+mobile initial state exposed all state tabs and stale count without horizontal swiping
+keyboard and touch state navigation exposed stale card and explicit takeover action
+confirmed authorized takeover reached generation 2 and old owner remained fenced
+bounded polling deferred during form input, preserved focus content, then reflected external state
+mobile submitted detail rendered multiline structured evidence without layout escape
+BROWSER_E2E_OK
