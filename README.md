@@ -4,9 +4,9 @@ viqueue is a minimalist pull-based ticket dispatcher for agents and humans. The 
 
 ## Daily Alpha contract
 
-The HTTP JSON core is the only state machine. `viq`, MCP stdio, and the browser are thin HTTP clients. Runtime data lives in one SQLite file using Node 22's built-in `node:sqlite` and four domain tables: projects, tickets, claims, and events.
+The HTTP JSON core is the only state machine. `viq`, MCP stdio, and the browser are thin HTTP clients. Runtime data lives in one SQLite file using Node 22's built-in `node:sqlite` and normalized projects, tickets, claims, events, actors, roles, actor-role memberships, and questions.
 
-Tickets have only `open`, `review`, and `done` states. The board projects them as Ready (open without a claim), Working (open with a claim), Review, and Done.
+Tickets have only `open`, `review`, and `done` states. Registered actors and roles provide typed actor/role assignment. Active agents may claim unassigned work; assigned work requires matching actor or role membership. Claim owners can ask fenced questions while continuing progress, and submission explicitly targets a reviewer whose approval answer atomically accepts or requests changes. The board projects them as Ready (open without a claim), Working (open with a claim), Review, and Done.
 
 **A claim persists until an explicit release, submission, or takeover. Silence changes nothing.** Claims are authority locks, not liveness. Claim identity contains an opaque `claim_id`, actor, generation, and an unguessable token whose hash—not plaintext—is stored. Executor mutations require all current credentials. Explicit local-operator takeover increments generation and fences every older owner.
 
@@ -22,17 +22,21 @@ npm run build
 VIQ_OPERATOR_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.sqlite
 ```
 
-Open `http://127.0.0.1:7373` for the responsive four-column board.
+Open `http://127.0.0.1:7373` for the responsive four-column board and prominent **Questions for you** inbox. The persisted actor selector is private-alpha workflow context, not authentication; server-side actor/role eligibility is still enforced.
 
 Representative CLI operations:
 
 ```text
+viq actor create eva --name Eva --kind agent --machine tower-pi --auth TOKEN
+viq actor show|update|deactivate eva; viq role grant|revoke eva reviewers --auth TOKEN
 viq project create ABC                 viq project list
-viq ticket create ABC "Fix parser" --body "..." --assigned-to eva
-viq ticket list ABC                    viq ticket show ABC-1
-viq ticket edit ABC-1 --title "..." --body "..." --assigned-to maks
+viq ticket create ABC "Fix parser" --body "..." --assignee eva
+viq ticket list ABC --assignee eva     viq ticket show ABC-1
+viq ticket edit ABC-1 --assignee-role builders
 viq ticket next --project ABC          viq ticket claim ABC-1 --actor eva
-viq ticket verify|release|submit ABC-1 --claim-id ID --actor eva --claim-token TOKEN --generation N
+viq question ask ABC-1 <claim credentials> --text "Need input" --target-role reviewers
+viq question answer ABC-1 Q --actor maks --answer "yes"
+viq ticket submit ABC-1 <claim credentials> --reviewer-role reviewers
 viq ticket takeover ABC-1 --actor maks --auth LOCAL_TOKEN
 viq ticket accept|reopen ABC-1 --actor maks --auth LOCAL_TOKEN
 viq event post ABC-1 <claim credentials> --message "tests green"

@@ -6,7 +6,10 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 No changes yet.
 
-## [0.3.0] — Daily Alpha core (unpublished)
+## [0.3.0]
+
+- Added registered actors/roles, typed assignments, actor inbox cursors, fenced multi-question workflows, and explicit reviewer approval submission.
+- Added transactional idempotent legacy actor migration and structured event metadata. — Daily Alpha core (unpublished)
 
 - Replace JSON tracer storage with one SQLite file and four minimal domain tables.
 - Replace lease/liveness semantics with durable explicit fenced claims.
