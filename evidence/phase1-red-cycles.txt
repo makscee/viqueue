@@ -1,0 +1,16 @@
+Phase 1 RED 1 — claim renewal
+Command: node --test test/domain.test.js test/http.test.js
+Observed: store.renew is not a function in two domain tests; HTTP renew returned 404; 3 failures, exit 1.
+GREEN: renewal domain and real HTTP tests passed.
+
+Phase 1 RED 2 — MCP protocol
+Command: node --test test/mcp.test.js
+Observed: ERR_MODULE_NOT_FOUND for src/mcp-server.js in all three real stdio protocol tests; exit 1.
+GREEN: initialize/discovery, actual HTTP-backed tool calls, stable error mapping, and schema validation passed.
+
+Phase 1 RED 3 — built parity tracer
+Command: bash test/mcp-e2e.sh
+Observed: MODULE_NOT_FOUND for dist/src/mcp-server.js; exit 1.
+GREEN after adding MCP and HTTP client artifacts to the build: actual built CLI, MCP stdio process, HTTP server, and durable storage reached MCP_E2E_OK.
+
+Harness correction observed during GREEN consolidation: broad `node --test` treated the executable helper test/mcp-e2e-client.js as a test. The test script was narrowed to test/*.test.js; no production behavior changed.

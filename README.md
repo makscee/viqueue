@@ -2,13 +2,13 @@
 
 viqueue is a minimalist, customizable central ticket dispatcher for agents and humans. The CLI command is `viq`. Tickets use human-readable IDs such as `ABC-123`.
 
-Naming has been selected, but trademark clearance is **not complete**. A license choice is **pending**; no open-source license grant is made by this phase-0 repository.
+Naming has been selected, but trademark clearance is **not complete**. A license choice is **pending**; no open-source license grant is made by this repository.
 
-## Phase-0 contract
+## Application contract
 
 Workers pull and explicitly claim tickets. viqueue never launches, supervises, or polls workers. Expiry is not proof of worker death: an expired claim becomes `stale` and remains unavailable. An authorized explicit takeover increments the monotonically increasing claim generation. Every mutation must present the current actor, opaque claim token, and generation; otherwise the API returns stable conflict code `stale_claim`.
 
-Only the tracer states `ready`, `claimed`, `stale`, and `submitted` exist. The HTTP JSON API is the domain transport; `viq` is its reference client.
+Only the tracer states `ready`, `claimed`, `stale`, and `submitted` exist. The HTTP JSON API is the application transport; `viq` and the MCP stdio server are equivalent clients. Claim renewal preserves the token and fencing generation and cannot revive an expired claim.
 
 ## Run
 
@@ -31,8 +31,38 @@ viq [--server URL] [--json] ticket create PROJECT TITLE
 viq [--server URL] [--json] ticket next --actor ACTOR
 viq [--server URL] [--json] ticket show ID
 viq [--server URL] [--json] ticket claim ID --actor ACTOR --ttl-ms MS
+viq [--server URL] [--json] ticket renew ID --actor ACTOR --claim-token TOKEN --generation N --ttl-ms MS
 viq [--server URL] [--json] ticket takeover ID --actor ACTOR --ttl-ms MS --auth TOKEN
 viq [--server URL] [--json] ticket submit ID --actor ACTOR --claim-token TOKEN --generation N --evidence TEXT_OR_JSON
 ```
 
-Run `npm run e2e` to build, start the actual server, drive the actual built CLI, and overwrite `evidence/e2e-output.txt` with exact output. See [the stack ADR](docs/adr-0001-stack.md).
+## Attach an MCP host
+
+Start the HTTP server first. Configure an MCP host to launch the stdio adapter with environment variables rather than changing any live host now:
+
+```json
+{
+  "mcpServers": {
+    "viqueue": {
+      "command": "node",
+      "args": ["/absolute/path/to/viqueue/dist/src/mcp-server.js"],
+      "env": {
+        "VIQ_SERVER": "http://127.0.0.1:7373",
+        "VIQ_TAKEOVER_TOKEN": "local-secret"
+      }
+    }
+  }
+}
+```
+
+The adapter writes protocol messages only to stdout. Do not put the takeover token in prompts or tool arguments. Host-specific attachment examples (do not run them against a live host during setup):
+
+- **Claude Code:** `claude mcp add --transport stdio --env VIQ_SERVER=http://127.0.0.1:7373 --env VIQ_TAKEOVER_TOKEN=local-secret viqueue -- node /absolute/path/to/viqueue/dist/src/mcp-server.js`
+- **Hermes:** add an `mcp_servers.viqueue` entry in `~/.hermes/config.yaml` with `command: node`, `args: [/absolute/path/to/viqueue/dist/src/mcp-server.js]`, and the two environment values.
+- **Pi:** core Pi has no built-in MCP client. Install a trusted MCP client extension such as `pi-mcp-adapter`, then use that extension's command/args/env configuration; alternatively write a small Pi extension that calls the same HTTP API.
+
+References: [Claude Code MCP](https://code.claude.com/docs/en/mcp), [Hermes MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp), and [Pi extensions](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md).
+
+MCP tools: `project_create`, `ticket_create`, `ticket_get`, `ticket_next`, `ticket_claim`, `claim_renew`, `ticket_takeover`, and `ticket_submit`. Their closed schemas are discoverable through `tools/list` and documented in [ADR 0002](docs/adr-0002-phase1-contract-and-mcp.md).
+
+Run `npm run e2e` to exercise both tracer bullets. Exact raw outputs are written to `evidence/e2e-output.txt` and `evidence/mcp-e2e-output.txt`. See [the stack ADR](docs/adr-0001-stack.md).

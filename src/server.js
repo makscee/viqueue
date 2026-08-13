@@ -42,6 +42,9 @@ export async function createApp({ storage, takeoverToken, now } = {}) {
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/claim$/)) && request.method === 'POST') {
         return send(response, 200, await store.claim(decodeURIComponent(match[1]), await json(request)));
       }
+      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/renew$/)) && request.method === 'POST') {
+        return send(response, 200, await store.renew(decodeURIComponent(match[1]), await json(request)));
+      }
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/takeover$/)) && request.method === 'POST') {
         if (!takeoverToken || request.headers.authorization !== `Bearer ${takeoverToken}`) {
           throw new DomainError(403, 'takeover_forbidden', 'valid takeover authorization is required');

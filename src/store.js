@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 export class DomainError extends Error {
@@ -126,6 +126,26 @@ export class Store {
     });
   }
 
+  renew(id, { actor, claim_token: token, generation, ttl_ms: rawTtl }) {
+    return this.#exclusive(async () => {
+      const ticket = this.#ticket(id);
+      const changed = this.#refresh(ticket);
+      const valid = ticket.claim && ticket.claim.actor === actor && ticket.claim.token === token && ticket.claim.generation === generation;
+      if (!valid) {
+        if (changed) await this.#save();
+        throw new DomainError(409, 'stale_claim', 'claim token or generation is no longer current');
+      }
+      if (ticket.state !== 'claimed') {
+        if (changed) await this.#save();
+        throw new DomainError(409, 'claim_expired', 'claim is stale and requires explicit takeover');
+      }
+      const ttl = this.#ttl(rawTtl);
+      ticket.claim.expires_at = this.#now() + ttl;
+      await this.#save();
+      return { ticket: publicTicket(ticket), claim_token: token };
+    });
+  }
+
   takeover(id, { actor, ttl_ms: ttl }) {
     return this.#exclusive(async () => {
       const ticket = this.#ticket(id);
@@ -138,9 +158,8 @@ export class Store {
   }
 
   #newClaim(ticket, actor, rawTtl, generation) {
-    const ttl = Number(rawTtl);
+    const ttl = this.#ttl(rawTtl);
     if (typeof actor !== 'string' || !actor.trim()) throw new DomainError(400, 'invalid_actor', 'actor is required');
-    if (!Number.isInteger(ttl) || ttl < 1 || ttl > 86_400_000) throw new DomainError(400, 'invalid_ttl', 'ttl_ms must be 1..86400000');
     const token = randomBytes(24).toString('base64url');
     ticket.state = 'claimed';
     ticket.claim = { actor: actor.trim(), generation, expires_at: this.#now() + ttl, token };
@@ -169,6 +188,14 @@ export class Store {
       await this.#save();
       return publicTicket(ticket);
     });
+  }
+
+  #ttl(rawTtl) {
+    const ttl = Number(rawTtl);
+    if (!Number.isInteger(ttl) || ttl < 1 || ttl > 86_400_000) {
+      throw new DomainError(400, 'invalid_ttl', 'ttl_ms must be 1..86400000');
+    }
+    return ttl;
   }
 
   #ticket(id) {

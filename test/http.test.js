@@ -36,8 +36,13 @@ test('HTTP JSON API runs the claim-expiry-takeover-fencing contract', async (t) 
   const old = await request(base, 'POST', '/v1/tickets/ABC-1/claim', { actor: 'worker-a', ttl_ms: 100 });
   assert.equal(old.status, 200);
   assert.equal((await request(base, 'GET', '/v1/tickets/next?actor=worker-b')).status, 204);
+  const renewed = await request(base, 'POST', '/v1/tickets/ABC-1/renew', {
+    actor: 'worker-a', claim_token: old.body.claim_token, generation: 1, ttl_ms: 200
+  });
+  assert.equal(renewed.status, 200);
+  assert.equal(renewed.body.ticket.claim.generation, 1);
 
-  advance(101);
+  advance(201);
   assert.equal((await request(base, 'GET', '/v1/tickets/next?actor=worker-b')).status, 204);
   assert.equal((await request(base, 'GET', '/v1/tickets/ABC-1')).body.ticket.state, 'stale');
 

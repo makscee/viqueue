@@ -43,6 +43,12 @@ async function command() {
   } else if (noun === 'ticket' && verb === 'claim' && positionals[0]) {
     method = 'POST'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}/claim`;
     body = { actor: option('--actor', { required: true }), ttl_ms: Number(option('--ttl-ms', { required: true })) };
+  } else if (noun === 'ticket' && verb === 'renew' && positionals[0]) {
+    method = 'POST'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}/renew`;
+    body = {
+      actor: option('--actor', { required: true }), claim_token: option('--claim-token', { required: true }),
+      generation: Number(option('--generation', { required: true })), ttl_ms: Number(option('--ttl-ms', { required: true }))
+    };
   } else if (noun === 'ticket' && verb === 'takeover' && positionals[0]) {
     method = 'POST'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}/takeover`;
     body = { actor: option('--actor', { required: true }), ttl_ms: Number(option('--ttl-ms', { required: true })) };

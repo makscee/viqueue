@@ -46,6 +46,31 @@ test('claim is pull-based and removes ticket from availability', async () => {
   assert.equal(await store.next('worker-b'), null);
 });
 
+test('current owner can renew without changing fencing generation', async () => {
+  const { store, ticket, advance } = await seeded();
+  const claim = await store.claim(ticket.id, { actor: 'worker-a', ttl_ms: 100 });
+  advance(50);
+  const renewed = await store.renew(ticket.id, {
+    actor: 'worker-a', claim_token: claim.claim_token, generation: 1, ttl_ms: 200
+  });
+  assert.equal(renewed.ticket.claim.generation, 1);
+  assert.equal(renewed.ticket.claim.expires_at, 1_700_000_000_250);
+  assert.equal(renewed.claim_token, claim.claim_token);
+});
+
+test('renew fences stale credentials and cannot revive an expired claim', async () => {
+  const { store, ticket, advance } = await seeded();
+  const claim = await store.claim(ticket.id, { actor: 'worker-a', ttl_ms: 100 });
+  await assert.rejects(store.renew(ticket.id, {
+    actor: 'worker-b', claim_token: claim.claim_token, generation: 1, ttl_ms: 100
+  }), (error) => error.code === 'stale_claim' && error.status === 409);
+  advance(101);
+  await assert.rejects(store.renew(ticket.id, {
+    actor: 'worker-a', claim_token: claim.claim_token, generation: 1, ttl_ms: 100
+  }), (error) => error.code === 'claim_expired' && error.status === 409);
+  assert.equal((await store.getTicket(ticket.id)).state, 'stale');
+});
+
 test('expired claim becomes stale and stays unavailable', async () => {
   const { store, ticket, advance } = await seeded();
   await store.claim(ticket.id, { actor: 'worker-a', ttl_ms: 100 });

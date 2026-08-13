@@ -40,6 +40,14 @@ test('built CLI emits one stable JSON document and useful exit codes', async (t)
   assert.equal(ticket.status, 0, ticket.stderr);
   assert.equal(JSON.parse(ticket.stdout).ticket.id, 'ABC-1');
 
+  const claimed = run(url, 'ticket', 'claim', 'ABC-1', '--actor', 'worker-a', '--ttl-ms', '1000');
+  assert.equal(claimed.status, 0, claimed.stderr);
+  const claim = JSON.parse(claimed.stdout);
+  const renewed = run(url, 'ticket', 'renew', 'ABC-1', '--actor', 'worker-a', '--claim-token', claim.claim_token,
+    '--generation', '1', '--ttl-ms', '2000');
+  assert.equal(renewed.status, 0, renewed.stderr);
+  assert.equal(JSON.parse(renewed.stdout).ticket.claim.generation, 1);
+
   const missing = run(url, 'ticket', 'show', 'NOPE-1');
   assert.equal(missing.status, 4);
   assert.equal(missing.stdout, '');
