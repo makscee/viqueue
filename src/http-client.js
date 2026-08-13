@@ -1,12 +1,12 @@
 export class HttpApplicationClient {
-  constructor({ server = 'http://127.0.0.1:7373', takeoverToken } = {}) {
+  constructor({ server = 'http://127.0.0.1:7373', operatorToken } = {}) {
     this.server = server.replace(/\/$/, '');
-    this.takeoverToken = takeoverToken;
+    this.operatorToken = operatorToken;
   }
 
   async request(method, route, body, { takeover = false } = {}) {
     const headers = { 'content-type': 'application/json' };
-    if (takeover && this.takeoverToken) headers.authorization = `Bearer ${this.takeoverToken}`;
+    if (takeover && this.operatorToken) headers.authorization = `Bearer ${this.operatorToken}`;
     let response;
     try {
       response = await fetch(`${this.server}${route}`, {

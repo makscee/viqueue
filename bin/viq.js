@@ -1,85 +1,27 @@
 #!/usr/bin/env node
-
-const argv = process.argv.slice(2);
-let server = process.env.VIQ_SERVER ?? 'http://127.0.0.1:7373';
-let jsonOutput = false;
-for (let index = 0; index < argv.length;) {
-  if (argv[index] === '--json') { jsonOutput = true; argv.splice(index, 1); continue; }
-  if (argv[index] === '--server') { server = argv[index + 1]; argv.splice(index, 2); continue; }
-  index += 1;
-}
-
-function usage(message = 'invalid command') {
-  throw Object.assign(new Error(message), { usage: true, code: 'usage_error' });
-}
-
-function parseEvidence(value) {
-  if (value === undefined) usage('evidence is required');
-  try { return JSON.parse(value); } catch { return value; }
-}
-
-function option(name, { required = false } = {}) {
-  const index = argv.indexOf(name);
-  const value = index >= 0 ? argv[index + 1] : undefined;
-  if (required && !value) usage(`${name} is required`);
-  return value;
-}
-
+const argv = process.argv.slice(2); let server = process.env.VIQ_SERVER ?? 'http://127.0.0.1:7373'; let jsonOutput = false;
+for (let i = 0; i < argv.length;) { if (argv[i] === '--json') { jsonOutput = true; argv.splice(i, 1); } else if (argv[i] === '--server') { server = argv[i + 1]; argv.splice(i, 2); } else i += 1; }
+const usage = (message = 'invalid command') => { throw Object.assign(new Error(message), { usage: true, code: 'usage_error' }); };
+const option = (name, { required = false } = {}) => { const i = argv.indexOf(name); const value = i >= 0 ? argv[i + 1] : undefined; if (required && !value) usage(`${name} is required`); return value; };
+const credentials = () => ({ claim_id: option('--claim-id', { required: true }), actor: option('--actor', { required: true }), claim_token: option('--claim-token', { required: true }), generation: Number(option('--generation', { required: true })) });
 async function command() {
-  const [noun, verb, ...positionals] = argv;
-  let method = 'GET';
-  let route;
-  let body;
-  const headers = {};
-
-  if (noun === 'project' && verb === 'create' && positionals[0]) {
-    method = 'POST'; route = '/v1/projects'; body = { key: positionals[0] };
-  } else if (noun === 'ticket' && verb === 'create' && positionals[0] && positionals[1]) {
-    method = 'POST'; route = '/v1/tickets'; body = { project: positionals[0], title: positionals[1] };
-  } else if (noun === 'ticket' && verb === 'next') {
-    route = `/v1/tickets/next?actor=${encodeURIComponent(option('--actor', { required: true }))}`;
-  } else if (noun === 'ticket' && verb === 'show' && positionals[0]) {
-    route = `/v1/tickets/${encodeURIComponent(positionals[0])}`;
-  } else if (noun === 'ticket' && verb === 'claim' && positionals[0]) {
-    method = 'POST'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}/claim`;
-    body = { actor: option('--actor', { required: true }), ttl_ms: Number(option('--ttl-ms', { required: true })) };
-  } else if (noun === 'ticket' && verb === 'renew' && positionals[0]) {
-    method = 'POST'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}/renew`;
-    body = {
-      actor: option('--actor', { required: true }), claim_token: option('--claim-token', { required: true }),
-      generation: Number(option('--generation', { required: true })), ttl_ms: Number(option('--ttl-ms', { required: true }))
-    };
-  } else if (noun === 'ticket' && verb === 'takeover' && positionals[0]) {
-    method = 'POST'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}/takeover`;
-    body = { actor: option('--actor', { required: true }), ttl_ms: Number(option('--ttl-ms', { required: true })) };
-    headers.authorization = `Bearer ${option('--auth', { required: true })}`;
-  } else if (noun === 'ticket' && verb === 'submit' && positionals[0]) {
-    method = 'PATCH'; route = `/v1/tickets/${encodeURIComponent(positionals[0])}`;
-    body = {
-      actor: option('--actor', { required: true }), claim_token: option('--claim-token', { required: true }),
-      generation: Number(option('--generation', { required: true })), status: 'submitted',
-      evidence: parseEvidence(option('--evidence', { required: true }))
-    };
-  } else usage();
-
-  const response = await fetch(`${server}${route}`, {
-    method, headers: { 'content-type': 'application/json', ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : { ticket: null };
-  if (!response.ok) {
-    const error = Object.assign(new Error(payload.error?.message ?? 'request failed'), { payload, status: response.status });
-    throw error;
-  }
+  const [noun, verb, ...p] = argv; let method = 'GET'; let route; let body; const headers = {};
+  if (noun === 'project' && verb === 'create' && p[0]) { method = 'POST'; route = '/v1/projects'; body = { key: p[0] }; }
+  else if (noun === 'project' && verb === 'list') route = '/v1/projects';
+  else if (noun === 'ticket' && verb === 'create' && p[0] && p[1]) { method = 'POST'; route = '/v1/tickets'; body = { project: p[0], title: p[1], body: option('--body') ?? '', assigned_to: option('--assigned-to') }; }
+  else if (noun === 'ticket' && verb === 'list' && p[0]) route = `/v1/projects/${encodeURIComponent(p[0])}/tickets`;
+  else if (noun === 'ticket' && verb === 'show' && p[0]) route = `/v1/tickets/${encodeURIComponent(p[0])}`;
+  else if (noun === 'ticket' && verb === 'next') route = `/v1/tickets/next${option('--project') ? `?project=${encodeURIComponent(option('--project'))}` : ''}`;
+  else if (noun === 'ticket' && verb === 'edit' && p[0]) { method = 'PATCH'; route = `/v1/tickets/${encodeURIComponent(p[0])}`; body = { actor: option('--actor'), ...(option('--title') !== undefined ? { title: option('--title') } : {}), ...(option('--body') !== undefined ? { body: option('--body') } : {}), ...(option('--assigned-to') !== undefined ? { assigned_to: option('--assigned-to') || null } : {}) }; }
+  else if (noun === 'ticket' && ['claim','verify','release','submit'].includes(verb) && p[0]) { method = 'POST'; route = `/v1/tickets/${encodeURIComponent(p[0])}/${verb}`; body = verb === 'claim' ? { actor: option('--actor', { required: true }) } : { ...credentials(), ...(verb === 'submit' && option('--message') ? { message: option('--message') } : {}) }; }
+  else if (noun === 'ticket' && ['takeover','accept','reopen'].includes(verb) && p[0]) { method = 'POST'; route = `/v1/tickets/${encodeURIComponent(p[0])}/${verb}`; body = { actor: option('--actor', { required: true }), ...(option('--message') ? { message: option('--message') } : {}) }; headers.authorization = `Bearer ${option('--auth', { required: true })}`; }
+  else if (noun === 'event' && verb === 'post' && p[0]) { method = 'POST'; route = `/v1/tickets/${encodeURIComponent(p[0])}/events`; body = { ...credentials(), message: option('--message', { required: true }) }; }
+  else if (noun === 'event' && verb === 'list') { const q = new URLSearchParams(); if (option('--project')) q.set('project', option('--project')); if (option('--ticket')) q.set('ticket', option('--ticket')); if (option('--after')) q.set('after', option('--after')); route = `/v1/events?${q}`; }
+  else usage();
+  const response = await fetch(`${server}${route}`, { method, headers: { 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await response.text(); const payload = text ? JSON.parse(text) : { ticket: null };
+  if (!response.ok) throw Object.assign(new Error(payload.error?.message ?? 'request failed'), { payload, status: response.status });
   return payload;
 }
-
-try {
-  const result = await command();
-  process.stdout.write(jsonOutput ? `${JSON.stringify(result)}\n` : `${JSON.stringify(result, null, 2)}\n`);
-} catch (error) {
-  const payload = error.payload ?? { error: { code: error.code ?? 'client_error', message: error.message } };
-  process.stderr.write(jsonOutput ? `${JSON.stringify(payload)}\n` : `${payload.error.code}: ${payload.error.message}\n`);
-  process.exitCode = error.usage ? 2 : error.status === 409 ? 3 : error.status === 404 ? 4 : error.status ? 5 : 6;
-}
+try { const result = await command(); process.stdout.write(jsonOutput ? `${JSON.stringify(result)}\n` : `${JSON.stringify(result, null, 2)}\n`); }
+catch (error) { const payload = error.payload ?? { error: { code: error.code ?? 'client_error', message: error.message } }; process.stderr.write(jsonOutput ? `${JSON.stringify(payload)}\n` : `${payload.error.code}: ${payload.error.message}\n`); process.exitCode = error.usage ? 2 : error.status === 409 ? 3 : error.status === 404 ? 4 : error.status ? 5 : 6; }

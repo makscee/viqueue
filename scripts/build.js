@@ -5,6 +5,7 @@ await mkdir('dist/bin', { recursive: true });
 await mkdir('dist/src', { recursive: true });
 await mkdir('dist/web', { recursive: true });
 await cp('bin/viq.js', 'dist/bin/viq.js');
+await cp('bin/viq-import.js', 'dist/bin/viq-import.js');
 await cp('src/server.js', 'dist/src/server.js');
 await cp('src/store.js', 'dist/src/store.js');
 await cp('src/http-client.js', 'dist/src/http-client.js');

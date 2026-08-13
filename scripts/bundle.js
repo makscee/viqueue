@@ -12,7 +12,7 @@ await mkdir(path.join(stage, 'bin'), { recursive: true });
 await mkdir(path.join(stage, 'src'), { recursive: true });
 await mkdir(path.join(stage, 'web'), { recursive: true });
 await mkdir(path.join(stage, 'docs'), { recursive: true });
-for (const file of ['bin/viq.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
+for (const file of ['bin/viq.js', 'bin/viq-import.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
   await cp(path.join('dist', file), path.join(stage, file));
 }
 await cp('dist/web', path.join(stage, 'web'), { recursive: true });

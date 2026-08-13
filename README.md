@@ -1,97 +1,60 @@
 # viqueue
 
-viqueue is a minimalist, customizable central ticket dispatcher for agents and humans. The CLI command is `viq`. Tickets use human-readable IDs such as `ABC-123`.
+viqueue is a minimalist pull-based ticket dispatcher for agents and humans. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.3.0 is an unpublished prerelease for local evaluation.
 
-viqueue is licensed under the [Apache License 2.0](LICENSE). This repository is prepared for the public GitHub project at [makscee/viqueue](https://github.com/makscee/viqueue). v0.2.0 is an early prerelease for local evaluation, not production readiness or package-registry publication. Trademark/name clearance is **not complete**.
+## Daily Alpha contract
 
-## Application contract
+The HTTP JSON core is the only state machine. `viq`, MCP stdio, and the browser are thin HTTP clients. Runtime data lives in one SQLite file using Node 22's built-in `node:sqlite` and four domain tables: projects, tickets, claims, and events.
 
-Workers pull and explicitly claim tickets. viqueue never launches, supervises, or polls workers. Expiry is not proof of worker death: an expired claim becomes `stale` and remains unavailable. An authorized explicit takeover increments the monotonically increasing claim generation. Every mutation must present the current actor, opaque claim token, and generation; otherwise the API returns stable conflict code `stale_claim`.
+Tickets have only `open`, `review`, and `done` states. The board projects them as Ready (open without a claim), Working (open with a claim), Review, and Done.
 
-Only the tracer states `ready`, `claimed`, `stale`, and `submitted` exist. The HTTP JSON API is the application transport; `viq` and the MCP stdio server are equivalent clients. Claim renewal preserves the token and fencing generation and cannot revive an expired claim.
+**A claim persists until an explicit release, submission, or takeover. Silence changes nothing.** Claims are authority locks, not liveness. Claim identity contains an opaque `claim_id`, actor, generation, and an unguessable token whose hash—not plaintext—is stored. Executor mutations require all current credentials. Explicit local-operator takeover increments generation and fences every older owner.
+
+**Progress events are observations, not proof of liveness.** Events form append-only per-ticket and global streams with a monotonic cursor. Agents pull work; viqueue never starts workers.
 
 ## Run
 
-Requires Node.js 22+. Runtime code has no third-party dependencies; browser development/E2E uses Playwright.
+Requires Node.js 22. Runtime has no third-party dependencies; Playwright is development-only.
 
 ```sh
 npm test
-npm run scan:secrets
 npm run build
-VIQ_TAKEOVER_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.json
-# Open http://127.0.0.1:7373 for the local Kanban board.
-node dist/bin/viq.js --server http://127.0.0.1:7373 --json project create ABC
+VIQ_OPERATOR_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.sqlite
 ```
 
-CLI JSON mode emits one JSON document to stdout on success and to stderr on failure. Exit codes: `0` success, `2` usage, `3` conflict, `4` not found, `5` other HTTP error, `6` transport/client error.
+Open `http://127.0.0.1:7373` for the responsive four-column board.
 
-Commands:
+Representative CLI operations:
 
 ```text
-viq [--server URL] [--json] project create KEY
-viq [--server URL] [--json] ticket create PROJECT TITLE
-viq [--server URL] [--json] ticket next --actor ACTOR
-viq [--server URL] [--json] ticket show ID
-viq [--server URL] [--json] ticket claim ID --actor ACTOR --ttl-ms MS
-viq [--server URL] [--json] ticket renew ID --actor ACTOR --claim-token TOKEN --generation N --ttl-ms MS
-viq [--server URL] [--json] ticket takeover ID --actor ACTOR --ttl-ms MS --auth TOKEN
-viq [--server URL] [--json] ticket submit ID --actor ACTOR --claim-token TOKEN --generation N --evidence TEXT_OR_JSON
+viq project create ABC                 viq project list
+viq ticket create ABC "Fix parser" --body "..." --assigned-to eva
+viq ticket list ABC                    viq ticket show ABC-1
+viq ticket edit ABC-1 --title "..." --body "..." --assigned-to maks
+viq ticket next --project ABC          viq ticket claim ABC-1 --actor eva
+viq ticket verify|release|submit ABC-1 --claim-id ID --actor eva --claim-token TOKEN --generation N
+viq ticket takeover ABC-1 --actor maks --auth LOCAL_TOKEN
+viq ticket accept|reopen ABC-1 --actor maks --auth LOCAL_TOKEN
+viq event post ABC-1 <claim credentials> --message "tests green"
+viq event list --project ABC --after CURSOR
 ```
 
-## Local release-candidate bundle
+CLI JSON mode writes one JSON document. Exit codes are 0 success, 2 usage, 3 conflict, 4 not found, 5 other HTTP error, and 6 client/transport error. MCP exposes coherent equivalents through `tools/list`; configure `VIQ_SERVER` and `VIQ_OPERATOR_TOKEN`.
 
-Create a reversible, unpublished local bundle:
+## Import v0.2 JSON safely
+
+The server never silently interprets or discards an old JSON file. Create a new SQLite file explicitly:
 
 ```sh
-npm run bundle
-cd release
-sha256sum -c viqueue-v0.2.0-rc.tar.gz.sha256
-mkdir unpacked && tar -xzf viqueue-v0.2.0-rc.tar.gz -C unpacked
-cd unpacked/viqueue-v0.2.0-rc
-./install-local.sh
+viq-import --from ./data/viqueue.json --to ./data/viqueue.sqlite
 ```
 
-This installs `viq`, `viqueue-server`, and `viqueue-mcp` under `~/.local` without elevated privileges. Ensure `~/.local/bin` is on `PATH`. Override the destination with `VIQ_PREFIX=/some/path`. Remove only installed program files with `./uninstall-local.sh`; ticket storage passed to the server is intentionally preserved. The bundle includes Apache-2.0 license information and public-source documentation. It is a local evaluation artifact, not a published package or production release.
+The one-shot importer preserves project keys, next numbers, ticket IDs/titles, submitted review state, evidence as an import event, and legacy claim fencing credentials. A legacy current claim is imported as a durable current claim with the same actor, generation, and token authority. Submitted tickets release their old claim. If any claim lacks actor, generation, or token, import fails closed and removes the incomplete target. Existing targets are never overwritten. Keep the old JSON backup until validation is complete.
 
-## Attach an MCP host
+## Local bundle and evidence
 
-Start the HTTP server first. Configure an MCP host to launch the stdio adapter with environment variables rather than changing any live host now:
+`npm run bundle` creates deterministic `release/viqueue-v0.3.0-rc.tar.gz` plus SHA-256. Its reversible installer adds `viq`, `viq-import`, `viqueue-server`, and `viqueue-mcp` under `${VIQ_PREFIX:-~/.local}`; uninstall preserves separately located ticket data. Nothing here publishes, pushes, tags, deploys, or launches workers.
 
-```json
-{
-  "mcpServers": {
-    "viqueue": {
-      "command": "node",
-      "args": ["/absolute/path/to/viqueue/dist/src/mcp-server.js"],
-      "env": {
-        "VIQ_SERVER": "http://127.0.0.1:7373",
-        "VIQ_TAKEOVER_TOKEN": "local-secret"
-      }
-    }
-  }
-}
-```
+`npm run e2e` exercises CLI, MCP, and Chromium and writes evidence/screenshots when `VIQ_EVIDENCE_DIR` is set. See [ADR 0008](docs/adr-0008-v03-daily-alpha-core.md), [CHANGELOG.md](CHANGELOG.md), and [release notes](release-notes/v0.3.0.md).
 
-The adapter writes protocol messages only to stdout. Do not put the takeover token in prompts or tool arguments. Host-specific attachment examples (do not run them against a live host during setup):
-
-- **Claude Code:** `claude mcp add --transport stdio --env VIQ_SERVER=http://127.0.0.1:7373 --env VIQ_TAKEOVER_TOKEN=local-secret viqueue -- node /absolute/path/to/viqueue/dist/src/mcp-server.js`
-- **Hermes:** add an `mcp_servers.viqueue` entry in `~/.hermes/config.yaml` with `command: node`, `args: [/absolute/path/to/viqueue/dist/src/mcp-server.js]`, and the two environment values.
-- **Pi:** core Pi has no built-in MCP client. Install a trusted MCP client extension such as `pi-mcp-adapter`, then use that extension's command/args/env configuration; alternatively write a small Pi extension that calls the same HTTP API.
-
-References: [Claude Code MCP](https://code.claude.com/docs/en/mcp), [Hermes MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp), and [Pi extensions](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md).
-
-MCP tools: `project_create`, `ticket_create`, `ticket_get`, `ticket_next`, `ticket_claim`, `claim_renew`, `ticket_takeover`, and `ticket_submit`. Their closed schemas are discoverable through `tools/list` and documented in [ADR 0002](docs/adr-0002-phase1-contract-and-mcp.md).
-
-## Local board
-
-The same server exposes a minimal responsive board at `http://127.0.0.1:7373`. It discovers projects and lists tickets only through the HTTP application contract. It shows ready, claimed, stale/uncertain, and submitted projections; stale cards are unavailable and can move only through an explicitly confirmed takeover with the configured local token. On narrow screens, explicit state tabs with counts show one full-width column and support touch plus Left/Right/Home/End keyboard navigation.
-
-The board refreshes its read-only projection every five seconds while visible. Polling pauses while a form control or dialog is active, so it does not replace typed input or steal focus. The last-refresh time is visible and manual Refresh remains available. The browser does not launch workers or read storage.
-
-Run `npm run e2e` to exercise the CLI, MCP, and real Chromium board tracer bullets. Exact raw outputs are written under `evidence/`; desktop/mobile acceptance screenshots are under `evidence/screenshots/`. Browser installation for a new development machine is `npx playwright install chromium`.
-
-See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), [board projection ADR](docs/adr-0003-phase2-board-projection.md), [responsive navigation ADR](docs/adr-0004-phase21-responsive-navigation.md), and [local bundle ADR](docs/adr-0005-local-release-bundle.md).
-
-## Contributing and security
-
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md). Public issues belong at [GitHub Issues](https://github.com/makscee/viqueue/issues); security reports must use GitHub private vulnerability reporting rather than public issues. No npm/package-registry publication or production release is claimed.
+viqueue is licensed under the [Apache License 2.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

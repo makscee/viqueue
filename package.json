@@ -1,11 +1,12 @@
 {
   "name": "viqueue",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Minimal pull-based central ticket dispatcher for agents and humans",
   "type": "module",
   "bin": {
     "viq": "bin/viq.js",
-    "viqueue-mcp": "src/mcp-server.js"
+    "viqueue-mcp": "src/mcp-server.js",
+    "viq-import": "bin/viq-import.js"
   },
   "scripts": {
     "test": "node --test test/*.test.js",

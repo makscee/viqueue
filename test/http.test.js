@@ -6,74 +6,64 @@ import test from 'node:test';
 
 import { createApp } from '../src/server.js';
 
-async function appFixture() {
+async function fixture() {
   const dir = await mkdtemp(path.join(tmpdir(), 'viq-http-'));
-  let now = 1_700_000_000_000;
-  const app = await createApp({ storage: path.join(dir, 'data.json'), takeoverToken: 'secret', now: () => now });
+  const app = await createApp({ storage: path.join(dir, 'data.sqlite'), operatorToken: 'secret' });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${app.address().port}`;
-  return { app, base, advance: (ms) => { now += ms; } };
+  return { app, base: `http://127.0.0.1:${app.address().port}` };
 }
 
-async function request(base, method, route, body, headers = {}) {
+async function request(base, method, route, body, auth = false) {
   const response = await fetch(`${base}${route}`, {
-    method, headers: { 'content-type': 'application/json', ...headers },
+    method, headers: { 'content-type': 'application/json', ...(auth ? { authorization: 'Bearer secret' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
 
-test('HTTP JSON API runs the claim-expiry-takeover-fencing contract', async (t) => {
-  const { app, base, advance } = await appFixture();
-  t.after(() => app.close());
+const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token });
 
+test('HTTP exposes the complete canonical lifecycle and event polling', async (t) => {
+  const { app, base } = await fixture(); t.after(() => app.close());
   assert.equal((await request(base, 'POST', '/v1/projects', { key: 'ABC' })).status, 201);
-  const created = await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'HTTP tracer' });
-  assert.equal(created.body.ticket.id, 'ABC-1');
-  assert.equal((await request(base, 'GET', '/v1/tickets/next?actor=worker-a')).body.ticket.id, 'ABC-1');
-
-  const old = await request(base, 'POST', '/v1/tickets/ABC-1/claim', { actor: 'worker-a', ttl_ms: 100 });
-  assert.equal(old.status, 200);
-  assert.equal((await request(base, 'GET', '/v1/tickets/next?actor=worker-b')).status, 204);
-  const renewed = await request(base, 'POST', '/v1/tickets/ABC-1/renew', {
-    actor: 'worker-a', claim_token: old.body.claim_token, generation: 1, ttl_ms: 200
-  });
-  assert.equal(renewed.status, 200);
-  assert.equal(renewed.body.ticket.claim.generation, 1);
-
-  advance(201);
-  assert.equal((await request(base, 'GET', '/v1/tickets/next?actor=worker-b')).status, 204);
-  assert.equal((await request(base, 'GET', '/v1/tickets/ABC-1')).body.ticket.state, 'stale');
-
-  assert.deepEqual(await request(base, 'POST', '/v1/tickets/ABC-1/takeover', { actor: 'worker-b', ttl_ms: 1000 }), {
-    status: 403, body: { error: { code: 'takeover_forbidden', message: 'valid takeover authorization is required' } }
-  });
-  const takeover = await request(base, 'POST', '/v1/tickets/ABC-1/takeover',
-    { actor: 'worker-b', ttl_ms: 1000 }, { authorization: 'Bearer secret' });
-  assert.equal(takeover.body.ticket.claim.generation, 2);
-
-  const fenced = await request(base, 'PATCH', '/v1/tickets/ABC-1', {
-    actor: 'worker-a', claim_token: old.body.claim_token, generation: 1,
-    status: 'submitted', evidence: 'old result'
-  });
-  assert.equal(fenced.status, 409);
-  assert.equal(fenced.body.error.code, 'stale_claim');
-
-  const submitted = await request(base, 'PATCH', '/v1/tickets/ABC-1', {
-    actor: 'worker-b', claim_token: takeover.body.claim_token, generation: 2,
-    status: 'submitted', evidence: { test: 'green' }
-  });
-  assert.equal(submitted.status, 200);
-  assert.deepEqual(submitted.body.ticket.evidence, { test: 'green' });
+  const created = await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'HTTP tracer', body: 'details', assigned_to: 'eva' });
+  assert.equal(created.body.ticket.state, 'open');
+  assert.equal((await request(base, 'GET', '/v1/tickets/next?project=ABC')).body.ticket.id, 'ABC-1');
+  const claim = await request(base, 'POST', '/v1/tickets/ABC-1/claim', { actor: 'worker-a' });
+  assert.equal(claim.status, 200);
+  const credentials = identity(claim.body);
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/verify', credentials)).status, 200);
+  const progress = await request(base, 'POST', '/v1/tickets/ABC-1/events', { ...credentials, message: 'working' });
+  assert.equal(progress.body.event.type, 'progress');
+  const events = await request(base, 'GET', `/v1/events?project=ABC&after=${progress.body.cursor - 1}`);
+  assert.deepEqual(events.body.events.map((event) => event.message), ['working']);
+  const submitted = await request(base, 'POST', '/v1/tickets/ABC-1/submit', { ...credentials, message: 'done' });
+  assert.equal(submitted.body.ticket.state, 'review');
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/accept', { actor: 'maks' })).status, 403);
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/accept', { actor: 'maks' }, true)).body.ticket.state, 'done');
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/reopen', { actor: 'maks' }, true)).body.ticket.state, 'open');
 });
 
-test('HTTP errors are stable JSON and malformed JSON is rejected', async (t) => {
-  const { app, base } = await appFixture();
-  t.after(() => app.close());
-  const missing = await request(base, 'GET', '/v1/tickets/NOPE-1');
-  assert.deepEqual(missing, { status: 404, body: { error: { code: 'ticket_not_found', message: 'ticket NOPE-1 not found' } } });
-  const response = await fetch(`${base}/v1/projects`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' });
-  assert.equal(response.status, 400);
-  assert.equal((await response.json()).error.code, 'invalid_json');
+test('HTTP release and authorized takeover preserve fencing', async (t) => {
+  const { app, base } = await fixture(); t.after(() => app.close());
+  await request(base, 'POST', '/v1/projects', { key: 'ABC' });
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'claim' });
+  const old = await request(base, 'POST', '/v1/tickets/ABC-1/claim', { actor: 'a' });
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/takeover', { actor: 'b' })).status, 403);
+  const current = await request(base, 'POST', '/v1/tickets/ABC-1/takeover', { actor: 'b' }, true);
+  assert.equal(current.body.ticket.claim.generation, 2);
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/release', identity(old.body))).body.error.code, 'stale_claim');
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/release', identity(current.body))).body.ticket.claim, null);
+});
+
+test('HTTP edits minimal ticket fields and rejects malformed JSON', async (t) => {
+  const { app, base } = await fixture(); t.after(() => app.close());
+  await request(base, 'POST', '/v1/projects', { key: 'ABC' });
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'old' });
+  const edited = await request(base, 'PATCH', '/v1/tickets/ABC-1', { title: 'new', body: 'body', assigned_to: 'eva', actor: 'maks' });
+  assert.equal(edited.body.ticket.assigned_to, 'eva');
+  const malformed = await fetch(`${base}/v1/projects`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' });
+  assert.equal(malformed.status, 400);
+  assert.equal((await malformed.json()).error.code, 'invalid_json');
 });

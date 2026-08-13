@@ -1,0 +1,11 @@
+
+> viqueue@0.3.0 bundle
+> npm run build && node scripts/bundle.js
+
+
+> viqueue@0.3.0 build
+> node scripts/build.js
+
+built dist/
+built /root/work/viqueue/release/viqueue-v0.3.0-rc.tar.gz
+sha256 d75bef7f572a4412d4a30850aecaf83f49d1f926ffb8d82fa6743a3a8dd5fb9a
