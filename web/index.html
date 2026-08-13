@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>viqueue board</title>
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div><h1>viqueue</h1><p>local ticket dispatch</p></div>
+    <button id="refresh" type="button">Refresh board</button>
+  </header>
+
+  <main>
+    <section class="controls" aria-label="Board controls">
+      <form id="project-form">
+        <label for="project-key">New project</label>
+        <div class="field-row"><input id="project-key" name="key" required pattern="[A-Za-z][A-Za-z0-9]{1,9}" maxlength="10" placeholder="ABC"><button>Create</button></div>
+      </form>
+      <form id="ticket-form">
+        <label for="ticket-title">New ticket in <strong id="ticket-project">no project</strong></label>
+        <div class="field-row"><input id="ticket-title" name="title" required placeholder="What needs doing?"><button id="create-ticket" disabled>Create</button></div>
+      </form>
+      <div><label for="project-select">Selected project</label>
+        <select id="project-select"><option value="">No projects yet</option></select>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status" aria-live="polite">Loading board…</p>
+    <section id="board" class="board" aria-label="Ticket board"></section>
+  </main>
+
+  <dialog id="detail">
+    <div class="dialog-head"><h2 id="detail-title">Ticket detail</h2><button type="button" data-close aria-label="Close ticket detail">×</button></div>
+    <div id="detail-body"></div>
+  </dialog>
+
+  <dialog id="takeover">
+    <form id="takeover-form">
+      <h2>Take over stale claim</h2>
+      <p>This claim is uncertain. Takeover fences its previous owner; it does not declare that worker dead.</p>
+      <input name="id" type="hidden">
+      <label for="takeover-actor">New owner</label><input id="takeover-actor" name="actor" required>
+      <label for="takeover-ttl">Claim lifetime (ms)</label><input id="takeover-ttl" name="ttl_ms" type="number" min="1" max="86400000" value="3600000" required>
+      <label for="takeover-auth">Local takeover token</label><input id="takeover-auth" name="authorization" type="password" required autocomplete="off">
+      <p class="warning">Confirm explicit takeover of <strong id="takeover-id"></strong>.</p>
+      <div class="dialog-actions"><button type="button" data-close>Cancel</button><button class="danger" type="submit">Confirm takeover</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

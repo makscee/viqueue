@@ -18,6 +18,7 @@ Requires Node.js 22+; there are no third-party runtime or development dependenci
 npm test
 npm run build
 VIQ_TAKEOVER_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.json
+# Open http://127.0.0.1:7373 for the local Kanban board.
 node dist/bin/viq.js --server http://127.0.0.1:7373 --json project create ABC
 ```
 
@@ -65,4 +66,10 @@ References: [Claude Code MCP](https://code.claude.com/docs/en/mcp), [Hermes MCP]
 
 MCP tools: `project_create`, `ticket_create`, `ticket_get`, `ticket_next`, `ticket_claim`, `claim_renew`, `ticket_takeover`, and `ticket_submit`. Their closed schemas are discoverable through `tools/list` and documented in [ADR 0002](docs/adr-0002-phase1-contract-and-mcp.md).
 
-Run `npm run e2e` to exercise both tracer bullets. Exact raw outputs are written to `evidence/e2e-output.txt` and `evidence/mcp-e2e-output.txt`. See [the stack ADR](docs/adr-0001-stack.md).
+## Local board
+
+The same server exposes a minimal responsive board at `http://127.0.0.1:7373`. It discovers projects and lists tickets only through the HTTP application contract. It shows ready, claimed, stale/uncertain, and submitted projections; stale cards are unavailable and can move only through an explicitly confirmed takeover with the configured local token. The browser does not launch workers or read storage.
+
+Run `npm run e2e` to exercise the CLI, MCP, and real Chromium board tracer bullets. Exact raw outputs are written under `evidence/`; desktop/mobile acceptance screenshots are under `evidence/screenshots/`. Browser installation for a new development machine is `npx playwright install chromium`.
+
+See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), and [board projection ADR](docs/adr-0003-phase2-board-projection.md).

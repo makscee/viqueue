@@ -1,0 +1,8 @@
+browser created project ABC and ticket ABC-1
+board reflected claimed owner worker-a in claimed column; ready column empty
+board reflected stale/uncertain and did not show ticket as ready
+captured desktop and 390px mobile stale-board screenshots without page overflow
+explicit confirmed takeover moved ticket to worker-b generation 2
+old owner mutation fenced with stale_claim and exit 3
+current owner submitted JSON evidence and board reflected submitted
+BROWSER_E2E_OK

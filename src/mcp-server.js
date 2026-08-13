@@ -64,7 +64,7 @@ export function createMcpHandler({ client = new HttpApplicationClient({ server: 
     if (message.method === 'initialize') {
       const requested = message.params?.protocolVersion;
       const protocolVersion = requested === '2025-06-18' ? requested : '2025-06-18';
-      return { ...response, result: { protocolVersion, capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'viqueue', version: '0.1.0' } } };
+      return { ...response, result: { protocolVersion, capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'viqueue', version: '0.2.0' } } };
     }
     if (message.method === 'ping') return { ...response, result: {} };
     if (message.method === 'tools/list') return { ...response, result: { tools } };

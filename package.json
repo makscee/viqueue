@@ -1,16 +1,25 @@
 {
   "name": "viqueue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Minimal pull-based central ticket dispatcher for agents and humans",
   "type": "module",
-  "bin": { "viq": "bin/viq.js", "viqueue-mcp": "src/mcp-server.js" },
+  "bin": {
+    "viq": "bin/viq.js",
+    "viqueue-mcp": "src/mcp-server.js"
+  },
   "scripts": {
     "test": "node --test test/*.test.js",
     "build": "node scripts/build.js",
-    "e2e": "bash test/e2e.sh && bash test/mcp-e2e.sh",
-    "e2e:mcp": "bash test/mcp-e2e.sh"
+    "e2e": "bash test/e2e.sh && bash test/mcp-e2e.sh && node test/browser-e2e.js",
+    "e2e:mcp": "bash test/mcp-e2e.sh",
+    "e2e:browser": "node test/browser-e2e.js"
   },
-  "engines": { "node": ">=22" },
-  "license": "UNLICENSED"
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
 }

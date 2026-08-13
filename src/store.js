@@ -73,6 +73,23 @@ export class Store {
     });
   }
 
+  listProjects() {
+    return this.#exclusive(async () => Object.values(this.#data.projects)
+      .map(copy).sort((a, b) => a.key.localeCompare(b.key)));
+  }
+
+  listTickets(rawProject) {
+    return this.#exclusive(async () => {
+      const project = String(rawProject ?? '').toUpperCase();
+      if (!this.#data.projects[project]) throw new DomainError(404, 'project_not_found', `project ${project} not found`);
+      let changed = false;
+      const tickets = Object.values(this.#data.tickets).filter((ticket) => ticket.project === project);
+      for (const ticket of tickets) changed = this.#refresh(ticket) || changed;
+      if (changed) await this.#save();
+      return tickets.map(publicTicket).sort((a, b) => Number(a.id.split('-').at(-1)) - Number(b.id.split('-').at(-1)));
+    });
+  }
+
   createTicket({ project: rawProject, title }) {
     return this.#exclusive(async () => {
       const project = this.#data.projects[String(rawProject ?? '').toUpperCase()];

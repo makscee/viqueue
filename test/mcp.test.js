@@ -73,7 +73,7 @@ test('real MCP stdio exchange initializes and discovers stable tool schemas', as
   const initialized = await client.initialize();
   assert.equal(initialized.result.protocolVersion, '2025-06-18');
   assert.deepEqual(initialized.result.capabilities, { tools: { listChanged: false } });
-  assert.deepEqual(initialized.result.serverInfo, { name: 'viqueue', version: '0.1.0' });
+  assert.deepEqual(initialized.result.serverInfo, { name: 'viqueue', version: '0.2.0' });
 
   const listed = await client.request('tools/list');
   assert.deepEqual(listed.result.tools.map(({ name }) => name), [
