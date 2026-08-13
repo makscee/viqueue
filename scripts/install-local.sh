@@ -4,7 +4,7 @@ prefix="${VIQ_PREFIX:-$HOME/.local}"
 app="$prefix/lib/viqueue"
 bin="$prefix/bin"
 mkdir -p "$app" "$bin"
-cp -R bin src web docs package.json README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md "$app/"
+cp -R bin src web docs release-notes package.json README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md "$app/"
 ln -sfn "$app/bin/viq.js" "$bin/viq"
 cat >"$bin/viqueue-server" <<EOF
 #!/usr/bin/env bash

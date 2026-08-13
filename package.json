@@ -20,6 +20,14 @@
     "node": ">=22"
   },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/makscee/viqueue.git"
+  },
+  "homepage": "https://github.com/makscee/viqueue#readme",
+  "bugs": {
+    "url": "https://github.com/makscee/viqueue/issues"
+  },
   "files": [
     "bin",
     "src",
@@ -29,7 +37,8 @@
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
-    "docs"
+    "docs",
+    "release-notes"
   ],
   "devDependencies": {
     "playwright": "^1.62.1"

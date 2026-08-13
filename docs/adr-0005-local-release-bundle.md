@@ -6,8 +6,8 @@ Build a deterministic local tarball containing the already-built server, board, 
 
 `npm run bundle` creates ignored files under `release/`:
 
-- `viqueue-local-rc.tar.gz`
-- `viqueue-local-rc.tar.gz.sha256`
+- `viqueue-v0.2.0-rc.tar.gz`
+- `viqueue-v0.2.0-rc.tar.gz.sha256`
 
 The installer defaults to `~/.local`, supports an isolated `VIQ_PREFIX`, and installs `viq`, `viqueue-server`, and `viqueue-mcp` launchers. Uninstall removes only installed application files and launchers; user-selected storage remains untouched. The integration test extracts the actual archive, installs into a temporary prefix, runs HTTP/board/CLI/MCP against durable storage, uninstalls, and verifies the data remains.
 

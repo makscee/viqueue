@@ -4,8 +4,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = path.resolve('release');
-const stage = path.join(root, 'viqueue-local-rc');
-const archive = path.join(root, 'viqueue-local-rc.tar.gz');
+const releaseName = `viqueue-v${JSON.parse(await readFile('package.json', 'utf8')).version}-rc`;
+const stage = path.join(root, releaseName);
+const archive = path.join(root, `${releaseName}.tar.gz`);
 await rm(root, { recursive: true, force: true });
 await mkdir(path.join(stage, 'bin'), { recursive: true });
 await mkdir(path.join(stage, 'src'), { recursive: true });
@@ -19,13 +20,14 @@ for (const file of ['README.md', 'LICENSE', 'CHANGELOG.md', 'CONTRIBUTING.md', '
   await cp(file, path.join(stage, file));
 }
 await cp('docs', path.join(stage, 'docs'), { recursive: true });
+await cp('release-notes', path.join(stage, 'release-notes'), { recursive: true });
 await cp('scripts/install-local.sh', path.join(stage, 'install-local.sh'));
 await cp('scripts/uninstall-local.sh', path.join(stage, 'uninstall-local.sh'));
 await chmod(path.join(stage, 'install-local.sh'), 0o755);
 await chmod(path.join(stage, 'uninstall-local.sh'), 0o755);
 const result = spawnSync('tar', [
   '--sort=name', '--mtime=@0', '--owner=0', '--group=0', '--numeric-owner',
-  '-czf', archive, '-C', root, 'viqueue-local-rc'
+  '-czf', archive, '-C', root, releaseName
 ], { encoding: 'utf8' });
 if (result.status !== 0) throw new Error(result.stderr);
 const digest = createHash('sha256').update(await readFile(archive)).digest('hex');

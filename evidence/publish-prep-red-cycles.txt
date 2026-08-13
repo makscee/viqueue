@@ -1,0 +1,6 @@
+Public-publish delta RED — GitHub metadata, workflow, and release notes
+Command: node --test test/release-hygiene.test.js
+Observed: package repository metadata was undefined; release-hygiene test failed, exit 1.
+GREEN: package metadata targets makscee/viqueue, public security/release documentation exists, and CI is asserted to contain no publish action.
+
+The existing bundle install test was updated first to expect the versioned v0.2.0 RC archive and required release notes/ADR contents, then passed against the actual deterministic archive and installed surfaces.

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "viqueue@0.2.0",
+    "name": "viqueue",
+    "version": "0.2.0",
+    "size": 25039,
+    "unpackedSize": 77417,
+    "shasum": "bb17c5b3225bad642e17d00d669c240e05c9b6f3",
+    "integrity": "sha512-zVpst2wPHCEpaofFtQe124u9G3n/2PGAComHhcgyGWrKUX+PNSe5qI21QDcmBJOXmM1YXf1PIpsePDox6hQE7w==",
+    "filename": "viqueue-0.2.0.tgz",
+    "files": [
+      {
+        "path": "CHANGELOG.md",
+        "size": 1134,
+        "mode": 420
+      },
+      {
+        "path": "CONTRIBUTING.md",
+        "size": 1310,
+        "mode": 420
+      },
+      {
+        "path": "LICENSE",
+        "size": 11358,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 6816,
+        "mode": 420
+      },
+      {
+        "path": "SECURITY.md",
+        "size": 1201,
+        "mode": 420
+      },
+      {
+        "path": "bin/viq.js",
+        "size": 4187,
+        "mode": 493
+      },
+      {
+        "path": "docs/adr-0001-stack.md",
+        "size": 816,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0002-phase1-contract-and-mcp.md",
+        "size": 2014,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0003-phase2-board-projection.md",
+        "size": 1832,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0004-phase21-responsive-navigation.md",
+        "size": 1745,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0005-local-release-bundle.md",
+        "size": 1131,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0006-apache-public-source-preparation.md",
+        "size": 1332,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0007-github-publish-preparation.md",
+        "size": 1069,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1141,
+        "mode": 420
+      },
+      {
+        "path": "release-notes/v0.2.0.md",
+        "size": 1159,
+        "mode": 420
+      },
+      {
+        "path": "src/http-client.js",
+        "size": 1197,
+        "mode": 420
+      },
+      {
+        "path": "src/mcp-server.js",
+        "size": 6940,
+        "mode": 420
+      },
+      {
+        "path": "src/server.js",
+        "size": 5379,
+        "mode": 420
+      },
+      {
+        "path": "src/store.js",
+        "size": 8049,
+        "mode": 420
+      },
+      {
+        "path": "web/app.css",
+        "size": 5567,
+        "mode": 420
+      },
+      {
+        "path": "web/app.js",
+        "size": 8633,
+        "mode": 420
+      },
+      {
+        "path": "web/index.html",
+        "size": 3407,
+        "mode": 420
+      }
+    ],
+    "entryCount": 22,
+    "bundled": []
+  }
+]

@@ -2,7 +2,7 @@
 
 viqueue is a minimalist, customizable central ticket dispatcher for agents and humans. The CLI command is `viq`. Tickets use human-readable IDs such as `ABC-123`.
 
-viqueue is licensed under the [Apache License 2.0](LICENSE). Trademark/name clearance is **not complete**. This source tree and local release-candidate bundle have not been published and are not production-ready.
+viqueue is licensed under the [Apache License 2.0](LICENSE). This repository is prepared for the public GitHub project at [makscee/viqueue](https://github.com/makscee/viqueue). v0.2.0 is an early prerelease for local evaluation, not production readiness or package-registry publication. Trademark/name clearance is **not complete**.
 
 ## Application contract
 
@@ -45,9 +45,9 @@ Create a reversible, unpublished local bundle:
 ```sh
 npm run bundle
 cd release
-sha256sum -c viqueue-local-rc.tar.gz.sha256
-mkdir unpacked && tar -xzf viqueue-local-rc.tar.gz -C unpacked
-cd unpacked/viqueue-local-rc
+sha256sum -c viqueue-v0.2.0-rc.tar.gz.sha256
+mkdir unpacked && tar -xzf viqueue-v0.2.0-rc.tar.gz -C unpacked
+cd unpacked/viqueue-v0.2.0-rc
 ./install-local.sh
 ```
 
@@ -94,4 +94,4 @@ See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-ph
 
 ## Contributing and security
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md). No public issue tracker, private vulnerability address, package publication, or hosted release is claimed by this repository snapshot.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md). Public issues belong at [GitHub Issues](https://github.com/makscee/viqueue/issues); security reports must use GitHub private vulnerability reporting rather than public issues. No npm/package-registry publication or production release is claimed.

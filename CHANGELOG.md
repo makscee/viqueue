@@ -4,15 +4,18 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 ## [Unreleased]
 
-- Prepare the source tree and local bundle for Apache-2.0 public-source review.
+No changes yet.
+
+## [0.2.0] — early prerelease
+
+- Prepare the Apache-2.0 source tree, public project hygiene, and GitHub CI without publishing packages.
 - Add contribution, security, release-content, and versioning documentation.
-
-## [0.2.0] — local release candidate
-
 - Add the responsive human Kanban projection and mobile state navigation.
 - Add bounded, non-disruptive projection refresh.
 - Add deterministic local install/uninstall bundle support.
 - Preserve HTTP, `viq`, and MCP claim/takeover fencing semantics.
+
+Release notes: [`release-notes/v0.2.0.md`](release-notes/v0.2.0.md).
 
 ## [0.1.0] — MCP tracer
 

@@ -13,16 +13,18 @@ async function port() {
 
 test('local release bundle installs, runs all surfaces, preserves data, and uninstalls', async (t) => {
   execFileSync('npm', ['run', 'bundle'], { stdio: 'pipe' });
-  const bundleFiles = execFileSync('tar', ['-tzf', 'release/viqueue-local-rc.tar.gz'], { encoding: 'utf8' }).trim().split('\n');
-  for (const file of ['LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adr-0006-apache-public-source-preparation.md']) {
-    assert.ok(bundleFiles.includes(`viqueue-local-rc/${file}`), `${file} missing from bundle`);
+  const archive = 'release/viqueue-v0.2.0-rc.tar.gz';
+  const releaseName = 'viqueue-v0.2.0-rc';
+  const bundleFiles = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n');
+  for (const file of ['LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adr-0007-github-publish-preparation.md', 'release-notes/v0.2.0.md']) {
+    assert.ok(bundleFiles.includes(`${releaseName}/${file}`), `${file} missing from bundle`);
   }
-  assert.equal(bundleFiles.includes('viqueue-local-rc/NOTICE'), false);
+  assert.equal(bundleFiles.includes(`${releaseName}/NOTICE`), false);
   const work = await mkdtemp(path.join(tmpdir(), 'viq-bundle-'));
   const extracted = path.join(work, 'extracted'); const prefix = path.join(work, 'prefix');
   execFileSync('mkdir', ['-p', extracted]);
-  execFileSync('tar', ['-xzf', 'release/viqueue-local-rc.tar.gz', '-C', extracted]);
-  const bundle = path.join(extracted, 'viqueue-local-rc');
+  execFileSync('tar', ['-xzf', archive, '-C', extracted]);
+  const bundle = path.join(extracted, releaseName);
   execFileSync('bash', [path.join(bundle, 'install-local.sh')], { cwd: bundle, env: { ...process.env, VIQ_PREFIX: prefix } });
 
   const listen = await port(); const storage = path.join(work, 'data', 'viqueue.json');
