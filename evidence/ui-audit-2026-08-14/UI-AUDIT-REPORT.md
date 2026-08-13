@@ -10,7 +10,7 @@
 
 **Implementation verdict: conditionally ready for Eva's browser acceptance; not deployed.** The repaired UI now opens on an all-project queue, makes identity and the human question inbox explicit, supports credential-free human answers and review decisions, and replaces agent protocol fields with readable ticket context. The seven required browser behaviors pass on Chromium at 1440×960 and 390×844. API/domain code and claim fencing were not changed.
 
-This is implementation evidence, **not user acceptance**. Eva has not yet accepted the UI or authorized deployment.
+This is implementation evidence, **not final user acceptance**. Eva's independent visual review found a duplicated assignment/worker fact and raw role-id presentation; the focused follow-up below repairs both. Eva has not yet accepted the follow-up or authorized deployment.
 
 ## Personas and jobs
 
@@ -47,8 +47,9 @@ This is implementation evidence, **not user acceptance**. Eva has not yet accept
 | Accept revised work | Worker resubmits through fenced API; Maks accepts inline | Approval answered; ticket moves to done | “Work accepted”; API state checked as `done` | PASS |
 | Multiple questions while working | Inspect VIQ-1 after worker asks two questions and posts later progress | Questions accumulate; claim remains; later worker progress visible | Two questions shown (one answered, one open); state Working; later progress shown | PASS |
 | Browse project/all | Select VIQ, then All projects | 2 VIQ tickets, then all 4 | Counts and IDs asserted | PASS |
-| Working ticket detail | Open VIQ-1 | Human fields only; no claim/operator/raw routing | Title, body, assignment, worker, state, progress, questions present; forbidden labels absent | PASS |
-| Mobile | Open at 390×844; choose Maks; switch Working; open detail | One selected state column; no horizontal overflow; usable dialog | Assertions pass and screenshots captured | PASS |
+| Working ticket detail, same actor | Open VIQ-1 when assigned to and claimed by Worker agent | Human fields only; no duplicate person fact | Only **Worker — Worker agent** is visible; redundant assignment fact is hidden | PASS |
+| Working ticket detail, role assignment | Reassign claimed VIQ-1 to workers role; open detail | Human role label and distinct active worker; no raw role id | **Eligible group — Workers** and **Worker — Worker agent** are both visible | PASS |
+| Mobile | Open role-assigned VIQ-1 at 390×844 | Same distinction; no horizontal overflow; usable dialog | Humanized group and worker asserted; screenshot captured | PASS |
 | Empty inbox | Answer final Maks question | Explain that nothing needs an answer | “All clear” and “Nothing needs your answer…” | PASS |
 | Refresh | Use Refresh after data changes | Board/inbox update without losing identity | Revised approval appears; Maks remains selected | PASS |
 | Browser errors | Capture console warning/error and pageerror during significant interactions | None | Empty captured problem list | PASS |
@@ -88,7 +89,7 @@ This is implementation evidence, **not user acceptance**. Eva has not yet accept
 | Project filter | Visible | Always visible | Kept, defaults to All projects |
 | Project/ticket creation | Visible | Progressive disclosure | Collapsed under **Create something** |
 | Ticket ID/title/state | Visible | Always visible | Kept |
-| Assignment and worker | Raw IDs/routes | Always visible, humanized | Names and plain labels |
+| Assignment and worker | Raw IDs/routes | Conditional, humanized | Actor assignment uses **Assigned person**; role assignment uses **Eligible group**; active **Worker** is separate only when genuinely distinct; same actor is shown once |
 | Ticket body/context | Edit form | Always visible in detail | Readable context |
 | Latest meaningful progress | Buried in chronological technical history | Always visible in detail | Latest progress message promoted |
 | Questions and answers | Raw target/status string | Always visible in detail | Prompt plus waiting/answered result |
@@ -114,6 +115,7 @@ This is implementation evidence, **not user acceptance**. Eva has not yet accept
 | High | Existing E2E normalized a worker/operator flow as human UX | Browser suite now starts as Maks and asserts the seven human behaviors |
 | Medium | Multiple questions and continued work were hard to understand | Detail shows every question and explicit “Worker continues…” note plus latest later progress |
 | Medium | Mobile evidence lacked console checks and broad realistic seed | Live-equivalent fixture, console/pageerror capture, overflow assertions, and fresh screenshots added |
+| Medium | Same actor appeared twice as Assigned to and Worker; role assignment could show raw role ID | Same actor now produces one Worker fact; roles load from the API and render as **Eligible group — {role name}** while a distinct active worker remains visible |
 
 ### Remaining
 
@@ -140,12 +142,14 @@ This is implementation evidence, **not user acceptance**. Eva has not yet accept
 - RED test was written first in `test/browser-e2e.js`.
 - Expected RED: old UI did not contain an **All tickets** heading and loaded only the first project's tickets.
 - Recorded RED: `red-browser-output.txt` exits 1 after waiting for the missing **All tickets** heading.
-- GREEN: `browser-e2e-output.txt` contains ten PASS statements and `BROWSER_E2E_OK`.
-- Screenshots:
+- GREEN: `browser-e2e-output.txt` contains eleven PASS statements and `BROWSER_E2E_OK`.
+- Follow-up RED: `follow-up-red-output.txt` records the duplicate same-actor assertion failing (`2 !== 1`) before the presentation repair.
+- Follow-up screenshots:
+  - `screenshots/maks-ticket-detail-same-actor-desktop.png`
+  - `screenshots/maks-ticket-detail-role-assigned-desktop.png`
+  - `screenshots/maks-ticket-detail-role-assigned-mobile-390.png`
   - `screenshots/maks-all-tickets-desktop.png`
-  - `screenshots/maks-ticket-detail-desktop.png`
   - `screenshots/maks-working-mobile-390.png`
-  - `screenshots/maks-ticket-detail-mobile-390.png`
   - `screenshots/maks-empty-inbox-mobile-390.png`
 
 ## Test evidence
@@ -188,5 +192,5 @@ After authorization only:
 
 - Automated implementation verification: pending/finalized in `VERIFICATION.md`.
 - Fresh verifier-subagent: pending/finalized in `VERIFICATION.md`.
-- Eva user acceptance: **not received**.
+- Eva visual review: defect reported and repaired; follow-up acceptance **not yet received**.
 - Production deployment: **not performed**.

@@ -1,3 +1,7 @@
+
+> viqueue@0.3.0 e2e:browser
+> node test/browser-e2e.js
+
 PASS root is an understandable all-project overview with four tickets
 PASS Maks identity is remembered and his question inbox is immediately obvious
 PASS Maks answers a text question inline without claim credentials

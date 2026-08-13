@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { projects: [], project: '', tickets: [], actors: [], active: 'ready', inbox: [] };
+const state = { projects: [], project: '', tickets: [], actors: [], roles: [], active: 'ready', inbox: [] };
 const columns = [['ready', 'Ready'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done']];
 
 async function request(path, options = {}) {
@@ -11,6 +11,8 @@ async function request(path, options = {}) {
 }
 const actorId = () => $('#actor-select').value;
 const actorName = (id) => state.actors.find((actor) => actor.id === id)?.name || id;
+const roleName = (id) => state.roles.find((role) => role.id === id)?.name || 'Assigned group';
+const assigneeName = (assignee) => assignee?.type === 'actor' ? actorName(assignee.id) : assignee?.type === 'role' ? roleName(assignee.id) : 'Unassigned';
 const projection = (ticket) => ticket.state === 'open' ? (ticket.claim ? 'working' : 'ready') : ticket.state;
 const stateName = (ticket) => ({ ready: 'Ready', working: 'Working', review: 'Awaiting review', done: 'Done' })[projection(ticket)];
 function report(error) { $('#status').textContent = `Something went wrong: ${error.message}`; }
@@ -30,7 +32,7 @@ function renderBoard() {
       card.type = 'button';
       card.className = 'ticket-card';
       card.dataset.id = ticket.id;
-      const person = ticket.assignee ? actorName(ticket.assignee.id) : 'Unassigned';
+      const person = assigneeName(ticket.assignee);
       card.innerHTML = '<small></small><strong></strong><span></span>';
       card.children[0].textContent = ticket.id;
       card.children[1].textContent = ticket.title;
@@ -80,8 +82,9 @@ async function refreshInbox() {
 }
 
 async function refresh(preferred = state.project) {
-  [state.actors, state.projects] = await Promise.all([
+  [state.actors, state.roles, state.projects] = await Promise.all([
     request('/v1/actors?active=true').then((body) => body.actors),
+    request('/v1/roles').then((body) => body.roles),
     request('/v1/projects').then((body) => body.projects)
   ]);
   const identity = actorId() || localStorage.getItem('viq.actor') || '';
@@ -104,8 +107,14 @@ async function showDetail(id) {
   $('#detail-id').textContent = ticket.id;
   $('#detail-title').textContent = ticket.title;
   $('#detail-body').textContent = ticket.body || 'No additional context.';
-  $('#detail-assignee').textContent = ticket.assignee ? actorName(ticket.assignee.id) : 'No one yet';
-  $('#detail-worker').textContent = ticket.claim ? actorName(ticket.claim.actor) : 'No worker yet';
+  const assignmentFact = $('#detail-assignment-fact');
+  const workerFact = $('#detail-worker-fact');
+  const sameActor = ticket.assignee?.type === 'actor' && ticket.claim?.actor === ticket.assignee.id;
+  assignmentFact.hidden = sameActor || !ticket.assignee;
+  workerFact.hidden = !ticket.claim;
+  $('#detail-assignment-label').textContent = ticket.assignee?.type === 'role' ? 'Eligible group' : 'Assigned person';
+  $('#detail-assignee').textContent = sameActor ? '' : assigneeName(ticket.assignee);
+  $('#detail-worker').textContent = ticket.claim ? actorName(ticket.claim.actor) : '';
   $('#detail-state').textContent = stateName(ticket);
   const meaningful = [...events].reverse().find((event) => event.type === 'progress' && event.message);
   $('#detail-progress').textContent = meaningful?.message || 'No progress update yet.';

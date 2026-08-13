@@ -9,7 +9,7 @@ All commands ran from `/root/work/viqueue` on the disposable/local repository on
 | Unit/domain/HTTP/CLI integration | `npm test` | PASS — 25/25 | `test-output.txt` |
 | Build | `npm run build` | PASS | `build-output.txt` |
 | Full CLI + MCP + browser E2E | `VIQ_EVIDENCE_DIR="$PWD/evidence/ui-audit-2026-08-14/e2e-final" npm run e2e` | PASS — `E2E_OK`, `MCP_E2E_OK`, `BROWSER_E2E_OK` | `e2e-all-output.txt`, `e2e-final/` |
-| Browser scenarios | Included above on fresh temp SQLite/loopback server, plus final focused rerun after validation coverage | PASS — ten scenario lines | `browser-e2e-output.txt`, screenshots in `screenshots/` |
+| Browser scenarios | Fresh temp SQLite/loopback server, including same-actor and role-assigned detail | PASS — eleven scenario lines | `follow-up-browser-output.txt`, `browser-e2e-output.txt`, screenshots in `screenshots/` |
 | Secret/history scan | `npm run scan:secrets` | PASS — 136 tracked files/history; 0 high-confidence matches | `secret-scan-output.txt` |
 | Bundle build 1 | `npm run bundle` | PASS | `bundle-1-output.txt` |
 | Bundle build 2 | `npm run bundle` | PASS | `bundle-2-output.txt` |
@@ -38,6 +38,17 @@ Cass ran from fresh context after implementation and independently executed:
 - `npm run scan:secrets` — PASS
 
 Cass confirmed that all seven UX scenario groups have GREEN browser assertions, realistic disposable multi-project state is exercised, and no production endpoint/storage or credential exposure was observed. Cass initially returned **FAIL** solely because the worker's temporary `workshop/artifacts/ui-repair-acceptance.md` inaccurately called the browser rewrite “synchronization-only” and omitted full command evidence. That artifact was removed and replaced by this exact record plus `UI-AUDIT-REPORT.md`; no functional defect was reported.
+
+## Eva visual-review follow-up
+
+Eva reported that ticket detail duplicated **Assigned to** and **Worker** for the same actor and could render a role ID through actor lookup. Focused assertions were added before the fix:
+
+- same actor appears exactly once and the redundant assignment fact is hidden;
+- role `workers` renders as **Eligible group — Workers**;
+- the genuinely distinct active worker remains **Worker — Worker agent**;
+- the role-assigned distinction is asserted at desktop and 390 px.
+
+`follow-up-red-output.txt` records the pre-fix same-actor failure (`2 !== 1`). Final `npm run e2e:browser` is GREEN with eleven PASS lines. `npm test` remains GREEN at 25/25. Outputs are `follow-up-build-output.txt`, `follow-up-browser-output.txt`, and `follow-up-test-output.txt`; affected screenshots were regenerated.
 
 ## Coverage limitations
 

@@ -125,9 +125,25 @@ try {
   for (const forbidden of ['Claim ID', 'Claim token', 'Generation', 'operator token', 'actor:maks', 'target_type']) assert.doesNotMatch(detailText, new RegExp(forbidden, 'i'));
   assert.equal(await desktop.locator('#detail .ticket-question').count(), 2);
   assert.match(detailText, /worker continues while questions wait/i);
-  await desktop.screenshot({ path: `${evidence}/screenshots/maks-ticket-detail-desktop.png`, fullPage: true });
+  assert.equal(await desktop.locator('#detail-assignment-fact').isHidden(), true);
+  assert.equal(await desktop.locator('#detail-worker').innerText(), 'Worker agent');
+  assert.equal(await desktop.locator('#detail').getByText('Worker agent', { exact: true }).count(), 1);
+  await desktop.screenshot({ path: `${evidence}/screenshots/maks-ticket-detail-same-actor-desktop.png`, fullPage: true });
+  await desktop.getByRole('button', { name: 'Close ticket' }).click();
+
+  await api('PATCH', '/v1/tickets/VIQ-1', { actor: 'maks', assignee: { type: 'role', id: 'workers' } });
+  await desktop.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await desktop.getByText('4 tickets shown').waitFor();
+  await desktop.locator('.ticket-card[data-id="VIQ-1"]').click();
+  await desktop.locator('#detail-assignee').getByText('Workers', { exact: true }).waitFor();
+  assert.equal(await desktop.locator('#detail-assignment-label').innerText(), 'Eligible group');
+  assert.equal(await desktop.locator('#detail-assignee').innerText(), 'Workers');
+  assert.equal(await desktop.locator('#detail-worker').innerText(), 'Worker agent');
+  assert.doesNotMatch(await desktop.locator('#detail').innerText(), /\bworkers\b.*\bworkers\b/i);
+  await desktop.screenshot({ path: `${evidence}/screenshots/maks-ticket-detail-role-assigned-desktop.png`, fullPage: true });
   await desktop.getByRole('button', { name: 'Close ticket' }).click();
   await desktop.screenshot({ path: `${evidence}/screenshots/maks-all-tickets-desktop.png`, fullPage: true });
+  note('PASS ticket facts avoid same-actor duplication and distinguish a humanized eligible role from the active worker');
   note('PASS human detail is meaningful, shows accumulating questions, and hides agent internals');
 
   await desktop.getByLabel('Project view').selectOption('VIQ');
@@ -146,18 +162,25 @@ try {
   await desktop.getByText('4 tickets shown').waitFor();
   note('PASS validation errors are understandable and refresh recovers without console errors');
 
+  assert.deepEqual((await api('GET', '/v1/tickets/VIQ-1')).ticket.assignee, { type: 'role', id: 'workers' });
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
   watchConsole(mobile, 'mobile');
   await mobile.goto(base);
+  await mobile.getByText('4 tickets shown').waitFor();
   await mobile.getByLabel('Your name').selectOption('maks');
   await mobile.locator('.question-card').waitFor();
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   await mobile.getByRole('tab', { name: /Working/ }).click();
   assert.equal(await mobile.locator('.column:not([hidden])').count(), 1);
   await mobile.screenshot({ path: `${evidence}/screenshots/maks-working-mobile-390.png`, fullPage: true });
+  await mobile.locator('.ticket-card[data-id="VIQ-1"]').getByText(/Workers · Working/).waitFor();
   await mobile.locator('.ticket-card[data-id="VIQ-1"]').click();
+  await mobile.locator('#detail-assignee').getByText('Workers', { exact: true }).waitFor();
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
-  await mobile.screenshot({ path: `${evidence}/screenshots/maks-ticket-detail-mobile-390.png`, fullPage: true });
+  assert.equal(await mobile.locator('#detail-assignment-label').innerText(), 'Eligible group');
+  assert.equal(await mobile.locator('#detail-assignee').innerText(), 'Workers');
+  assert.equal(await mobile.locator('#detail-worker').innerText(), 'Worker agent');
+  await mobile.screenshot({ path: `${evidence}/screenshots/maks-ticket-detail-role-assigned-mobile-390.png`, fullPage: true });
   note('PASS desktop and 390px mobile have sensible navigation and no horizontal overflow');
 
   await mobile.getByRole('button', { name: 'Close ticket' }).click();
