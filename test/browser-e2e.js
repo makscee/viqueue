@@ -30,7 +30,21 @@ const longTitle = 'Investigate an unusually long external-agent handoff title th
 const longActor = 'worker-with-a-very-long-local-identifier-0123456789';
 
 try {
-  await desktop.goto(base);
+  await desktop.route('**/v1/projects', async (route) => {
+    if (route.request().method() === 'GET') {
+      await new Promise((resolve) => setTimeout(resolve, 150)); await route.continue();
+    } else await route.continue();
+  });
+  const loading = desktop.goto(base); await desktop.getByText('Loading board…').waitFor(); await loading;
+  await desktop.getByText('Create a project to begin').waitFor();
+  assert.equal(await desktop.locator('[data-state="ready"] .empty').textContent(), 'No tickets');
+  note('browser rendered deterministic loading and empty-project states');
+  await desktop.unroute('**/v1/projects');
+  await desktop.route('**/v1/projects', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"message":"fixture unavailable"}}' }), { times: 1 });
+  await desktop.getByRole('button', { name: 'Refresh board' }).click();
+  await desktop.getByRole('status').getByText('fixture unavailable').waitFor();
+  assert.equal(await desktop.getByRole('status').evaluate((element) => element.classList.contains('error')), true);
+  note('browser rendered an accessible deterministic refresh error');
   await desktop.getByLabel('New project').fill('ABC'); await desktop.getByRole('button', { name: 'Create', exact: true }).first().click();
   await desktop.getByText('ABC refreshed').waitFor();
   await desktop.getByLabel(/New ticket in/).fill(longTitle); await desktop.locator('#ticket-form').getByRole('button', { name: 'Create' }).click();

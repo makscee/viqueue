@@ -1,3 +1,5 @@
+browser rendered deterministic loading and empty-project states
+browser rendered an accessible deterministic refresh error
 desktop populated all states with long title, actor, and structured evidence fixtures
 mobile initial state exposed all state tabs and stale count without horizontal swiping
 keyboard and touch state navigation exposed stale card and explicit takeover action

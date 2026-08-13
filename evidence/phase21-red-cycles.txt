@@ -5,4 +5,4 @@ GREEN: semantic tab strip and responsive styles served by the real server; HTTP/
 
 Browser GREEN was preceded by one deterministic-fixture harness correction: repeated UI submission raced the browser refresh and one fixture was missing. Only the first create was retained as a UI-control proof; remaining fixture tickets now use the real HTTP API before browser assertions. Production behavior was unchanged.
 
-Browser acceptance covers deterministic multi-state content, long title/actor, structured multiline evidence, 390px initial counts, keyboard focus/navigation, touch stale selection, stale-only explicit takeover, old-owner fencing, polling deferral during input, eventual external refresh, and viewport/evidence containment.
+Browser acceptance covers deterministic loading, empty, and routed-error states; multi-state content; long title/actor; structured multiline evidence; 390px initial counts; keyboard focus/navigation; touch stale selection; stale-only explicit takeover; old-owner fencing; polling deferral during input; eventual external refresh; and viewport/evidence containment.
