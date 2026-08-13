@@ -1,0 +1,2 @@
+PASS: bundle-1.sha256 and bundle-2.sha256 are identical.
+SHA-256: 92a6dfee840e069b2b76a78e3eb59310cc29b3f0fab6bb15e5496e3bcac454a3
