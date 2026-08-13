@@ -1,7 +1,3 @@
-
-> viqueue@0.2.0 e2e
-> bash test/e2e.sh && bash test/mcp-e2e.sh && node test/browser-e2e.js
-
 $ viq project create ABC
 {"project":{"key":"ABC","next_number":1}}
 $ viq ticket create ABC phase\ zero\ tracer
@@ -9,18 +5,18 @@ $ viq ticket create ABC phase\ zero\ tracer
 $ viq ticket next --actor worker-a
 {"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"ready","evidence":null,"claim":null}}
 $ viq ticket claim ABC-1 --actor worker-a --ttl-ms 1
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585615222}},"claim_token":"NqiQ3Jy9c7SO7EpaR2De_fNFOZFVX6Em"}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585808690}},"claim_token":"ENPD-EnMJuebalSBbZM4Yi1f26Pr6KJx"}
 $ viq ticket next --actor worker-b
 {"ticket":null}
 $ viq ticket show ABC-1
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585615222}}}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585808690}}}
 $ viq ticket takeover ABC-1 --actor worker-b --ttl-ms 60000 --auth secret
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786585675452}},"claim_token":"PYpoUR1cuYVk0ruHcN9BAgzsxvpLZ5fj"}
-$ viq ticket submit ABC-1 --actor worker-a --claim-token NqiQ3Jy9c7SO7EpaR2De_fNFOZFVX6Em --generation 1 --evidence old
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786585868940}},"claim_token":"uvp5E7Mr-b1pz2ZU3IfMEkkAF5jsdIJW"}
+$ viq ticket submit ABC-1 --actor worker-a --claim-token ENPD-EnMJuebalSBbZM4Yi1f26Pr6KJx --generation 1 --evidence old
 {"error":{"code":"stale_claim","message":"claim token or generation is no longer current"}}
 exit=3
-$ viq ticket submit ABC-1 --actor worker-b --claim-token PYpoUR1cuYVk0ruHcN9BAgzsxvpLZ5fj --generation 2 --evidence \{\"tests\":\"green\"\}
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"submitted","evidence":{"tests":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786585675452}}}
+$ viq ticket submit ABC-1 --actor worker-b --claim-token uvp5E7Mr-b1pz2ZU3IfMEkkAF5jsdIJW --generation 2 --evidence \{\"tests\":\"green\"\}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"submitted","evidence":{"tests":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786585868940}}}
 E2E_OK
 $ mcp create
 {"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1}}}
@@ -29,20 +25,20 @@ $ mcp ticket-create
 $ viq ticket next --actor worker-a
 {"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"ready","evidence":null,"claim":null}}
 $ viq ticket claim ABC-1 --actor worker-a --ttl-ms 1000
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585617174}},"claim_token":"nzdDjV7ON_sCT-6GKVI3DUNuizJRWipi"}
-$ mcp renew worker-a nzdDjV7ON_sCT-6GKVI3DUNuizJRWipi 1 100
-{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"claimed\",\"evidence\":null,\"claim\":{\"actor\":\"worker-a\",\"generation\":1,\"expires_at\":1786585616384}},\"claim_token\":\"nzdDjV7ON_sCT-6GKVI3DUNuizJRWipi\"}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585616384}},"claim_token":"nzdDjV7ON_sCT-6GKVI3DUNuizJRWipi"}}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585810724}},"claim_token":"xqqCHBGNQQBVsrnJ23qtYVtlhiFWNSbu"}
+$ mcp renew worker-a xqqCHBGNQQBVsrnJ23qtYVtlhiFWNSbu 1 100
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"claimed\",\"evidence\":null,\"claim\":{\"actor\":\"worker-a\",\"generation\":1,\"expires_at\":1786585809945}},\"claim_token\":\"xqqCHBGNQQBVsrnJ23qtYVtlhiFWNSbu\"}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585809945}},"claim_token":"xqqCHBGNQQBVsrnJ23qtYVtlhiFWNSbu"}}
 $ viq ticket next --actor worker-b
 {"ticket":null}
 $ mcp get
-{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"stale\",\"evidence\":null,\"claim\":{\"actor\":\"worker-a\",\"generation\":1,\"expires_at\":1786585616384}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585616384}}}}
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"stale\",\"evidence\":null,\"claim\":{\"actor\":\"worker-a\",\"generation\":1,\"expires_at\":1786585809945}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585809945}}}}
 $ mcp takeover worker-b 60000
-{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"claimed\",\"evidence\":null,\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786585676678}},\"claim_token\":\"5jTif6e7vO9G772fYRp_iKtrBuOJ7MGg\"}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786585676678}},"claim_token":"5jTif6e7vO9G772fYRp_iKtrBuOJ7MGg"}}
-$ viq ticket submit ABC-1 --actor worker-a --claim-token nzdDjV7ON_sCT-6GKVI3DUNuizJRWipi --generation 1 --evidence old
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"claimed\",\"evidence\":null,\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786585870307}},\"claim_token\":\"fAyvB5mQvXDAfjAsf8OXUezr4lmqpKpt\"}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786585870307}},"claim_token":"fAyvB5mQvXDAfjAsf8OXUezr4lmqpKpt"}}
+$ viq ticket submit ABC-1 --actor worker-a --claim-token xqqCHBGNQQBVsrnJ23qtYVtlhiFWNSbu --generation 1 --evidence old
 {"error":{"code":"stale_claim","message":"claim token or generation is no longer current"}}
 exit=3
-$ mcp submit worker-b 5jTif6e7vO9G772fYRp_iKtrBuOJ7MGg 2 \{\"parity\":\"green\"\}
-{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"submitted\",\"evidence\":{\"parity\":\"green\"},\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786585676678}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"submitted","evidence":{"parity":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786585676678}}}}
+$ mcp submit worker-b fAyvB5mQvXDAfjAsf8OXUezr4lmqpKpt 2 \{\"parity\":\"green\"\}
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"submitted\",\"evidence\":{\"parity\":\"green\"},\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786585870307}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"submitted","evidence":{"parity":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786585870307}}}}
 MCP_E2E_OK
 browser created project ABC and ticket ABC-1
 board reflected claimed owner worker-a in claimed column; ready column empty

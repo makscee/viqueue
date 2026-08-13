@@ -13,7 +13,7 @@ base="http://127.0.0.1:$port"
 for _ in $(seq 1 100); do curl -sf "$base/health" >/dev/null && break; sleep 0.02; done
 curl -sf "$base/health" >/dev/null
 viq=(node dist/bin/viq.js --server "$base" --json)
-out="evidence/e2e-output.txt"
+out="${VIQ_EVIDENCE_DIR:-evidence}/e2e-output.txt"
 : >"$out"
 record_viq() { printf '$ viq' >>"$out"; printf ' %q' "$@" >>"$out"; printf '\n' >>"$out"; "${viq[@]}" "$@" >>"$out" 2>&1; }
 

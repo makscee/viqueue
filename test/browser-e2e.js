@@ -22,7 +22,8 @@ for (let tries = 0; tries < 100; tries += 1) {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
 
-await mkdir('evidence/screenshots', { recursive: true });
+const evidenceDir = process.env.VIQ_EVIDENCE_DIR ?? 'evidence';
+await mkdir(`${evidenceDir}/screenshots`, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1 });
 const log = [];
@@ -52,11 +53,12 @@ try {
   await stale.getByText('Unavailable — explicit takeover only').waitFor();
   note('board reflected stale/uncertain and did not show ticket as ready');
 
-  await page.screenshot({ path: 'evidence/screenshots/board-desktop-stale.png', fullPage: true });
+  await page.screenshot({ path: `${evidenceDir}/screenshots/board-desktop-stale.png`, fullPage: true });
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   await mobile.goto(base); await mobile.getByText('ABC-1').waitFor();
-  await mobile.screenshot({ path: 'evidence/screenshots/board-mobile-stale.png', fullPage: true });
+  await mobile.screenshot({ path: `${evidenceDir}/screenshots/board-mobile-stale.png`, fullPage: true });
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  assert.equal(await mobile.locator('.column').first().evaluate((element) => element.getBoundingClientRect().width >= 300), true);
   await mobile.close(); note('captured desktop and 390px mobile stale-board screenshots without page overflow');
 
   await stale.getByRole('button', { name: /Open ABC-1/ }).click();
@@ -83,10 +85,10 @@ try {
   await submittedColumn.getByRole('button', { name: /Open ABC-1/ }).click();
   await page.getByText(/"browser": "green"/).waitFor();
   await page.getByLabel('Close ticket detail').click();
-  await page.screenshot({ path: 'evidence/screenshots/board-desktop-submitted.png', fullPage: true });
+  await page.screenshot({ path: `${evidenceDir}/screenshots/board-desktop-submitted.png`, fullPage: true });
   note('current owner submitted JSON evidence and board reflected submitted');
   note('BROWSER_E2E_OK');
 } finally {
   await browser.close(); server.kill();
-  await writeFile('evidence/browser-e2e-output.txt', `${log.join('\n')}\n`);
+  await writeFile(`${evidenceDir}/browser-e2e-output.txt`, `${log.join('\n')}\n`);
 }

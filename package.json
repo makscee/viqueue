@@ -11,7 +11,7 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "build": "node scripts/build.js",
-    "e2e": "bash test/e2e.sh && bash test/mcp-e2e.sh && node test/browser-e2e.js",
+    "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
     "e2e:mcp": "bash test/mcp-e2e.sh",
     "e2e:browser": "node test/browser-e2e.js"
   },
