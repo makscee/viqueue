@@ -1,0 +1,150 @@
+TAP version 13
+# Subtest: SQLite ticket fields, numbering, and event history survive store restart
+not ok 1 - SQLite ticket fields, numbering, and event history survive store restart
+  ---
+  duration_ms: 7.839197
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:32:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    -   created_at: 1700000000000,
+        key: 'ABC',
+        next_number: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    key: 'ABC'
+    next_number: 1
+    created_at: 1700000000000
+  actual:
+    key: 'ABC'
+    next_number: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///root/work/viqueue/test/domain.test.js:34:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: durable claim survives arbitrary elapsed time and restart without liveness inference
+not ok 2 - durable claim survives arbitrary elapsed time and restart without liveness inference
+  ---
+  duration_ms: 3.014382
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:51:1'
+  failureType: 'testCodeFailure'
+  error: 'ttl_ms must be 1..86400000'
+  code: 'invalid_ttl'
+  stack: |-
+    #ttl (file:///root/work/viqueue/src/store.js:213:13)
+    #newClaim (file:///root/work/viqueue/src/store.js:178:26)
+    file:///root/work/viqueue/src/store.js:140:36
+  ...
+# Subtest: explicit release removes authority and makes open ticket ready
+not ok 3 - explicit release removes authority and makes open ticket ready
+  ---
+  duration_ms: 3.067272
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:68:1'
+  failureType: 'testCodeFailure'
+  error: 'ttl_ms must be 1..86400000'
+  code: 'invalid_ttl'
+  stack: |-
+    #ttl (file:///root/work/viqueue/src/store.js:213:13)
+    #newClaim (file:///root/work/viqueue/src/store.js:178:26)
+    file:///root/work/viqueue/src/store.js:140:36
+  ...
+# Subtest: submit review, accept done, and reopen open are explicit state transitions
+not ok 4 - submit review, accept done, and reopen open are explicit state transitions
+  ---
+  duration_ms: 1.976916
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:77:1'
+  failureType: 'testCodeFailure'
+  error: 'ttl_ms must be 1..86400000'
+  code: 'invalid_ttl'
+  stack: |-
+    #ttl (file:///root/work/viqueue/src/store.js:213:13)
+    #newClaim (file:///root/work/viqueue/src/store.js:178:26)
+    file:///root/work/viqueue/src/store.js:140:36
+  ...
+# Subtest: competing claims are atomic across independent SQLite connections
+not ok 5 - competing claims are atomic across independent SQLite connections
+  ---
+  duration_ms: 3.144751
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///root/work/viqueue/test/domain.test.js:98:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: explicit takeover increments generation and old owner is fenced
+not ok 6 - explicit takeover increments generation and old owner is fenced
+  ---
+  duration_ms: 6.06516
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:103:1'
+  failureType: 'testCodeFailure'
+  error: 'ttl_ms must be 1..86400000'
+  code: 'invalid_ttl'
+  stack: |-
+    #ttl (file:///root/work/viqueue/src/store.js:213:13)
+    #newClaim (file:///root/work/viqueue/src/store.js:178:26)
+    file:///root/work/viqueue/src/store.js:140:36
+  ...
+# Subtest: event cursor is global monotonic and polling after cursor filters project or ticket
+not ok 7 - event cursor is global monotonic and polling after cursor filters project or ticket
+  ---
+  duration_ms: 1.990814
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:114:1'
+  failureType: 'testCodeFailure'
+  error: 'store.listEvents is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///root/work/viqueue/test/domain.test.js:116:31)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: ticket edit and assignment retain the minimal canonical fields and record events
+not ok 8 - ticket edit and assignment retain the minimal canonical fields and record events
+  ---
+  duration_ms: 3.353596
+  type: 'test'
+  location: '/root/work/viqueue/test/domain.test.js:131:1'
+  failureType: 'testCodeFailure'
+  error: 'store.editTicket is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///root/work/viqueue/test/domain.test.js:133:30)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 0
+# fail 8
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 87.549437

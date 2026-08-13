@@ -6,6 +6,16 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 No changes yet.
 
+## [0.3.0] — Daily Alpha core (unpublished)
+
+- Replace JSON tracer storage with one SQLite file and four minimal domain tables.
+- Replace lease/liveness semantics with durable explicit fenced claims.
+- Add append-only events, edit/assign, release, review/accept/reopen, and four-column board.
+- Add explicit fail-closed v0.2 JSON import.
+- Keep HTTP as the single state machine behind CLI, MCP, and browser adapters.
+
+Release notes: [`release-notes/v0.3.0.md`](release-notes/v0.3.0.md).
+
 ## [0.2.0] — early prerelease
 
 - Prepare the Apache-2.0 source tree, public project hygiene, and GitHub CI without publishing packages.

@@ -1,0 +1,85 @@
+
+> viqueue@0.3.0 e2e
+> VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh
+
+$ viq project create ABC
+{"project":{"key":"ABC","next_number":1,"created_at":1786648900056}}
+$ viq ticket create ABC tracer
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"open","assigned_to":null,"created_at":1786648900128,"updated_at":1786648900128,"claim":null}}
+{
+  "ticket": {
+    "id": "ABC-1",
+    "project": "ABC",
+    "title": "tracer",
+    "body": "",
+    "state": "open",
+    "assigned_to": null,
+    "created_at": 1786648900128,
+    "updated_at": 1786648900194,
+    "claim": {
+      "claim_id": "eed6b118-6e19-45b7-9894-c7d41c0877cd",
+      "actor": "worker-a",
+      "generation": 1,
+      "claimed_at": 1786648900194
+    }
+  }
+}
+$ viq event post ABC-1 --claim-id eed6b118-6e19-45b7-9894-c7d41c0877cd --actor worker-a --claim-token 7yJceUIvB6N9eU4DR8BDMkffLWwjCc1JwMuG8_ltoPQ --generation 1 --message working
+{"event":{"cursor":3,"ticket_id":"ABC-1","project":"ABC","type":"progress","actor":"worker-a","message":"working","created_at":1786648900272},"cursor":3}
+{
+  "ticket": {
+    "id": "ABC-1",
+    "project": "ABC",
+    "title": "tracer",
+    "body": "",
+    "state": "open",
+    "assigned_to": null,
+    "created_at": 1786648900128,
+    "updated_at": 1786648900346,
+    "claim": {
+      "claim_id": "790fe337-5f92-468b-ac50-3f39a33fbd94",
+      "actor": "worker-b",
+      "generation": 2,
+      "claimed_at": 1786648900346
+    }
+  }
+}
+{"error":{"code":"stale_claim","message":"claim identity or generation is no longer current"}}
+$ viq ticket submit ABC-1 --claim-id 790fe337-5f92-468b-ac50-3f39a33fbd94 --actor worker-b --claim-token lRcZt14CNSx4I_hNkGOBBQZ30eKmZi04FTc-3W2a0pg --generation 2
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"review","assigned_to":null,"created_at":1786648900128,"updated_at":1786648900495,"claim":null}}
+$ viq ticket accept ABC-1 --actor maks --auth secret
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"done","assigned_to":null,"created_at":1786648900128,"updated_at":1786648900570,"claim":null}}
+E2E_OK
+{"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1,\"created_at\":1786648900941}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1,"created_at":1786648900941}}}
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"MCP tracer\",\"body\":\"\",\"state\":\"open\",\"assigned_to\":null,\"created_at\":1786648901049,\"updated_at\":1786648901049,\"claim\":null}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"MCP tracer","body":"","state":"open","assigned_to":null,"created_at":1786648901049,"updated_at":1786648901049,"claim":null}}}
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "[claim response redacted]"
+    }
+  ],
+  "structuredContent": {
+    "ticket": {
+      "id": "ABC-1",
+      "project": "ABC",
+      "title": "MCP tracer",
+      "body": "",
+      "state": "open",
+      "assigned_to": null,
+      "created_at": 1786648901049,
+      "updated_at": 1786648901148,
+      "claim": {
+        "claim_id": "85d3d422-61c1-44a6-bc98-b37caf5adbe7",
+        "actor": "worker",
+        "generation": 1,
+        "claimed_at": 1786648901148
+      }
+    }
+  }
+}
+{"content":[{"type":"text","text":"{\"events\":[{\"cursor\":1,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"ticket_created\",\"actor\":null,\"message\":null,\"created_at\":1786648901049},{\"cursor\":2,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"claimed\",\"actor\":\"worker\",\"message\":null,\"created_at\":1786648901148}],\"cursor\":2}"}],"structuredContent":{"events":[{"cursor":1,"ticket_id":"ABC-1","project":"ABC","type":"ticket_created","actor":null,"message":null,"created_at":1786648901049},{"cursor":2,"ticket_id":"ABC-1","project":"ABC","type":"claimed","actor":"worker","message":null,"created_at":1786648901148}],"cursor":2}}
+MCP_E2E_OK
+desktop shows Ready, Working, Review, and Done with browser create/edit/claim exercised
+mobile detail shows chronological events and state-appropriate accept/reopen controls
+BROWSER_E2E_OK

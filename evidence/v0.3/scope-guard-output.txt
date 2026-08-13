@@ -1,0 +1,1 @@
+PASS: canonical source surfaces and current release docs contain no removed lease/liveness API terms.

@@ -1,0 +1,148 @@
+
+> viqueue@0.3.0 test
+> node --test test/*.test.js
+
+TAP version 13
+# (node:177629) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: board assets name exactly four canonical projection columns and no liveness inference
+ok 1 - board assets name exactly four canonical projection columns and no liveness inference
+  ---
+  duration_ms: 84.7835
+  type: 'test'
+  ...
+# Subtest: CLI covers list/edit/claims/events and lifecycle without lease arguments
+ok 2 - CLI covers list/edit/claims/events and lifecycle without lease arguments
+  ---
+  duration_ms: 1310.753028
+  type: 'test'
+  ...
+# (node:177636) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SQLite ticket fields, numbering, and event history survive store restart
+ok 3 - SQLite ticket fields, numbering, and event history survive store restart
+  ---
+  duration_ms: 16.991291
+  type: 'test'
+  ...
+# Subtest: durable claim survives arbitrary elapsed time and restart without liveness inference
+ok 4 - durable claim survives arbitrary elapsed time and restart without liveness inference
+  ---
+  duration_ms: 15.754628
+  type: 'test'
+  ...
+# Subtest: explicit release removes authority and makes open ticket ready
+ok 5 - explicit release removes authority and makes open ticket ready
+  ---
+  duration_ms: 6.73512
+  type: 'test'
+  ...
+# Subtest: submit review, accept done, and reopen open are explicit state transitions
+ok 6 - submit review, accept done, and reopen open are explicit state transitions
+  ---
+  duration_ms: 4.140104
+  type: 'test'
+  ...
+# Subtest: competing claims are atomic across independent SQLite connections
+ok 7 - competing claims are atomic across independent SQLite connections
+  ---
+  duration_ms: 3.793821
+  type: 'test'
+  ...
+# Subtest: explicit takeover increments generation and old owner is fenced
+ok 8 - explicit takeover increments generation and old owner is fenced
+  ---
+  duration_ms: 4.062011
+  type: 'test'
+  ...
+# Subtest: event cursor is global monotonic and polling after cursor filters project or ticket
+ok 9 - event cursor is global monotonic and polling after cursor filters project or ticket
+  ---
+  duration_ms: 8.958084
+  type: 'test'
+  ...
+# Subtest: ticket edit and assignment retain the minimal canonical fields and record events
+ok 10 - ticket edit and assignment retain the minimal canonical fields and record events
+  ---
+  duration_ms: 2.805972
+  type: 'test'
+  ...
+# (node:177670) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: HTTP exposes the complete canonical lifecycle and event polling
+ok 11 - HTTP exposes the complete canonical lifecycle and event polling
+  ---
+  duration_ms: 114.834928
+  type: 'test'
+  ...
+# Subtest: HTTP release and authorized takeover preserve fencing
+ok 12 - HTTP release and authorized takeover preserve fencing
+  ---
+  duration_ms: 37.062674
+  type: 'test'
+  ...
+# Subtest: HTTP edits minimal ticket fields and rejects malformed JSON
+ok 13 - HTTP edits minimal ticket fields and rejects malformed JSON
+  ---
+  duration_ms: 31.633428
+  type: 'test'
+  ...
+# (node:177678) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one-shot v0.2 JSON import preserves IDs, states, numbering, and claim fencing truth
+ok 14 - one-shot v0.2 JSON import preserves IDs, states, numbering, and claim fencing truth
+  ---
+  duration_ms: 60.94409
+  type: 'test'
+  ...
+# Subtest: import fails closed on incomplete or state-inconsistent legacy claims
+ok 15 - import fails closed on incomplete or state-inconsistent legacy claims
+  ---
+  duration_ms: 102.743234
+  type: 'test'
+  ...
+# Subtest: import rejection never alters or deletes an existing target
+ok 16 - import rejection never alters or deletes an existing target
+  ---
+  duration_ms: 72.797768
+  type: 'test'
+  ...
+# Subtest: v0.3 local bundle installs SQLite HTTP/CLI/MCP/import surfaces and uninstalls without data removal
+ok 17 - v0.3 local bundle installs SQLite HTTP/CLI/MCP/import surfaces and uninstalls without data removal
+  ---
+  duration_ms: 727.570452
+  type: 'test'
+  ...
+# Subtest: MCP v0.3 exposes coherent HTTP adapter tools without lease or renewal
+ok 18 - MCP v0.3 exposes coherent HTTP adapter tools without lease or renewal
+  ---
+  duration_ms: 1.881559
+  type: 'test'
+  ...
+# Subtest: MCP validates closed schemas
+ok 19 - MCP validates closed schemas
+  ---
+  duration_ms: 1.266885
+  type: 'test'
+  ...
+# Subtest: canonical project name is lowercase everywhere in repository content
+ok 20 - canonical project name is lowercase everywhere in repository content
+  ---
+  duration_ms: 11.321435
+  type: 'test'
+  ...
+# Subtest: public-source metadata and canonical Apache-2.0 license are consistent
+ok 21 - public-source metadata and canonical Apache-2.0 license are consistent
+  ---
+  duration_ms: 2.917767
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1406.341972
