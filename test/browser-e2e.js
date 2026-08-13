@@ -8,87 +8,88 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 async function port() {
-  const server = net.createServer();
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const value = server.address().port; await new Promise((resolve) => server.close(resolve)); return value;
+  const probe = net.createServer(); await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
+  const value = probe.address().port; await new Promise((resolve) => probe.close(resolve)); return value;
 }
 const work = await mkdtemp(path.join(tmpdir(), 'viq-browser-'));
-const listen = await port();
-const base = `http://127.0.0.1:${listen}`;
+const listen = await port(); const base = `http://127.0.0.1:${listen}`;
 const server = spawn(process.execPath, ['dist/src/server.js', `--port=${listen}`, `--storage=${work}/data.json`, '--takeover-token=secret']);
 const cli = (...args) => spawnSync(process.execPath, ['dist/bin/viq.js', '--server', base, '--json', ...args], { encoding: 'utf8' });
-for (let tries = 0; tries < 100; tries += 1) {
-  try { if ((await fetch(`${base}/health`)).ok) break; } catch {}
-  await new Promise((resolve) => setTimeout(resolve, 20));
-}
+const api = async (method, route, body, headers = {}) => {
+  const response = await fetch(`${base}${route}`, { method, headers: { 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await response.json(); assert.equal(response.ok, true, JSON.stringify(data)); return data;
+};
+for (let tries = 0; tries < 100; tries += 1) { try { if ((await fetch(`${base}/health`)).ok) break; } catch {} await new Promise((resolve) => setTimeout(resolve, 20)); }
 
-const evidenceDir = process.env.VIQ_EVIDENCE_DIR ?? 'evidence';
-await mkdir(`${evidenceDir}/screenshots`, { recursive: true });
+const evidenceDir = process.env.VIQ_EVIDENCE_DIR ?? 'evidence'; await mkdir(`${evidenceDir}/screenshots`, { recursive: true });
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1 });
-const log = [];
-const note = (value) => { log.push(value); console.log(value); };
+const desktop = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const log = []; const note = (value) => { log.push(value); console.log(value); };
+const longTitle = 'Investigate an unusually long external-agent handoff title that must wrap without escaping its ticket card boundary';
+const longActor = 'worker-with-a-very-long-local-identifier-0123456789';
 
 try {
-  await page.goto(base);
-  await page.getByLabel('New project').fill('ABC');
-  await page.getByRole('button', { name: 'Create', exact: true }).first().click();
-  await page.getByText('ABC refreshed').waitFor();
-  await page.getByLabel(/New ticket in/).fill('Browser parity tracer');
-  await page.locator('#ticket-form').getByRole('button', { name: 'Create' }).click();
-  await page.getByText('ABC-1').waitFor();
-  note('browser created project ABC and ticket ABC-1');
+  await desktop.goto(base);
+  await desktop.getByLabel('New project').fill('ABC'); await desktop.getByRole('button', { name: 'Create', exact: true }).first().click();
+  await desktop.getByText('ABC refreshed').waitFor();
+  await desktop.getByLabel(/New ticket in/).fill(longTitle); await desktop.locator('#ticket-form').getByRole('button', { name: 'Create' }).click();
+  for (const title of ['Claimed integration check', 'Stale uncertain handoff', 'Submitted evidence review', 'Additional ready item']) {
+    await api('POST', '/v1/tickets', { project: 'ABC', title });
+  }
+  const claimed = JSON.parse(cli('ticket', 'claim', 'ABC-2', '--actor', longActor, '--ttl-ms', '60000').stdout);
+  const staleOwner = JSON.parse(cli('ticket', 'claim', 'ABC-3', '--actor', 'worker-stale-owner-with-long-id', '--ttl-ms', '800').stdout);
+  const submittedOwner = JSON.parse(cli('ticket', 'claim', 'ABC-4', '--actor', 'worker-submitter', '--ttl-ms', '60000').stdout);
+  const evidence = { summary: 'first line\nsecond line with a long structured value that must remain readable', checks: ['unit', 'browser', 'fencing'], nested: { result: 'green' } };
+  assert.equal(cli('ticket', 'submit', 'ABC-4', '--actor', 'worker-submitter', '--claim-token', submittedOwner.claim_token, '--generation', '1', '--evidence', JSON.stringify(evidence)).status, 0);
+  await desktop.waitForTimeout(850); await desktop.getByRole('button', { name: 'Refresh board' }).click();
+  await desktop.locator('[data-state="stale"]').getByText('ABC-3').waitFor();
+  await desktop.screenshot({ path: `${evidenceDir}/screenshots/board-desktop-populated.png`, fullPage: true });
+  assert.equal(await desktop.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  note('desktop populated all states with long title, actor, and structured evidence fixtures');
 
-  const claimRun = cli('ticket', 'claim', 'ABC-1', '--actor', 'worker-a', '--ttl-ms', '800');
-  assert.equal(claimRun.status, 0, claimRun.stderr); const old = JSON.parse(claimRun.stdout);
-  await page.getByRole('button', { name: 'Refresh board' }).click();
-  const claimed = page.locator('[data-state="claimed"]');
-  await claimed.getByText('ABC-1').waitFor();
-  assert.equal(await page.locator('[data-state="ready"] .card').count(), 0);
-  note('board reflected claimed owner worker-a in claimed column; ready column empty');
-
-  await page.waitForTimeout(850); await page.getByRole('button', { name: 'Refresh board' }).click();
-  const stale = page.locator('[data-state="stale"]'); await stale.getByText('ABC-1').waitFor();
-  assert.equal(await page.locator('[data-state="ready"] .card').count(), 0);
-  await stale.getByText('Unavailable — explicit takeover only').waitFor();
-  note('board reflected stale/uncertain and did not show ticket as ready');
-
-  await page.screenshot({ path: `${evidenceDir}/screenshots/board-desktop-stale.png`, fullPage: true });
-  const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
-  await mobile.goto(base); await mobile.getByText('ABC-1').waitFor();
-  await mobile.screenshot({ path: `${evidenceDir}/screenshots/board-mobile-stale.png`, fullPage: true });
+  await mobile.goto(base); await mobile.getByRole('tab', { name: /Ready 2/ }).waitFor();
+  assert.equal(await mobile.getByRole('tab', { name: /Stale 1/ }).getAttribute('aria-selected'), 'false');
+  assert.equal(await mobile.locator('.column:visible').getAttribute('data-state'), 'ready');
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
-  assert.equal(await mobile.locator('.column').first().evaluate((element) => element.getBoundingClientRect().width >= 300), true);
-  await mobile.close(); note('captured desktop and 390px mobile stale-board screenshots without page overflow');
+  await mobile.screenshot({ path: `${evidenceDir}/screenshots/board-mobile-initial.png`, fullPage: true });
+  note('mobile initial state exposed all state tabs and stale count without horizontal swiping');
 
-  await stale.getByRole('button', { name: /Open ABC-1/ }).click();
-  await page.getByRole('button', { name: 'Take over stale claim' }).click();
-  await page.getByLabel('New owner').fill('worker-b');
-  await page.getByLabel('Claim lifetime').fill('60000');
-  await page.getByLabel('Local takeover token').fill('secret');
-  const takeoverResponse = page.waitForResponse((response) => response.url().endsWith('/takeover') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Confirm takeover' }).click();
-  const takeover = await (await takeoverResponse).json();
-  await claimed.getByText('Generation 2').waitFor();
-  note('explicit confirmed takeover moved ticket to worker-b generation 2');
+  const readyTab = mobile.getByRole('tab', { name: /Ready 2/ }); await readyTab.focus(); await readyTab.press('ArrowRight');
+  assert.equal(await mobile.getByRole('tab', { name: /Claimed 1/ }).getAttribute('aria-selected'), 'true');
+  assert.equal(await mobile.getByRole('tab', { name: /Claimed 1/ }).evaluate((element) => getComputedStyle(element).outlineStyle), 'solid');
+  await mobile.getByRole('tab', { name: /Stale 1/ }).click();
+  assert.equal(await mobile.locator('.column:visible').getAttribute('data-state'), 'stale');
+  await mobile.getByRole('button', { name: /Open ABC-3/ }).click();
+  await mobile.getByRole('button', { name: 'Take over stale claim' }).waitFor();
+  await mobile.screenshot({ path: `${evidenceDir}/screenshots/board-mobile-stale-action.png`, fullPage: true });
+  note('keyboard and touch state navigation exposed stale card and explicit takeover action');
 
-  const fenced = cli('ticket', 'submit', 'ABC-1', '--actor', 'worker-a', '--claim-token', old.claim_token,
-    '--generation', '1', '--evidence', 'old');
+  await mobile.getByRole('button', { name: 'Take over stale claim' }).click();
+  await mobile.getByLabel('New owner').fill('worker-b'); await mobile.getByLabel('Claim lifetime').fill('60000'); await mobile.getByLabel('Local takeover token').fill('secret');
+  const takeoverResponse = mobile.waitForResponse((response) => response.url().endsWith('/takeover') && response.request().method() === 'POST');
+  await mobile.getByRole('button', { name: 'Confirm takeover' }).click(); const takeover = await (await takeoverResponse).json();
+  assert.equal(takeover.ticket.claim.generation, 2);
+  const fenced = cli('ticket', 'submit', 'ABC-3', '--actor', 'worker-stale-owner-with-long-id', '--claim-token', staleOwner.claim_token, '--generation', '1', '--evidence', 'old');
   assert.equal(fenced.status, 3); assert.equal(JSON.parse(fenced.stderr).error.code, 'stale_claim');
-  note('old owner mutation fenced with stale_claim and exit 3');
+  note('confirmed authorized takeover reached generation 2 and old owner remained fenced');
 
-  const submitted = cli('ticket', 'submit', 'ABC-1', '--actor', 'worker-b', '--claim-token', takeover.claim_token,
-    '--generation', String(takeover.ticket.claim.generation), '--evidence', '{"browser":"green"}');
-  assert.equal(submitted.status, 0, submitted.stderr);
-  await page.getByRole('button', { name: 'Refresh board' }).click();
-  const submittedColumn = page.locator('[data-state="submitted"]'); await submittedColumn.getByText('ABC-1').waitFor();
-  await submittedColumn.getByRole('button', { name: /Open ABC-1/ }).click();
-  await page.getByText(/"browser": "green"/).waitFor();
-  await page.getByLabel('Close ticket detail').click();
-  await page.screenshot({ path: `${evidenceDir}/screenshots/board-desktop-submitted.png`, fullPage: true });
-  note('current owner submitted JSON evidence and board reflected submitted');
+  await mobile.getByLabel(/New ticket in/).fill('editing text must survive polling');
+  const external = await api('POST', '/v1/tickets', { project: 'ABC', title: 'Created externally while browser waits' });
+  await mobile.waitForTimeout(5_300);
+  assert.equal(await mobile.getByLabel(/New ticket in/).inputValue(), 'editing text must survive polling');
+  assert.equal(await mobile.getByRole('tab', { name: /Ready 2/ }).textContent(), 'Ready 2');
+  await mobile.getByLabel(/New ticket in/).blur(); await mobile.waitForTimeout(5_300);
+  await mobile.getByRole('tab', { name: /Ready 3/ }).waitFor(); assert.equal(external.ticket.id, 'ABC-6');
+  note('bounded polling deferred during form input, preserved focus content, then reflected external state');
+
+  await mobile.getByRole('tab', { name: /Submitted 1/ }).click(); await mobile.getByRole('button', { name: /Open ABC-4/ }).click();
+  await mobile.getByText(/second line with a long structured value/).waitFor();
+  assert.equal(await mobile.locator('.evidence').evaluate((element) => element.scrollWidth <= element.clientWidth), true);
+  await mobile.screenshot({ path: `${evidenceDir}/screenshots/board-mobile-submitted-detail.png`, fullPage: true });
+  note('mobile submitted detail rendered multiline structured evidence without layout escape');
   note('BROWSER_E2E_OK');
+  void claimed;
 } finally {
-  await browser.close(); server.kill();
-  await writeFile(`${evidenceDir}/browser-e2e-output.txt`, `${log.join('\n')}\n`);
+  await browser.close(); server.kill(); await writeFile(`${evidenceDir}/browser-e2e-output.txt`, `${log.join('\n')}\n`);
 }

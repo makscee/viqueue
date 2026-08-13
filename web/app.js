@@ -1,5 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { projects: [], selected: '', tickets: [] };
+const state = { projects: [], selected: '', tickets: [], activeState: 'ready', refreshing: false };
+const pollIntervalMs = 5_000;
+const narrowBoard = matchMedia('(max-width: 560px)');
 const columns = [
   ['ready', 'Ready'], ['claimed', 'Claimed'], ['stale', 'Stale / uncertain'], ['submitted', 'Submitted']
 ];
@@ -37,6 +39,16 @@ function card(ticket) {
   button.append(meta); return button;
 }
 
+function selectState(key, { focus = false } = {}) {
+  state.activeState = key;
+  for (const tab of document.querySelectorAll('[data-state-tab]')) {
+    const selected = tab.dataset.stateTab === key;
+    tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1;
+    if (selected && focus) tab.focus();
+  }
+  for (const column of document.querySelectorAll('.column')) column.hidden = narrowBoard.matches && column.dataset.state !== key;
+}
+
 function render() {
   const board = $('#board'); board.replaceChildren();
   for (const [key, label] of columns) {
@@ -46,8 +58,11 @@ function render() {
     const cards = text('div', '', 'cards');
     if (!tickets.length) cards.append(text('p', 'No tickets', 'empty'));
     else for (const ticket of tickets) cards.append(card(ticket));
+    section.setAttribute('role', 'tabpanel'); section.setAttribute('aria-label', `${label} tickets`);
     section.append(heading, cards); board.append(section);
+    $(`[data-count="${key}"]`).textContent = String(tickets.length);
   }
+  selectState(state.activeState);
 }
 
 async function loadProjects(preferred) {
@@ -61,12 +76,17 @@ async function loadProjects(preferred) {
   $('#create-ticket').disabled = !state.selected;
 }
 
-async function refresh(preferred) {
+async function refresh(preferred, { quiet = false } = {}) {
+  if (state.refreshing) return;
+  state.refreshing = true;
   try {
     await loadProjects(preferred);
     state.tickets = state.selected ? (await request(`/v1/projects/${encodeURIComponent(state.selected)}/tickets`)).tickets : [];
-    render(); status(state.selected ? `${state.selected} refreshed` : 'Create a project to begin');
+    render();
+    $('#freshness').textContent = `Updated ${new Date().toLocaleTimeString()} · auto-refresh 5s`;
+    if (!quiet) status(state.selected ? `${state.selected} refreshed` : 'Create a project to begin');
   } catch (error) { status(error.message, true); }
+  finally { state.refreshing = false; }
 }
 
 function showDetail(ticket) {
@@ -100,6 +120,18 @@ document.addEventListener('click', (event) => {
   }
 });
 
+narrowBoard.addEventListener('change', () => selectState(state.activeState));
+$('#state-tabs').addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-state-tab]'); if (tab) selectState(tab.dataset.stateTab);
+});
+$('#state-tabs').addEventListener('keydown', (event) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const tabs = [...document.querySelectorAll('[data-state-tab]')]; let index = tabs.indexOf(document.activeElement);
+  if (event.key === 'Home') index = 0;
+  else if (event.key === 'End') index = tabs.length - 1;
+  else index = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  event.preventDefault(); selectState(tabs[index].dataset.stateTab, { focus: true });
+});
 $('#refresh').addEventListener('click', () => refresh());
 $('#project-select').addEventListener('change', (event) => refresh(event.target.value));
 $('#project-form').addEventListener('submit', async (event) => {
@@ -124,3 +156,7 @@ $('#takeover-form').addEventListener('submit', async (event) => {
 });
 
 refresh();
+setInterval(() => {
+  const editing = document.activeElement?.matches('input, select, textarea') || document.querySelector('dialog[open]');
+  if (!editing && document.visibilityState === 'visible') refresh(undefined, { quiet: true });
+}, pollIntervalMs);

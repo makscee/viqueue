@@ -68,8 +68,10 @@ MCP tools: `project_create`, `ticket_create`, `ticket_get`, `ticket_next`, `tick
 
 ## Local board
 
-The same server exposes a minimal responsive board at `http://127.0.0.1:7373`. It discovers projects and lists tickets only through the HTTP application contract. It shows ready, claimed, stale/uncertain, and submitted projections; stale cards are unavailable and can move only through an explicitly confirmed takeover with the configured local token. The browser does not launch workers or read storage.
+The same server exposes a minimal responsive board at `http://127.0.0.1:7373`. It discovers projects and lists tickets only through the HTTP application contract. It shows ready, claimed, stale/uncertain, and submitted projections; stale cards are unavailable and can move only through an explicitly confirmed takeover with the configured local token. On narrow screens, explicit state tabs with counts show one full-width column and support touch plus Left/Right/Home/End keyboard navigation.
+
+The board refreshes its read-only projection every five seconds while visible. Polling pauses while a form control or dialog is active, so it does not replace typed input or steal focus. The last-refresh time is visible and manual Refresh remains available. The browser does not launch workers or read storage.
 
 Run `npm run e2e` to exercise the CLI, MCP, and real Chromium board tracer bullets. Exact raw outputs are written under `evidence/`; desktop/mobile acceptance screenshots are under `evidence/screenshots/`. Browser installation for a new development machine is `npx playwright install chromium`.
 
-See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), and [board projection ADR](docs/adr-0003-phase2-board-projection.md).
+See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), [board projection ADR](docs/adr-0003-phase2-board-projection.md), and [responsive navigation ADR](docs/adr-0004-phase21-responsive-navigation.md).

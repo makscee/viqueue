@@ -5,16 +5,16 @@ $ viq ticket create ABC phase\ zero\ tracer
 $ viq ticket next --actor worker-a
 {"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"ready","evidence":null,"claim":null}}
 $ viq ticket claim ABC-1 --actor worker-a --ttl-ms 1
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585808690}},"claim_token":"ENPD-EnMJuebalSBbZM4Yi1f26Pr6KJx"}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786607912804}},"claim_token":"MxB6rK6xM7jFboiZCZ9uZVTxhUPoNeKY"}
 $ viq ticket next --actor worker-b
 {"ticket":null}
 $ viq ticket show ABC-1
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786585808690}}}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786607912804}}}
 $ viq ticket takeover ABC-1 --actor worker-b --ttl-ms 60000 --auth secret
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786585868940}},"claim_token":"uvp5E7Mr-b1pz2ZU3IfMEkkAF5jsdIJW"}
-$ viq ticket submit ABC-1 --actor worker-a --claim-token ENPD-EnMJuebalSBbZM4Yi1f26Pr6KJx --generation 1 --evidence old
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786607973032}},"claim_token":"F4lFzweAWYt487e-0DfBZSJC724CzVWM"}
+$ viq ticket submit ABC-1 --actor worker-a --claim-token MxB6rK6xM7jFboiZCZ9uZVTxhUPoNeKY --generation 1 --evidence old
 {"error":{"code":"stale_claim","message":"claim token or generation is no longer current"}}
 exit=3
-$ viq ticket submit ABC-1 --actor worker-b --claim-token uvp5E7Mr-b1pz2ZU3IfMEkkAF5jsdIJW --generation 2 --evidence \{\"tests\":\"green\"\}
-{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"submitted","evidence":{"tests":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786585868940}}}
+$ viq ticket submit ABC-1 --actor worker-b --claim-token F4lFzweAWYt487e-0DfBZSJC724CzVWM --generation 2 --evidence \{\"tests\":\"green\"\}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"submitted","evidence":{"tests":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786607973032}}}
 E2E_OK

@@ -1,3 +1,23 @@
+$ viq project create ABC
+{"project":{"key":"ABC","next_number":1}}
+$ viq ticket create ABC phase\ zero\ tracer
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"ready","evidence":null,"claim":null}}
+$ viq ticket next --actor worker-a
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"ready","evidence":null,"claim":null}}
+$ viq ticket claim ABC-1 --actor worker-a --ttl-ms 1
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786607912804}},"claim_token":"MxB6rK6xM7jFboiZCZ9uZVTxhUPoNeKY"}
+$ viq ticket next --actor worker-b
+{"ticket":null}
+$ viq ticket show ABC-1
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"stale","evidence":null,"claim":{"actor":"worker-a","generation":1,"expires_at":1786607912804}}}
+$ viq ticket takeover ABC-1 --actor worker-b --ttl-ms 60000 --auth secret
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"claimed","evidence":null,"claim":{"actor":"worker-b","generation":2,"expires_at":1786607973032}},"claim_token":"F4lFzweAWYt487e-0DfBZSJC724CzVWM"}
+$ viq ticket submit ABC-1 --actor worker-a --claim-token MxB6rK6xM7jFboiZCZ9uZVTxhUPoNeKY --generation 1 --evidence old
+{"error":{"code":"stale_claim","message":"claim token or generation is no longer current"}}
+exit=3
+$ viq ticket submit ABC-1 --actor worker-b --claim-token F4lFzweAWYt487e-0DfBZSJC724CzVWM --generation 2 --evidence \{\"tests\":\"green\"\}
+{"ticket":{"id":"ABC-1","project":"ABC","title":"phase zero tracer","state":"submitted","evidence":{"tests":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786607973032}}}
+E2E_OK
 $ mcp create
 {"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1}}}
 $ mcp ticket-create
@@ -20,3 +40,10 @@ exit=3
 $ mcp submit worker-b HHegem0QuOqLq1n4KXvzEsRn1t0JRNrM 2 \{\"parity\":\"green\"\}
 {"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"phase one parity tracer\",\"state\":\"submitted\",\"evidence\":{\"parity\":\"green\"},\"claim\":{\"actor\":\"worker-b\",\"generation\":2,\"expires_at\":1786607974219}}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"phase one parity tracer","state":"submitted","evidence":{"parity":"green"},"claim":{"actor":"worker-b","generation":2,"expires_at":1786607974219}}}}
 MCP_E2E_OK
+desktop populated all states with long title, actor, and structured evidence fixtures
+mobile initial state exposed all state tabs and stale count without horizontal swiping
+keyboard and touch state navigation exposed stale card and explicit takeover action
+confirmed authorized takeover reached generation 2 and old owner remained fenced
+bounded polling deferred during form input, preserved focus content, then reflected external state
+mobile submitted detail rendered multiline structured evidence without layout escape
+BROWSER_E2E_OK

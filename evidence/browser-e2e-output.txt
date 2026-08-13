@@ -1,8 +1,7 @@
-browser created project ABC and ticket ABC-1
-board reflected claimed owner worker-a in claimed column; ready column empty
-board reflected stale/uncertain and did not show ticket as ready
-captured desktop and 390px mobile stale-board screenshots without page overflow
-explicit confirmed takeover moved ticket to worker-b generation 2
-old owner mutation fenced with stale_claim and exit 3
-current owner submitted JSON evidence and board reflected submitted
+desktop populated all states with long title, actor, and structured evidence fixtures
+mobile initial state exposed all state tabs and stale count without horizontal swiping
+keyboard and touch state navigation exposed stale card and explicit takeover action
+confirmed authorized takeover reached generation 2 and old owner remained fenced
+bounded polling deferred during form input, preserved focus content, then reflected external state
+mobile submitted detail rendered multiline structured evidence without layout escape
 BROWSER_E2E_OK

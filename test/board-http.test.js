@@ -56,12 +56,16 @@ test('board assets are served by the same server with usable semantics', async (
   assert.match(html, /<h1>viqueue<\/h1>/);
   assert.match(html, /<main/);
   assert.match(html, /aria-live=/);
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /aria-selected="true"/);
   assert.match(html, /Take over stale claim/);
   assert.doesNotMatch(html, /onclick=/);
 
   const css = await fetch(`${base}/app.css`);
   assert.equal(css.status, 200);
-  assert.match(await css.text(), /@media.*max-width/s);
+  const styles = await css.text();
+  assert.match(styles, /@media.*max-width/s);
+  assert.match(styles, /\.state-tabs/);
   const script = await fetch(`${base}/app.js`);
   assert.equal(script.status, 200);
   assert.match(script.headers.get('content-type'), /javascript/);

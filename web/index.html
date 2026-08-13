@@ -29,7 +29,13 @@
       </div>
     </section>
 
-    <p id="status" class="status" role="status" aria-live="polite">Loading board…</p>
+    <div class="freshness"><p id="status" class="status" role="status" aria-live="polite">Loading board…</p><p id="freshness">Not yet refreshed</p></div>
+    <div id="state-tabs" class="state-tabs" role="tablist" aria-label="Ticket state">
+      <button type="button" role="tab" aria-selected="true" data-state-tab="ready">Ready <span data-count="ready">0</span></button>
+      <button type="button" role="tab" aria-selected="false" data-state-tab="claimed" tabindex="-1">Claimed <span data-count="claimed">0</span></button>
+      <button type="button" role="tab" aria-selected="false" data-state-tab="stale" tabindex="-1">Stale <span data-count="stale">0</span></button>
+      <button type="button" role="tab" aria-selected="false" data-state-tab="submitted" tabindex="-1">Submitted <span data-count="submitted">0</span></button>
+    </div>
     <section id="board" class="board" aria-label="Ticket board"></section>
   </main>
 
