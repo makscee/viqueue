@@ -6,115 +6,115 @@ TAP version 13
 # Subtest: project discovery and project ticket listing are truthful projections
 ok 1 - project discovery and project ticket listing are truthful projections
   ---
-  duration_ms: 104.089534
+  duration_ms: 71.231985
   type: 'test'
   ...
 # Subtest: board assets are served by the same server with usable semantics
 ok 2 - board assets are served by the same server with usable semantics
   ---
-  duration_ms: 25.977416
+  duration_ms: 29.564612
   type: 'test'
   ...
 # Subtest: built CLI emits one stable JSON document and useful exit codes
 ok 3 - built CLI emits one stable JSON document and useful exit codes
   ---
-  duration_ms: 804.762278
+  duration_ms: 569.999744
   type: 'test'
   ...
 # Subtest: project ticket numbering starts at one and survives reopening durable storage
 ok 4 - project ticket numbering starts at one and survives reopening durable storage
   ---
-  duration_ms: 9.565599
+  duration_ms: 15.7948
   type: 'test'
   ...
 # Subtest: claim is pull-based and removes ticket from availability
 ok 5 - claim is pull-based and removes ticket from availability
   ---
-  duration_ms: 4.317286
+  duration_ms: 3.141403
   type: 'test'
   ...
 # Subtest: current owner can renew without changing fencing generation
 ok 6 - current owner can renew without changing fencing generation
   ---
-  duration_ms: 15.730404
+  duration_ms: 5.406085
   type: 'test'
   ...
 # Subtest: renew fences stale credentials and cannot revive an expired claim
 ok 7 - renew fences stale credentials and cannot revive an expired claim
   ---
-  duration_ms: 14.864032
+  duration_ms: 4.17957
   type: 'test'
   ...
 # Subtest: expired claim becomes stale and stays unavailable
 ok 8 - expired claim becomes stale and stays unavailable
   ---
-  duration_ms: 24.893279
+  duration_ms: 5.470197
   type: 'test'
   ...
 # Subtest: explicit authorized takeover increments generation and fences old owner
 ok 9 - explicit authorized takeover increments generation and fences old owner
   ---
-  duration_ms: 4.042375
+  duration_ms: 3.627413
   type: 'test'
   ...
 # Subtest: current owner can submit textual or JSON evidence
 ok 10 - current owner can submit textual or JSON evidence
   ---
-  duration_ms: 27.816741
+  duration_ms: 17.691166
   type: 'test'
   ...
 # Subtest: competing claims are serialized and exactly one wins
 ok 11 - competing claims are serialized and exactly one wins
   ---
-  duration_ms: 3.712847
+  duration_ms: 2.143315
   type: 'test'
   ...
 # Subtest: HTTP JSON API runs the claim-expiry-takeover-fencing contract
 ok 12 - HTTP JSON API runs the claim-expiry-takeover-fencing contract
   ---
-  duration_ms: 119.897221
+  duration_ms: 75.64807
   type: 'test'
   ...
 # Subtest: HTTP errors are stable JSON and malformed JSON is rejected
 ok 13 - HTTP errors are stable JSON and malformed JSON is rejected
   ---
-  duration_ms: 25.349278
+  duration_ms: 21.229369
   type: 'test'
   ...
 # Subtest: local release bundle installs, runs all surfaces, preserves data, and uninstalls
 ok 14 - local release bundle installs, runs all surfaces, preserves data, and uninstalls
   ---
-  duration_ms: 845.564368
+  duration_ms: 676.079512
   type: 'test'
   ...
 # Subtest: real MCP stdio exchange initializes and discovers stable tool schemas
 ok 15 - real MCP stdio exchange initializes and discovers stable tool schemas
   ---
-  duration_ms: 83.705611
+  duration_ms: 53.73123
   type: 'test'
   ...
 # Subtest: MCP calls the actual HTTP application and maps stable domain errors
 ok 16 - MCP calls the actual HTTP application and maps stable domain errors
   ---
-  duration_ms: 118.745285
+  duration_ms: 97.042647
   type: 'test'
   ...
 # Subtest: MCP rejects invalid tool arguments without reaching domain behavior
 ok 17 - MCP rejects invalid tool arguments without reaching domain behavior
   ---
-  duration_ms: 47.18069
+  duration_ms: 44.602845
   type: 'test'
   ...
 # Subtest: canonical project name is lowercase everywhere in repository content
 ok 18 - canonical project name is lowercase everywhere in repository content
   ---
-  duration_ms: 10.589138
+  duration_ms: 7.929325
   type: 'test'
   ...
 # Subtest: public-source metadata and canonical Apache-2.0 license are consistent
 ok 19 - public-source metadata and canonical Apache-2.0 license are consistent
   ---
-  duration_ms: 3.524516
+  duration_ms: 1.643695
   type: 'test'
   ...
 1..19
@@ -125,4 +125,4 @@ ok 19 - public-source metadata and canonical Apache-2.0 license are consistent
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1248.914819
+# duration_ms 931.963017

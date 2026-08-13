@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile } from 'node:fs/promises';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -15,6 +15,10 @@ test('local release bundle installs, runs all surfaces, preserves data, and unin
   execFileSync('npm', ['run', 'bundle'], { stdio: 'pipe' });
   const archive = 'release/viqueue-v0.2.0-rc.tar.gz';
   const releaseName = 'viqueue-v0.2.0-rc';
+  const flatDownload = await mkdtemp(path.join(tmpdir(), 'viq-download-'));
+  await copyFile(archive, path.join(flatDownload, path.basename(archive)));
+  await copyFile(`${archive}.sha256`, path.join(flatDownload, `${path.basename(archive)}.sha256`));
+  execFileSync('sha256sum', ['-c', `${path.basename(archive)}.sha256`], { cwd: flatDownload, stdio: 'pipe' });
   const bundleFiles = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n');
   for (const file of ['LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adr-0007-github-publish-preparation.md', 'release-notes/v0.2.0.md']) {
     assert.ok(bundleFiles.includes(`${releaseName}/${file}`), `${file} missing from bundle`);

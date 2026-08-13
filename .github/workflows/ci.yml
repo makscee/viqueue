@@ -45,4 +45,4 @@ jobs:
           npm run bundle
           second="$(sha256sum release/viqueue-v0.2.0-rc.tar.gz | cut -d' ' -f1)"
           test "$first" = "$second"
-          sha256sum -c release/viqueue-v0.2.0-rc.tar.gz.sha256
+          (cd release && sha256sum -c viqueue-v0.2.0-rc.tar.gz.sha256)

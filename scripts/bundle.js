@@ -31,6 +31,6 @@ const result = spawnSync('tar', [
 ], { encoding: 'utf8' });
 if (result.status !== 0) throw new Error(result.stderr);
 const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
-await writeFile(`${archive}.sha256`, `${digest}  release/${path.basename(archive)}\n`);
+await writeFile(`${archive}.sha256`, `${digest}  ${path.basename(archive)}\n`);
 console.log(`built ${archive}`);
 console.log(`sha256 ${digest}`);
