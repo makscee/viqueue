@@ -12,13 +12,14 @@ async function fixture() {
   const file = path.join(dir, 'viqueue.sqlite');
   const store = new Store(file, { now: () => now });
   await store.init();
+  for (const id of ['worker-a','worker-b','maks']) await store.createActor({id,name:id,kind:id==='maks'?'human':'agent'});
   return { store, file, advance: (ms) => { now += ms; } };
 }
 
 async function seeded() {
   const f = await fixture();
   await f.store.createProject('ABC');
-  const ticket = await f.store.createTicket({ project: 'ABC', title: 'Trace claim fencing', body: 'details', assigned_to: 'eva' });
+  const ticket = await f.store.createTicket({ project: 'ABC', title: 'Trace claim fencing', body: 'details' });
   return { ...f, ticket };
 }
 
@@ -77,7 +78,7 @@ test('explicit release removes authority and makes open ticket ready', async () 
 test('submit review, accept done, and reopen open are explicit state transitions', async () => {
   const { store, ticket } = await seeded();
   const claim = await store.claim(ticket.id, { actor: 'worker-a' });
-  const reviewed = await store.submit(ticket.id, { ...identity(claim), message: 'ready for review' });
+  const reviewed = (await store.submit(ticket.id, { ...identity(claim), reviewer:{type:'actor',id:'maks'}, message: 'ready for review' })).ticket;
   assert.equal(reviewed.state, 'review');
   assert.equal(reviewed.claim, null);
   const done = await store.accept(ticket.id, { actor: 'maks', message: 'accepted' });
@@ -134,5 +135,5 @@ test('ticket edit and assignment retain the minimal canonical fields and record 
   assert.equal(edited.title, 'Updated');
   assert.equal(edited.body, 'new body');
   assert.equal(edited.assigned_to, null);
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'ticket_edited', 'assigned']);
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'ticket_edited']);
 });
