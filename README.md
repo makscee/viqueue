@@ -37,6 +37,21 @@ viq [--server URL] [--json] ticket takeover ID --actor ACTOR --ttl-ms MS --auth 
 viq [--server URL] [--json] ticket submit ID --actor ACTOR --claim-token TOKEN --generation N --evidence TEXT_OR_JSON
 ```
 
+## Local release-candidate bundle
+
+Create a reversible, unpublished local bundle:
+
+```sh
+npm run bundle
+cd release
+sha256sum -c viqueue-local-rc.tar.gz.sha256
+mkdir unpacked && tar -xzf viqueue-local-rc.tar.gz -C unpacked
+cd unpacked/viqueue-local-rc
+./install-local.sh
+```
+
+This installs `viq`, `viqueue-server`, and `viqueue-mcp` under `~/.local` without elevated privileges. Ensure `~/.local/bin` is on `PATH`. Override the destination with `VIQ_PREFIX=/some/path`. Remove only installed program files with `./uninstall-local.sh`; ticket storage passed to the server is intentionally preserved. This is a local evaluation artifact, not a published package or licensed release.
+
 ## Attach an MCP host
 
 Start the HTTP server first. Configure an MCP host to launch the stdio adapter with environment variables rather than changing any live host now:
@@ -74,4 +89,4 @@ The board refreshes its read-only projection every five seconds while visible. P
 
 Run `npm run e2e` to exercise the CLI, MCP, and real Chromium board tracer bullets. Exact raw outputs are written under `evidence/`; desktop/mobile acceptance screenshots are under `evidence/screenshots/`. Browser installation for a new development machine is `npx playwright install chromium`.
 
-See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), [board projection ADR](docs/adr-0003-phase2-board-projection.md), and [responsive navigation ADR](docs/adr-0004-phase21-responsive-navigation.md).
+See [the stack ADR](docs/adr-0001-stack.md), [MCP contract ADR](docs/adr-0002-phase1-contract-and-mcp.md), [board projection ADR](docs/adr-0003-phase2-board-projection.md), [responsive navigation ADR](docs/adr-0004-phase21-responsive-navigation.md), and [local bundle ADR](docs/adr-0005-local-release-bundle.md).

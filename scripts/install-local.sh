@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+prefix="${VIQ_PREFIX:-$HOME/.local}"
+app="$prefix/lib/viqueue"
+bin="$prefix/bin"
+mkdir -p "$app" "$bin"
+cp -R bin src web package.json "$app/"
+ln -sfn "$app/bin/viq.js" "$bin/viq"
+cat >"$bin/viqueue-server" <<EOF
+#!/usr/bin/env bash
+exec node "$app/src/server.js" "\$@"
+EOF
+cat >"$bin/viqueue-mcp" <<EOF
+#!/usr/bin/env bash
+exec node "$app/src/mcp-server.js" "\$@"
+EOF
+chmod +x "$app/bin/viq.js" "$bin/viqueue-server" "$bin/viqueue-mcp"
+printf 'installed viqueue locally under %s\n' "$prefix"
+printf 'ensure %s is on PATH\n' "$bin"

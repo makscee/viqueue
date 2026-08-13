@@ -1,0 +1,30 @@
+import { createHash } from 'node:crypto';
+import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+const root = path.resolve('release');
+const stage = path.join(root, 'viqueue-local-rc');
+const archive = path.join(root, 'viqueue-local-rc.tar.gz');
+await rm(root, { recursive: true, force: true });
+await mkdir(path.join(stage, 'bin'), { recursive: true });
+await mkdir(path.join(stage, 'src'), { recursive: true });
+await mkdir(path.join(stage, 'web'), { recursive: true });
+for (const file of ['bin/viq.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
+  await cp(path.join('dist', file), path.join(stage, file));
+}
+await cp('dist/web', path.join(stage, 'web'), { recursive: true });
+await cp('README.md', path.join(stage, 'README.md'));
+await cp('scripts/install-local.sh', path.join(stage, 'install-local.sh'));
+await cp('scripts/uninstall-local.sh', path.join(stage, 'uninstall-local.sh'));
+await chmod(path.join(stage, 'install-local.sh'), 0o755);
+await chmod(path.join(stage, 'uninstall-local.sh'), 0o755);
+const result = spawnSync('tar', [
+  '--sort=name', '--mtime=@0', '--owner=0', '--group=0', '--numeric-owner',
+  '-czf', archive, '-C', root, 'viqueue-local-rc'
+], { encoding: 'utf8' });
+if (result.status !== 0) throw new Error(result.stderr);
+const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
+await writeFile(`${archive}.sha256`, `${digest}  release/${path.basename(archive)}\n`);
+console.log(`built ${archive}`);
+console.log(`sha256 ${digest}`);

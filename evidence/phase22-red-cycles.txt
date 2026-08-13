@@ -1,0 +1,6 @@
+Phase 2.2 RED — reversible local bundle
+Command: npm run bundle
+Observed: npm reported Missing script: "bundle"; exit 1.
+GREEN: bundle script creates a tar.gz plus SHA-256 checksum from built artifacts.
+
+Integration GREEN: test/local-bundle.test.js extracts the actual archive into a temporary directory, installs to an isolated VIQ_PREFIX, starts the installed server/board, creates durable data through installed viq, initializes the installed MCP adapter, uninstalls, and verifies user storage remains intact.
