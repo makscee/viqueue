@@ -1,5 +1,5 @@
 export class HttpApplicationClient {
-  constructor({ server = 'http://127.0.0.1:7373', operatorToken } = {}) {
+  constructor({ server = process.env.VIQ_URL ?? 'http://127.0.0.1:7373', operatorToken } = {}) {
     this.server = server.replace(/\/$/, '');
     this.operatorToken = operatorToken;
   }

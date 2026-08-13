@@ -43,7 +43,7 @@ viq event post ABC-1 <claim credentials> --message "tests green"
 viq event list --project ABC --after CURSOR
 ```
 
-CLI JSON mode writes one JSON document. Exit codes are 0 success, 2 usage, 3 conflict, 4 not found, 5 other HTTP error, and 6 client/transport error. MCP exposes coherent equivalents through `tools/list`; configure `VIQ_SERVER` and `VIQ_OPERATOR_TOKEN`.
+CLI JSON mode writes one JSON document. Exit codes are 0 success, 2 usage, 3 conflict, 4 not found, 5 other HTTP error, and 6 client/transport error. MCP exposes coherent equivalents through `tools/list`; run `viq-mcp` with `VIQ_URL` (legacy `VIQ_SERVER` is also accepted). `VIQ_OPERATOR_TOKEN` is only needed for operator tools. The actor selector and actor fields are private-alpha workflow identity, not adversarial authentication: keep HTTP behind a trusted loopback or private Tailscale boundary and never expose it with Funnel/public ingress.
 
 ## Import v0.2 JSON safely
 

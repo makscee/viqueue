@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "viq": "bin/viq.js",
+    "viq-mcp": "src/mcp-server.js",
     "viqueue-mcp": "src/mcp-server.js",
     "viq-import": "bin/viq-import.js"
   },
