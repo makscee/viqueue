@@ -1,6 +1,6 @@
 {
   "name": "viqueue",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Minimal pull-based central ticket dispatcher for agents and humans",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
     "viqueue-mcp": "src/mcp-server.js",
     "viq-import": "bin/viq-import.js",
     "viq-phone-auth": "bin/viq-phone-auth.js",
+    "viq-trace-tailscale-upstream": "bin/viq-trace-tailscale-upstream.js",
     "viqueue-phone-gateway": "src/phone-gateway.js"
   },
   "scripts": {

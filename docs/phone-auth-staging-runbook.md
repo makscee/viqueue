@@ -3,21 +3,39 @@
 ## Operator flow
 
 1. Build and run the existing application on loopback 7373 as today.
-2. Choose a separate durable auth directory (new directories are created 0700; an existing parent is never chmodded), database (0600), canonical approved HTTPS origin, and fixed loopback upstream. Either run gateway-managed TLS with both files, `viqueue-phone-gateway --auth-db=… --origin=https://phone.example --upstream=http://127.0.0.1:7373 --cert=… --key=…`, or use the existing approved proxy/tunnel for TLS and explicitly run loopback HTTP with `--tls-terminated=true`. The latter mode is safe only when the gateway remains bound to loopback and the approved ingress forwards to it. A partial certificate/key pair is rejected.
-3. Run `viq-phone-auth pair-create --db=… --origin=https://…`. Do not paste the URL into logs or tickets.
-4. On the phone, open the fragment URL and tap **Pair this phone**. That is the single minimal phone action after the cutover gate.
-5. Inspect `viq-phone-auth status --db=… --origin=https://…` (`--json` is available). If a key/profile is lost or access must end, run `revoke`; create a new pair only afterward.
+2. Choose a separate durable auth directory (new directories are created 0700; an existing parent is never chmodded), database (0600), and canonical approved HTTPS phone origin.
+3. Select exactly one upstream mode:
+   - Default/local: `--upstream=http://127.0.0.1:7373`. Loopback HTTP is the only mode when no address policy is supplied.
+   - Exact tailnet HTTPS: `--upstream=https://cc-worker.twin-pogona.ts.net --upstream-address-policy=tailscale`. Remote HTTP, IP literals, nondefault ports, credentials, paths, queries, fragments, and every policy name other than `tailscale` are rejected.
+4. Either run gateway-managed inbound TLS with both `--cert` and `--key`, or use an already approved TLS ingress and explicitly pass `--tls-terminated=true`. The latter is safe only while the gateway remains bound to loopback and that approved ingress is the sole caller. A partial keypair is rejected.
+5. Run `viq-phone-auth pair-create --db=… --origin=https://…`. Do not paste its URL into logs or tickets.
+6. On the phone, open the fragment URL and tap **Pair this phone**. That is the single minimal phone action after the cutover gate.
+7. Inspect `viq-phone-auth status --db=… --origin=https://…` (`--json` is available). If a key/profile is lost or access must end, run `revoke`; create a new pair only afterward.
 
-The actor picker remains workflow context, not authentication.
+Example inert command for the approved mcow topology (paths and phone origin remain cutover inputs):
+
+```sh
+viqueue-phone-gateway \
+  --auth-db=/APPROVED/PATH/phone-auth.sqlite \
+  --origin=https://APPROVED-PHONE-ORIGIN \
+  --upstream=https://cc-worker.twin-pogona.ts.net \
+  --upstream-address-policy=tailscale \
+  --tls-terminated=true \
+  --port=7443
+```
+
+`HTTP_PROXY`, `HTTPS_PROXY`, and lowercase variants are intentionally ignored. Standard Node CA and hostname verification must succeed. Each new connection re-resolves the exact hostname, rejects the whole answer set if any address is outside Tailscale IPv4 `100.64.0.0/10` or IPv6 `fd7a:115c:a1e0::/48`, and binds the socket to the validated result. Redirects are returned but never followed by the gateway.
+
+## Read-only upstream tracer
+
+From the gateway host and without proxy variables, `viq-trace-tailscale-upstream` performs only `GET /health` and `GET /v1/projects` against the exact `cc-worker.twin-pogona.ts.net` origin. It uses the production trust store and hostname verification, validates actual tailnet DNS answers, pins those answers into the request lookup, caps response bytes, and does not follow redirects. It creates no pairing or application state.
 
 ## Cutover gate (Eva approval required)
 
-Before any activation, Eva must approve **the hostname and specific ingress**, the required policy exception, credential provisioning (if any), and the production auth DB location/service wiring. This change performs none of those actions.
-
-Candidate inert options: prefer the existing managed reverse proxy to the separate loopback gateway; an outbound Cloudflare Tunnel would require a newly approved credential; Tailscale Funnel is forbidden/not authorized. Examples are planning inputs, not active configuration.
+Before activation, Eva must approve **the phone hostname and specific ingress**, production auth DB path/service wiring, and any required policy exception or credential provisioning. Building, testing, tracing, and publishing v0.4.1 perform none of those actions. Tailscale Funnel remains forbidden/not authorized.
 
 ## Rollback
 
 Stop/remove only the gateway ingress/process, revoke the active device, and archive or delete the separate auth DB according to policy. Do not alter the existing server, tailnet route, DNS, firewall, or application DB. Direct loopback/tailnet behavior remains available and unchanged.
 
-The external origin is always canonical HTTPS. Gateway-managed TLS or explicit external TLS termination is mandatory outside automated `testMode`; `testMode` is not a CLI production option. Never package or track auth databases, private keys, certificates, or pairing URLs.
+Never package or track auth databases, private keys, certificates, or pairing URLs.
