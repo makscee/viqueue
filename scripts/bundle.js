@@ -15,7 +15,7 @@ await mkdir(path.join(stage, 'docs'), { recursive: true });
 const revision = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
 if (revision.status !== 0 || !/^[0-9a-f]{40}\n?$/.test(revision.stdout)) throw new Error(revision.stderr || 'cannot determine source commit');
 await writeFile(path.join(stage, 'SOURCE_COMMIT'), `${revision.stdout.trim()}\n`);
-for (const file of ['bin/viq.js', 'bin/viq-import.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
+for (const file of ['bin/viq.js', 'bin/viq-import.js', 'bin/viq-phone-auth.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'src/phone-auth-store.js', 'src/phone-gateway.js', 'package.json']) {
   await cp(path.join('dist', file), path.join(stage, file));
 }
 await cp('dist/web', path.join(stage, 'web'), { recursive: true });

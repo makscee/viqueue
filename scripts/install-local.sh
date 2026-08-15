@@ -7,15 +7,20 @@ mkdir -p "$app" "$bin"
 cp -R bin src web docs release-notes package.json README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md "$app/"
 ln -sfn "$app/bin/viq.js" "$bin/viq"
 ln -sfn "$app/bin/viq-import.js" "$bin/viq-import"
+ln -sfn "$app/bin/viq-phone-auth.js" "$bin/viq-phone-auth"
 cat >"$bin/viqueue-server" <<EOF
 #!/usr/bin/env bash
 exec node "$app/src/server.js" "\$@"
+EOF
+cat >"$bin/viqueue-phone-gateway" <<EOF
+#!/usr/bin/env bash
+exec node "$app/src/phone-gateway.js" "\$@"
 EOF
 cat >"$bin/viq-mcp" <<EOF
 #!/usr/bin/env bash
 exec node "$app/src/mcp-server.js" "\$@"
 EOF
 ln -sfn viq-mcp "$bin/viqueue-mcp"
-chmod +x "$app/bin/viq.js" "$app/bin/viq-import.js" "$bin/viqueue-server" "$bin/viq-mcp"
+chmod +x "$app/bin/viq.js" "$app/bin/viq-import.js" "$app/bin/viq-phone-auth.js" "$bin/viqueue-server" "$bin/viqueue-phone-gateway" "$bin/viq-mcp"
 printf 'installed viqueue locally under %s\n' "$prefix"
 printf 'ensure %s is on PATH\n' "$bin"

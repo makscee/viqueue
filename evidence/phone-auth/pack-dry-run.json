@@ -1,0 +1,186 @@
+[
+  {
+    "id": "viqueue@0.3.0",
+    "name": "viqueue",
+    "version": "0.3.0",
+    "size": 43542,
+    "unpackedSize": 147006,
+    "shasum": "d1f27ed2a3f94efee01803d5e5878dc596d789f7",
+    "integrity": "sha512-9uwoBe2P3SyIUFb7hE1kR/eYTA/z27b+zUlLnCdGMX4dskVwBVVlZkc/bb4zUcdcIaxS3xRuk3NKHOm3M3V4qA==",
+    "filename": "viqueue-0.3.0.tgz",
+    "files": [
+      {
+        "path": "CHANGELOG.md",
+        "size": 1861,
+        "mode": 420
+      },
+      {
+        "path": "CONTRIBUTING.md",
+        "size": 1319,
+        "mode": 420
+      },
+      {
+        "path": "LICENSE",
+        "size": 11358,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 5272,
+        "mode": 420
+      },
+      {
+        "path": "SECURITY.md",
+        "size": 1201,
+        "mode": 420
+      },
+      {
+        "path": "bin/viq-import.js",
+        "size": 3428,
+        "mode": 420
+      },
+      {
+        "path": "bin/viq-phone-auth.js",
+        "size": 1498,
+        "mode": 493
+      },
+      {
+        "path": "bin/viq.js",
+        "size": 7460,
+        "mode": 493
+      },
+      {
+        "path": "docs/adr-0001-stack.md",
+        "size": 816,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0002-phase1-contract-and-mcp.md",
+        "size": 350,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0003-phase2-board-projection.md",
+        "size": 314,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0004-phase21-responsive-navigation.md",
+        "size": 350,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0005-local-release-bundle.md",
+        "size": 1131,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0006-apache-public-source-preparation.md",
+        "size": 1332,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0007-github-publish-preparation.md",
+        "size": 1069,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0008-v03-daily-alpha-core.md",
+        "size": 1773,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0009-daily-alpha-actors-questions.md",
+        "size": 2193,
+        "mode": 420
+      },
+      {
+        "path": "docs/adr-0010-isolated-phone-auth.md",
+        "size": 1310,
+        "mode": 420
+      },
+      {
+        "path": "docs/phone-auth-staging-runbook.md",
+        "size": 2381,
+        "mode": 420
+      },
+      {
+        "path": "docs/phone-auth-threat-model.md",
+        "size": 1834,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1364,
+        "mode": 420
+      },
+      {
+        "path": "release-notes/v0.2.0.md",
+        "size": 377,
+        "mode": 420
+      },
+      {
+        "path": "release-notes/v0.3.0.md",
+        "size": 1185,
+        "mode": 420
+      },
+      {
+        "path": "src/http-client.js",
+        "size": 1220,
+        "mode": 420
+      },
+      {
+        "path": "src/mcp-server.js",
+        "size": 9829,
+        "mode": 420
+      },
+      {
+        "path": "src/phone-auth-store.js",
+        "size": 8477,
+        "mode": 420
+      },
+      {
+        "path": "src/phone-gateway.js",
+        "size": 7069,
+        "mode": 420
+      },
+      {
+        "path": "src/server.js",
+        "size": 9470,
+        "mode": 420
+      },
+      {
+        "path": "src/store.js",
+        "size": 33720,
+        "mode": 420
+      },
+      {
+        "path": "web/app.css",
+        "size": 4768,
+        "mode": 420
+      },
+      {
+        "path": "web/app.js",
+        "size": 10542,
+        "mode": 420
+      },
+      {
+        "path": "web/index.html",
+        "size": 2889,
+        "mode": 420
+      },
+      {
+        "path": "web/phone-bootstrap.js",
+        "size": 4695,
+        "mode": 420
+      },
+      {
+        "path": "web/phone-index.html",
+        "size": 3151,
+        "mode": 420
+      }
+    ],
+    "entryCount": 34,
+    "bundled": []
+  }
+]
