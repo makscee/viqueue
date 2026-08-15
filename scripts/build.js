@@ -7,6 +7,7 @@ await mkdir('dist/web', { recursive: true });
 await cp('bin/viq.js', 'dist/bin/viq.js');
 await cp('bin/viq-import.js', 'dist/bin/viq-import.js');
 await cp('bin/viq-phone-auth.js', 'dist/bin/viq-phone-auth.js');
+await cp('bin/viq-trace-tailscale-upstream.js', 'dist/bin/viq-trace-tailscale-upstream.js');
 await cp('src/server.js', 'dist/src/server.js');
 await cp('src/phone-auth-store.js', 'dist/src/phone-auth-store.js');
 await cp('src/phone-gateway.js', 'dist/src/phone-gateway.js');

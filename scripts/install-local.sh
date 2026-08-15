@@ -8,6 +8,7 @@ cp -R bin src web docs release-notes package.json README.md LICENSE CHANGELOG.md
 ln -sfn "$app/bin/viq.js" "$bin/viq"
 ln -sfn "$app/bin/viq-import.js" "$bin/viq-import"
 ln -sfn "$app/bin/viq-phone-auth.js" "$bin/viq-phone-auth"
+ln -sfn "$app/bin/viq-trace-tailscale-upstream.js" "$bin/viq-trace-tailscale-upstream"
 cat >"$bin/viqueue-server" <<EOF
 #!/usr/bin/env bash
 exec node "$app/src/server.js" "\$@"
@@ -21,6 +22,6 @@ cat >"$bin/viq-mcp" <<EOF
 exec node "$app/src/mcp-server.js" "\$@"
 EOF
 ln -sfn viq-mcp "$bin/viqueue-mcp"
-chmod +x "$app/bin/viq.js" "$app/bin/viq-import.js" "$app/bin/viq-phone-auth.js" "$bin/viqueue-server" "$bin/viqueue-phone-gateway" "$bin/viq-mcp"
+chmod +x "$app/bin/viq.js" "$app/bin/viq-import.js" "$app/bin/viq-phone-auth.js" "$app/bin/viq-trace-tailscale-upstream.js" "$bin/viqueue-server" "$bin/viqueue-phone-gateway" "$bin/viq-mcp"
 printf 'installed viqueue locally under %s\n' "$prefix"
 printf 'ensure %s is on PATH\n' "$bin"

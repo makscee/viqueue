@@ -6,6 +6,15 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 No changes yet.
 
+## [0.4.1] — exact Tailscale HTTPS upstream security successor
+
+- Preserve loopback-only HTTP as the default phone-gateway upstream mode.
+- Add an explicit `tailscale` address policy for one exact remote HTTPS DNS origin.
+- Bind every new TLS socket to a freshly validated all-tailnet DNS answer set while retaining standard CA and hostname verification.
+- Add adversarial upstream tests, read-only tailnet tracer, CLI help, and updated security operations documentation.
+
+Release notes: [`release-notes/v0.4.1.md`](release-notes/v0.4.1.md).
+
 ## [0.4.0] — phone gateway prerelease
 
 - Repair the human-first desktop/mobile queue and assignment presentation.
