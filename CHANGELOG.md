@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 No changes yet.
 
+## [0.4.0] — phone gateway prerelease
+
+- Repair the human-first desktop/mobile queue and assignment presentation.
+- Add the isolated single-phone proof gateway, one-use device pairing, request-bound signatures, local revocation, and staging security documentation.
+- Add phone CLI/browser E2E coverage and package the gateway launchers.
+
+Release notes: [`release-notes/v0.4.0.md`](release-notes/v0.4.0.md).
+
 ## [0.3.0]
 
 - Added registered actors/roles, typed assignments, actor inbox cursors, fenced multi-question workflows, and explicit reviewer approval submission.

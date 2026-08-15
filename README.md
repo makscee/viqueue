@@ -1,6 +1,6 @@
 # viqueue
 
-viqueue is a minimalist pull-based ticket dispatcher for agents and humans. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.3.0 is an unpublished prerelease for local evaluation.
+viqueue is a minimalist pull-based ticket dispatcher for agents and humans. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.4.0 is a prerelease for local evaluation; it is not production-ready.
 
 ## Daily Alpha contract
 
@@ -57,8 +57,8 @@ The one-shot importer preserves project keys, next numbers, ticket IDs/titles, s
 
 ## Local bundle and evidence
 
-`npm run bundle` creates deterministic `release/viqueue-v0.3.0-rc.tar.gz` plus SHA-256. Its reversible installer adds the launchers `viq`, `viq-import`, `viq-phone-auth`, `viqueue-server`, `viqueue-mcp`, and `viqueue-phone-gateway` under `${VIQ_PREFIX:-~/.local}`; uninstall preserves separately located ticket data. Nothing here publishes, pushes, tags, deploys, or launches workers. See the [isolated phone-auth staging runbook](docs/phone-auth-staging-runbook.md) before configuring a gateway.
+`npm run bundle` creates deterministic `release/viqueue-v0.4.0-rc.tar.gz` plus SHA-256. Its reversible installer adds the launchers `viq`, `viq-import`, `viq-phone-auth`, `viqueue-server`, `viqueue-mcp`, and `viqueue-phone-gateway` under `${VIQ_PREFIX:-~/.local}`; uninstall preserves separately located ticket data. Nothing here publishes, pushes, tags, deploys, or launches workers. See the [isolated phone-auth staging runbook](docs/phone-auth-staging-runbook.md) before configuring a gateway.
 
-`npm run e2e` exercises CLI, MCP, the standard Chromium flow, and the isolated HTTPS phone-browser flow and writes evidence/screenshots when `VIQ_EVIDENCE_DIR` is set. See [ADR 0008](docs/adr-0008-v03-daily-alpha-core.md), [CHANGELOG.md](CHANGELOG.md), and [release notes](release-notes/v0.3.0.md).
+`npm run e2e` exercises CLI, MCP, the standard Chromium flow, and the isolated HTTPS phone-browser flow and writes evidence/screenshots when `VIQ_EVIDENCE_DIR` is set. See [ADR 0008](docs/adr-0008-v03-daily-alpha-core.md), [CHANGELOG.md](CHANGELOG.md), and [release notes](release-notes/v0.4.0.md).
 
 viqueue is licensed under the [Apache License 2.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

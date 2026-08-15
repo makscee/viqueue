@@ -1,8 +1,10 @@
+#!/usr/bin/env node
 import http from 'node:http';
 import https from 'node:https';
+import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { AuthStore } from './phone-auth-store.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
@@ -39,4 +41,4 @@ export async function createPhoneGateway({authDb,origin,upstream,cert,key,tlsTer
  const server=cert&&key?https.createServer({cert,key},handler):http.createServer(handler);server.authStore=store;server.rateLimitBuckets=buckets;server.on('close',()=>store.close());return server;
 }
 export async function runPhoneGateway(o){const s=await createPhoneGateway(o);const port=Number(o.port||7443);s.listen(port,'127.0.0.1',()=>console.log(JSON.stringify({event:'phone_gateway_listening',url:o.origin})));return s}
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const a=Object.fromEntries(process.argv.slice(2).map(x=>{const[k,...v]=x.replace(/^--/,'').split('=');return[k.replaceAll('-','_'),v.join('=')]}));await runPhoneGateway({authDb:a.auth_db,origin:a.origin,upstream:a.upstream,cert:a.cert?await readFile(a.cert):null,key:a.key?await readFile(a.key):null,port:a.port,tlsTerminated:a.tls_terminated==='true'})}
+if(process.argv[1]&&fileURLToPath(import.meta.url)===realpathSync(process.argv[1])){const a=Object.fromEntries(process.argv.slice(2).map(x=>{const[k,...v]=x.replace(/^--/,'').split('=');return[k.replaceAll('-','_'),v.join('=')]}));await runPhoneGateway({authDb:a.auth_db,origin:a.origin,upstream:a.upstream,cert:a.cert?await readFile(a.cert):null,key:a.key?await readFile(a.key):null,port:a.port,tlsTerminated:a.tls_terminated==='true'})}
