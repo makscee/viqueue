@@ -9,7 +9,7 @@ const signatures = [
   ['slack_token', /xox[baprs]-[A-Za-z0-9-]{10,}/g],
   ['google_api_key', /AIza[0-9A-Za-z_-]{35}/g]
 ];
-const files = execFileSync('git', ['ls-files'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 const findings = [];
 for (const file of files) {
   const content = readFileSync(file);
@@ -23,5 +23,5 @@ if (findings.length) {
   for (const finding of findings) console.error(`potential ${finding.kind} in ${finding.scope}${finding.file ? ` file ${finding.file}` : ''}`);
   process.exit(1);
 }
-console.log(`secret scan passed: ${files.length} tracked files and git patch history; 0 high-confidence matches`);
-console.log('targeted credential-keyword review is recorded in evidence/phase23-secret-scan-output.txt');
+console.log(`secret scan passed: ${files.length} tracked/untracked proposed source files and unchanged git patch history; 0 high-confidence matches`);
+console.log('targeted credential/artifact review is a separate evidence check');

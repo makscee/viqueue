@@ -1,0 +1,300 @@
+
+> viqueue@0.3.0 test
+> node --test test/*.test.js
+
+TAP version 13
+# (node:287293) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: board assets expose the four canonical projections without agent controls
+ok 1 - board assets expose the four canonical projections without agent controls
+  ---
+  duration_ms: 46.580248
+  type: 'test'
+  ...
+# Subtest: CLI E2E covers actors roles typed assignment questions inbox metadata and approval
+ok 2 - CLI E2E covers actors roles typed assignment questions inbox metadata and approval
+  ---
+  duration_ms: 1960.647628
+  type: 'test'
+  ...
+# (node:287295) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: actor lifecycle, role holder eligibility, typed assignment/filtering and claim restrictions
+ok 3 - actor lifecycle, role holder eligibility, typed assignment/filtering and claim restrictions
+  ---
+  duration_ms: 12.509368
+  type: 'test'
+  ...
+# Subtest: questions accumulate without stopping claim; inbox authorization/cursor metadata and duplicate race
+ok 4 - questions accumulate without stopping claim; inbox authorization/cursor metadata and duplicate race
+  ---
+  duration_ms: 17.111836
+  type: 'test'
+  ...
+# Subtest: submit approval atomics, compatibility acceptance and reopen coherence
+ok 5 - submit approval atomics, compatibility acceptance and reopen coherence
+  ---
+  duration_ms: 12.130464
+  type: 'test'
+  ...
+# (node:287335) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SQLite ticket fields, numbering, and event history survive store restart
+ok 6 - SQLite ticket fields, numbering, and event history survive store restart
+  ---
+  duration_ms: 13.326321
+  type: 'test'
+  ...
+# Subtest: durable claim survives arbitrary elapsed time and restart without liveness inference
+ok 7 - durable claim survives arbitrary elapsed time and restart without liveness inference
+  ---
+  duration_ms: 5.631609
+  type: 'test'
+  ...
+# Subtest: explicit release removes authority and makes open ticket ready
+ok 8 - explicit release removes authority and makes open ticket ready
+  ---
+  duration_ms: 4.186167
+  type: 'test'
+  ...
+# Subtest: submit review, accept done, and reopen open are explicit state transitions
+ok 9 - submit review, accept done, and reopen open are explicit state transitions
+  ---
+  duration_ms: 4.896391
+  type: 'test'
+  ...
+# Subtest: competing claims are atomic across independent SQLite connections
+ok 10 - competing claims are atomic across independent SQLite connections
+  ---
+  duration_ms: 4.958233
+  type: 'test'
+  ...
+# Subtest: explicit takeover increments generation and old owner is fenced
+ok 11 - explicit takeover increments generation and old owner is fenced
+  ---
+  duration_ms: 3.829544
+  type: 'test'
+  ...
+# Subtest: event cursor is global monotonic and polling after cursor filters project or ticket
+ok 12 - event cursor is global monotonic and polling after cursor filters project or ticket
+  ---
+  duration_ms: 5.416676
+  type: 'test'
+  ...
+# Subtest: ticket edit and assignment retain the minimal canonical fields and record events
+ok 13 - ticket edit and assignment retain the minimal canonical fields and record events
+  ---
+  duration_ms: 3.059158
+  type: 'test'
+  ...
+# (node:287342) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: HTTP exposes the complete canonical lifecycle and event polling
+ok 14 - HTTP exposes the complete canonical lifecycle and event polling
+  ---
+  duration_ms: 74.879384
+  type: 'test'
+  ...
+# Subtest: HTTP release and authorized takeover preserve fencing
+ok 15 - HTTP release and authorized takeover preserve fencing
+  ---
+  duration_ms: 34.710992
+  type: 'test'
+  ...
+# Subtest: HTTP edits minimal ticket fields and rejects malformed JSON
+ok 16 - HTTP edits minimal ticket fields and rejects malformed JSON
+  ---
+  duration_ms: 20.585681
+  type: 'test'
+  ...
+# (node:287371) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one-shot v0.2 JSON import preserves IDs, states, numbering, and claim fencing truth
+ok 17 - one-shot v0.2 JSON import preserves IDs, states, numbering, and claim fencing truth
+  ---
+  duration_ms: 64.771753
+  type: 'test'
+  ...
+# Subtest: import fails closed on incomplete or state-inconsistent legacy claims
+ok 18 - import fails closed on incomplete or state-inconsistent legacy claims
+  ---
+  duration_ms: 93.113163
+  type: 'test'
+  ...
+# Subtest: import rejection never alters or deletes an existing target
+ok 19 - import rejection never alters or deletes an existing target
+  ---
+  duration_ms: 49.327768
+  type: 'test'
+  ...
+# Subtest: v0.3 local bundle installs SQLite HTTP/CLI/MCP/import surfaces and uninstalls without data removal
+ok 20 - v0.3 local bundle installs SQLite HTTP/CLI/MCP/import surfaces and uninstalls without data removal
+  ---
+  duration_ms: 803.512282
+  type: 'test'
+  ...
+# Subtest: MCP v0.3 exposes actor/role/assignment/question parity without leases
+ok 21 - MCP v0.3 exposes actor/role/assignment/question parity without leases
+  ---
+  duration_ms: 3.174188
+  type: 'test'
+  ...
+# Subtest: MCP validates closed schemas
+ok 22 - MCP validates closed schemas
+  ---
+  duration_ms: 0.239439
+  type: 'test'
+  ...
+# (node:287493) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: accepted v0.3 SQLite migrates in place idempotently and preserves assignments claims events restart
+ok 23 - accepted v0.3 SQLite migrates in place idempotently and preserves assignments claims events restart
+  ---
+  duration_ms: 10.758473
+  type: 'test'
+  ...
+# Subtest: canonical project name is lowercase everywhere in repository content
+ok 24 - canonical project name is lowercase everywhere in repository content
+  ---
+  duration_ms: 12.307358
+  type: 'test'
+  ...
+# Subtest: dedicated CLI status, pair-create JSON and revoke lifecycle
+ok 25 - dedicated CLI status, pair-create JSON and revoke lifecycle
+  ---
+  duration_ms: 249.580589
+  type: 'test'
+  ...
+# (node:287676) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired is denied and pair token is one-use
+ok 26 - unpaired is denied and pair token is one-use
+  ---
+  duration_ms: 10.824274
+  type: 'test'
+  ...
+# Subtest: pair intent expires and is consumed exactly once
+ok 27 - pair intent expires and is consumed exactly once
+  ---
+  duration_ms: 5.918532
+  type: 'test'
+  ...
+# Subtest: proof is one-use and substitutions fail
+ok 28 - proof is one-use and substitutions fail
+  ---
+  duration_ms: 6.012474
+  type: 'test'
+  ...
+# Subtest: expired challenge and revoke invalidate, re-pair works
+ok 29 - expired challenge and revoke invalidate, re-pair works
+  ---
+  duration_ms: 3.555007
+  type: 'test'
+  ...
+# Subtest: second device denied, status and audit
+ok 30 - second device denied, status and audit
+  ---
+  duration_ms: 4.137668
+  type: 'test'
+  ...
+# Subtest: closed schemas and limits
+ok 31 - closed schemas and limits
+  ---
+  duration_ms: 2.755414
+  type: 'test'
+  ...
+# Subtest: only the latest pair intent is valid and revoke invalidates a pending intent
+ok 32 - only the latest pair intent is valid and revoke invalidates a pending intent
+  ---
+  duration_ms: 3.708378
+  type: 'test'
+  ...
+# Subtest: origin must be an exact canonical HTTPS origin
+ok 33 - origin must be an exact canonical HTTPS origin
+  ---
+  duration_ms: 0.377095
+  type: 'test'
+  ...
+# Subtest: pre-existing database parent permissions remain unchanged and database is 0600
+ok 34 - pre-existing database parent permissions remain unchanged and database is 0600
+  ---
+  duration_ms: 4.160037
+  type: 'test'
+  ...
+# Subtest: pair and challenge expire at the exact boundary
+ok 35 - pair and challenge expire at the exact boundary
+  ---
+  duration_ms: 9.341832
+  type: 'test'
+  ...
+# Subtest: concurrent second-device redemption has exactly one winner
+ok 36 - concurrent second-device redemption has exactly one winner
+  ---
+  duration_ms: 7.67182
+  type: 'test'
+  ...
+# (node:287713) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired API is denied before upstream
+ok 37 - unpaired API is denied before upstream
+  ---
+  duration_ms: 35.234826
+  type: 'test'
+  ...
+# Subtest: concurrent replay has exactly one winner/upstream request and strips request and response credentials
+ok 38 - concurrent replay has exactly one winner/upstream request and strips request and response credentials
+  ---
+  duration_ms: 22.25589
+  type: 'test'
+  ...
+# Subtest: auth JSON is limited to 8KiB and application bodies to 1MiB
+ok 39 - auth JSON is limited to 8KiB and application bodies to 1MiB
+  ---
+  duration_ms: 12.144466
+  type: 'test'
+  ...
+# Subtest: body substitution fails before upstream
+ok 40 - body substitution fails before upstream
+  ---
+  duration_ms: 7.276885
+  type: 'test'
+  ...
+# Subtest: source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+ok 41 - source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+  ---
+  duration_ms: 147.711265
+  type: 'test'
+  ...
+# Subtest: raw request-target rejects normalization hazards and binds exact target
+ok 42 - raw request-target rejects normalization hazards and binds exact target
+  ---
+  duration_ms: 9.491265
+  type: 'test'
+  ...
+# Subtest: only fixed public targets pass and unknown non-v1 targets are denied
+ok 43 - only fixed public targets pass and unknown non-v1 targets are denied
+  ---
+  duration_ms: 7.644274
+  type: 'test'
+  ...
+# Subtest: TLS configuration requires a complete keypair or explicit termination mode
+ok 44 - TLS configuration requires a complete keypair or explicit termination mode
+  ---
+  duration_ms: 2.252356
+  type: 'test'
+  ...
+# Subtest: public-source metadata and canonical Apache-2.0 license are consistent
+ok 45 - public-source metadata and canonical Apache-2.0 license are consistent
+  ---
+  duration_ms: 1.741757
+  type: 'test'
+  ...
+1..45
+# tests 45
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2029.475007

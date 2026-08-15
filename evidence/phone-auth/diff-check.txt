@@ -1,0 +1,5 @@
+git diff --check
+PASS (no output)
+
+git diff --cached --name-only
+PASS (no output; no staged files)

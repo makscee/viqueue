@@ -4,3 +4,7 @@ node_modules/
 .pi-subagents/
 *.tmp
 viqueue.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.pem

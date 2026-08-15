@@ -1,13 +1,153 @@
-const $=s=>document.querySelector(s),state={projects:[],project:'',tickets:[],actors:[],roles:[],active:'ready',inbox:[]},columns=[['ready','Ready'],['working','Working'],['review','Review'],['done','Done']];
-const request=async(path,options={})=>{const response=await fetch(path,{headers:{'content-type':'application/json',...(options.headers||{})},...options}),text=await response.text(),body=text?JSON.parse(text):null;if(!response.ok)throw new Error(body?.error?.message||`HTTP ${response.status}`);return body;};const projection=t=>t.state==='open'?(t.claim?'working':'ready'):t.state,age=when=>{const s=Math.max(0,Math.floor((Date.now()-when)/1000));return s<60?`${s}s`:s<3600?`${Math.floor(s/60)}m`:`${Math.floor(s/3600)}h`;},actorId=()=>$('#actor-select').value;
-const targetOptions=()=>[{label:'Actors',items:state.actors.map(a=>({value:`actor:${a.id}`,label:`${a.name}${a.machine?` · ${a.machine}`:''}`}))},{label:'Roles',items:state.roles.map(r=>({value:`role:${r.id}`,label:r.name}))}];function fillTargets(select,{unassigned=false}={}){select.replaceChildren();if(unassigned)select.append(new Option('Unassigned',''));for(const group of targetOptions()){const g=document.createElement('optgroup');g.label=group.label;for(const x of group.items)g.append(new Option(x.label,x.value));select.append(g);}}
-function render(){const board=$('#board');board.replaceChildren();for(const[key,label]of columns){const section=document.createElement('section');section.className='column';section.dataset.column=key;const list=state.tickets.filter(t=>projection(t)===key);section.innerHTML=`<h2>${label} <span>${list.length}</span></h2>`;for(const ticket of list){const button=document.createElement('button');button.className='card';button.dataset.id=ticket.id;const machine=state.actors.find(a=>a.id===ticket.claim?.actor)?.machine;button.innerHTML=`<strong></strong><b></b><small></small>`;button.children[0].textContent=ticket.id;button.children[1].textContent=ticket.title;button.children[2].textContent=`${ticket.assignee?`Assigned ${ticket.assignee.type}:${ticket.assignee.id}`:'Unassigned'}${ticket.claim?` · ${ticket.claim.actor}${machine?` @ ${machine}`:''} · ${age(ticket.claim.claimed_at)}`:''}`;section.append(button);}if(!list.length)section.insertAdjacentHTML('beforeend','<p>No tickets</p>');board.append(section);const tab=document.querySelector(`[data-tab="${key}"]`);tab.querySelector('span').textContent=list.length;section.hidden=matchMedia('(max-width:600px)').matches&&key!==state.active;}}
-function answerCard(q){const article=document.createElement('article');article.className='question-card';article.dataset.questionId=q.id;article.innerHTML=`<strong>${q.ticket_id} · ${q.kind}</strong><p></p><small>${q.target_type}:${q.target_id}</small>`;article.querySelector('p').textContent=q.text;const form=document.createElement('form');form.className='inline-answer';form.dataset.ticket=q.ticket_id;form.dataset.question=q.id;if(q.kind==='text')form.innerHTML='<label>Answer<input name="answer" required></label><button>Answer</button>';else form.innerHTML='<label>Optional note<input name="note"></label><button name="decision" value="accept">Accept</button><button name="decision" value="request_changes">Request changes</button>';article.append(form);return article;}
-async function refreshInbox(){const actor=actorId();state.inbox=actor?(await request(`/v1/actors/${encodeURIComponent(actor)}/inbox?after=0`)).questions:[];const all=state.project?await Promise.all(state.tickets.map(t=>request(`/v1/tickets/${t.id}/questions?status=open`))):[];$('#all-question-badge').textContent=`${all.reduce((n,x)=>n+x.questions.length,0)} open total`;$('#my-question-badge').textContent=`${state.inbox.length} for you`;$('#inbox-list').replaceChildren(...(state.inbox.length?state.inbox.map(answerCard):[Object.assign(document.createElement('p'),{textContent:actor?'No questions for you.':'Choose a registered actor.'})]));}
-async function refresh(preferred){[state.actors,state.roles,state.projects]=await Promise.all([request('/v1/actors?active=true').then(x=>x.actors),request('/v1/roles').then(x=>x.roles),request('/v1/projects').then(x=>x.projects)]);const select=$('#actor-select'),chosen=actorId()||localStorage.getItem('viq.actor')||'';select.replaceChildren(new Option('Choose actor',''),...state.actors.map(a=>new Option(`${a.name}${a.machine?` @ ${a.machine}`:''}`,a.id)));select.value=chosen;state.project=preferred||state.project||state.projects[0]?.key||'';$('#project-select').replaceChildren(...state.projects.map(p=>new Option(p.key,p.key)));$('#project-select').value=state.project;state.tickets=state.project?(await request(`/v1/projects/${state.project}/tickets`)).tickets:[];render();await refreshInbox();$('#status').textContent=state.project?`${state.project} refreshed`:'Create a project to begin';}
-async function detail(id){const[{ticket},questions,events]=await Promise.all([request(`/v1/tickets/${id}`),request(`/v1/tickets/${id}/questions`),request(`/v1/events?ticket=${id}`)]);const edit=$('#edit-form');edit.elements.id.value=id;edit.elements.title.value=ticket.title;edit.elements.body.value=ticket.body;fillTargets(edit.elements.assignee,{unassigned:true});edit.elements.assignee.value=ticket.assignee?`${ticket.assignee.type}:${ticket.assignee.id}`:'';$('#questions').replaceChildren(...questions.questions.map(q=>{const li=document.createElement('li');let answer=q.answer;if(q.kind==='approval'&&answer){try{const a=JSON.parse(answer);answer=`${a.decision}${a.note?` — ${a.note}`:''}`;}catch{}}li.textContent=`${q.kind}: ${q.text} → ${q.target_type}:${q.target_id} [${q.status}]${answer?` — ${answer} by ${q.answered_by}`:''}`;return li;}));$('#history').replaceChildren(...events.events.map(e=>{const li=document.createElement('li');li.textContent=`${new Date(e.created_at).toLocaleString()} · ${e.type}${e.actor?` · ${e.actor}`:''}${e.message?` — ${e.message}`:''}`;return li;}));const action=$('#action-form');action.elements.id.value=id;action.elements.actor.value=ticket.claim?.actor||actorId();action.elements.claim_id.value=ticket.claim?.claim_id||'';action.elements.generation.value=ticket.claim?.generation||'';fillTargets(action.elements.reviewer);const ask=$('#ask-form');ask.elements.ticket_id.value=id;ask.elements.claim_id.value=ticket.claim?.claim_id||'';ask.elements.generation.value=ticket.claim?.generation||'';fillTargets(ask.elements.target);ask.hidden=!(ticket.state==='open'&&ticket.claim&&ticket.claim.actor===actorId());const actions=$('#actions');actions.replaceChildren();const add=(name,label)=>{const b=document.createElement('button');b.type='submit';b.name='action';b.value=name;b.textContent=label;actions.append(b);};if(ticket.state==='open'&&!ticket.claim)add('claim','Claim');if(ticket.state==='open'&&ticket.claim){add('events','Post progress / note');add('release','Release');add('submit','Submit');add('takeover','Take over');}if(ticket.state==='done')add('reopen','Reopen');if(!$('#detail').open)$('#detail').showModal();}
-$('#board').onclick=e=>{const card=e.target.closest('[data-id]');if(card)detail(card.dataset.id);};$('#state-tabs').onclick=e=>{const tab=e.target.closest('[data-tab]');if(!tab)return;state.active=tab.dataset.tab;document.querySelectorAll('[role=tab]').forEach(x=>x.setAttribute('aria-selected',String(x===tab)));render();};$('#refresh').onclick=()=>refresh();$('#actor-select').onchange=async e=>{localStorage.setItem('viq.actor',e.target.value);await refreshInbox();};$('#project-select').onchange=e=>refresh(e.target.value);
-$('#inbox-list').onsubmit=async e=>{e.preventDefault();const f=e.target.closest('.inline-answer');if(!f)return;const d=Object.fromEntries(new FormData(f)),decision=e.submitter?.value;await request(`/v1/tickets/${f.dataset.ticket}/questions/${f.dataset.question}/answer`,{method:'POST',body:JSON.stringify({actor:actorId(),...(decision?{decision,note:d.note}:{answer:d.answer})})});await refresh();};
-$('#project-form').onsubmit=async e=>{e.preventDefault();const p=(await request('/v1/projects',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))})).project;e.target.reset();await refresh(p.key);};$('#ticket-form').onsubmit=async e=>{e.preventDefault();await request('/v1/tickets',{method:'POST',body:JSON.stringify({project:state.project,title:new FormData(e.target).get('title')})});e.target.reset();await refresh();};$('#edit-form').onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target)),id=d.id,[type,value]=d.assignee?d.assignee.split(':'):[null,null];await request(`/v1/tickets/${id}`,{method:'PATCH',body:JSON.stringify({title:d.title,body:d.body,actor:actorId()||null,assignee:type?{type,id:value}:null})});await refresh();await detail(id);};
-$('#ask-form').onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target)),[type,id]=d.target.split(':'),action=$('#action-form');await request(`/v1/tickets/${d.ticket_id}/questions`,{method:'POST',body:JSON.stringify({claim_id:d.claim_id,claim_token:d.claim_token,generation:Number(d.generation),actor:actorId(),kind:'text',text:d.text,target_type:type,target_id:id})});e.target.elements.text.value='';action.elements.claim_token.value=d.claim_token;await refresh();await detail(d.ticket_id);$('#ask-form').elements.claim_token.value=d.claim_token;};
-$('#action-form').onsubmit=async e=>{e.preventDefault();const action=e.submitter.value,d=Object.fromEntries(new FormData(e.target)),id=d.id,headers={};let body;if(action==='claim'||action==='takeover'||action==='reopen')body={actor:actorId()||d.actor,message:d.message||undefined};else{body={claim_id:d.claim_id,actor:d.actor,claim_token:d.claim_token,generation:Number(d.generation),message:d.message||undefined};if(action==='submit'){if(!d.reviewer)throw new Error('Review target required');const[type,targetId]=d.reviewer.split(':');body.reviewer={type,id:targetId};}}if(['takeover','reopen'].includes(action))headers.authorization=`Bearer ${d.authorization}`;const result=await request(`/v1/tickets/${id}/${action}`,{method:'POST',headers,body:JSON.stringify(body)});await refresh();if(action==='claim'||action==='takeover'){e.target.elements.claim_id.value=result.ticket.claim.claim_id;e.target.elements.generation.value=result.ticket.claim.generation;e.target.elements.claim_token.value=result.claim_token;await detail(id);e.target.elements.claim_token.value=result.claim_token;$('#ask-form').elements.claim_token.value=result.claim_token;}else $('#detail').close();};refresh();
+const $ = (selector) => document.querySelector(selector);
+const state = { projects: [], project: '', tickets: [], actors: [], roles: [], active: 'ready', inbox: [] };
+const columns = [['ready', 'Ready'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done']];
+
+async function request(path, options = {}) {
+  const response = await fetch(path, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!response.ok) throw new Error(body?.error?.message || `Request failed (${response.status})`);
+  return body;
+}
+const actorId = () => $('#actor-select').value;
+const actorName = (id) => state.actors.find((actor) => actor.id === id)?.name || id;
+const roleName = (id) => state.roles.find((role) => role.id === id)?.name || 'Assigned group';
+const assigneeName = (assignee) => assignee?.type === 'actor' ? actorName(assignee.id) : assignee?.type === 'role' ? roleName(assignee.id) : 'Unassigned';
+const projection = (ticket) => ticket.state === 'open' ? (ticket.claim ? 'working' : 'ready') : ticket.state;
+const stateName = (ticket) => ({ ready: 'Ready', working: 'Working', review: 'Awaiting review', done: 'Done' })[projection(ticket)];
+function report(error) { $('#status').textContent = `Something went wrong: ${error.message}`; }
+function safely(handler) { return async (event) => { try { await handler(event); } catch (error) { report(error); } }; }
+
+function renderBoard() {
+  const board = $('#board');
+  board.replaceChildren();
+  for (const [key, label] of columns) {
+    const section = document.createElement('section');
+    section.className = 'column';
+    section.dataset.column = key;
+    const tickets = state.tickets.filter((ticket) => projection(ticket) === key);
+    section.innerHTML = `<h3>${label} <span>${tickets.length}</span></h3>`;
+    for (const ticket of tickets) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'ticket-card';
+      card.dataset.id = ticket.id;
+      const person = assigneeName(ticket.assignee);
+      card.innerHTML = '<small></small><strong></strong><span></span>';
+      card.children[0].textContent = ticket.id;
+      card.children[1].textContent = ticket.title;
+      card.children[2].textContent = `${person} · ${stateName(ticket)}`;
+      card.addEventListener('click', safely(async () => showDetail(ticket.id)));
+      section.append(card);
+    }
+    if (!tickets.length) section.insertAdjacentHTML('beforeend', '<p class="empty">Nothing here</p>');
+    section.hidden = matchMedia('(max-width:600px)').matches && key !== state.active;
+    board.append(section);
+    document.querySelector(`[data-tab="${key}"] span`).textContent = tickets.length;
+  }
+}
+
+function answerCard(question) {
+  const ticket = state.tickets.find((item) => item.id === question.ticket_id);
+  const article = document.createElement('article');
+  article.className = 'question-card';
+  article.innerHTML = '<small></small><h3></h3><p></p>';
+  article.querySelector('small').textContent = question.kind === 'approval' ? 'Review requested' : `Question · ${question.ticket_id}`;
+  article.querySelector('h3').textContent = ticket?.title || question.ticket_id;
+  article.querySelector('p').textContent = question.text;
+  const form = document.createElement('form');
+  form.className = 'inline-answer';
+  form.dataset.ticket = question.ticket_id;
+  form.dataset.question = question.id;
+  if (question.kind === 'text') form.innerHTML = '<label>Your answer<textarea name="answer" required rows="2"></textarea></label><button>Send answer</button>';
+  else form.innerHTML = '<label>Note (optional)<textarea name="note" rows="2"></textarea></label><div><button name="decision" value="accept">Accept work</button><button class="secondary" name="decision" value="request_changes">Request changes</button></div>';
+  article.append(form);
+  return article;
+}
+
+async function refreshInbox() {
+  const actor = actorId();
+  state.inbox = actor ? (await request(`/v1/actors/${encodeURIComponent(actor)}/inbox?after=0`)).questions : [];
+  const list = $('#inbox-list');
+  if (!actor) {
+    $('#inbox-count').textContent = '';
+    list.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Choose your name to see questions waiting for you.' }));
+  } else if (!state.inbox.length) {
+    $('#inbox-count').textContent = 'All clear';
+    list.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Nothing needs your answer. New questions will appear here.' }));
+  } else {
+    $('#inbox-count').textContent = `${state.inbox.length} ${state.inbox.length === 1 ? 'question needs' : 'questions need'} your answer`;
+    list.replaceChildren(...state.inbox.map(answerCard));
+  }
+}
+
+async function refresh(preferred = state.project) {
+  [state.actors, state.roles, state.projects] = await Promise.all([
+    request('/v1/actors?active=true').then((body) => body.actors),
+    request('/v1/roles').then((body) => body.roles),
+    request('/v1/projects').then((body) => body.projects)
+  ]);
+  const identity = actorId() || localStorage.getItem('viq.actor') || '';
+  $('#actor-select').replaceChildren(new Option('Choose your name', ''), ...state.actors.filter((actor) => actor.kind === 'human').map((actor) => new Option(actor.name, actor.id)));
+  $('#actor-select').value = state.actors.some((actor) => actor.id === identity && actor.kind === 'human') ? identity : '';
+  state.project = preferred || '';
+  $('#project-select').replaceChildren(new Option('All projects', ''), ...state.projects.map((project) => new Option(project.key, project.key)));
+  $('#project-select').value = state.project;
+  if (state.project) state.tickets = (await request(`/v1/projects/${encodeURIComponent(state.project)}/tickets`)).tickets;
+  else state.tickets = (await Promise.all(state.projects.map((project) => request(`/v1/projects/${encodeURIComponent(project.key)}/tickets`)))).flatMap((body) => body.tickets);
+  renderBoard();
+  await refreshInbox();
+  $('#status').textContent = `${state.tickets.length} tickets shown`;
+}
+
+async function showDetail(id) {
+  const [{ ticket }, { questions }, { events }] = await Promise.all([
+    request(`/v1/tickets/${id}`), request(`/v1/tickets/${id}/questions`), request(`/v1/events?ticket=${id}`)
+  ]);
+  $('#detail-id').textContent = ticket.id;
+  $('#detail-title').textContent = ticket.title;
+  $('#detail-body').textContent = ticket.body || 'No additional context.';
+  const assignmentFact = $('#detail-assignment-fact');
+  const workerFact = $('#detail-worker-fact');
+  const sameActor = ticket.assignee?.type === 'actor' && ticket.claim?.actor === ticket.assignee.id;
+  assignmentFact.hidden = sameActor || !ticket.assignee;
+  workerFact.hidden = !ticket.claim;
+  $('#detail-assignment-label').textContent = ticket.assignee?.type === 'role' ? 'Eligible group' : 'Assigned person';
+  $('#detail-assignee').textContent = sameActor ? '' : assigneeName(ticket.assignee);
+  $('#detail-worker').textContent = ticket.claim ? actorName(ticket.claim.actor) : '';
+  $('#detail-state').textContent = stateName(ticket);
+  const meaningful = [...events].reverse().find((event) => event.type === 'progress' && event.message);
+  $('#detail-progress').textContent = meaningful?.message || 'No progress update yet.';
+  $('#question-note').textContent = ticket.claim && questions.some((question) => question.status === 'open') ? 'Worker continues while questions wait.' : '';
+  $('#questions').replaceChildren(...questions.map((question) => {
+    const item = document.createElement('li');
+    item.className = 'ticket-question';
+    const prompt = document.createElement('strong');
+    prompt.textContent = question.text;
+    const answer = document.createElement('p');
+    if (!question.answer) answer.textContent = 'Waiting for an answer';
+    else if (question.kind === 'approval') {
+      try { const result = JSON.parse(question.answer); answer.textContent = `${result.decision === 'accept' ? 'Accepted' : 'Changes requested'}${result.note ? ` — ${result.note}` : ''}`; }
+      catch { answer.textContent = question.answer; }
+    } else answer.textContent = `Answered: ${question.answer}`;
+    item.append(prompt, answer);
+    return item;
+  }));
+  if (!questions.length) $('#questions').append(Object.assign(document.createElement('li'), { textContent: 'No questions have been asked.' }));
+  if (!$('#detail').open) $('#detail').showModal();
+}
+
+$('#close-detail').addEventListener('click', () => $('#detail').close());
+$('#refresh').addEventListener('click', safely(async () => refresh()));
+$('#actor-select').addEventListener('change', safely(async (event) => { localStorage.setItem('viq.actor', event.target.value); await refreshInbox(); }));
+$('#project-select').addEventListener('change', safely(async (event) => refresh(event.target.value)));
+$('#state-tabs').addEventListener('click', (event) => { const tab = event.target.closest('[data-tab]'); if (!tab) return; state.active = tab.dataset.tab; document.querySelectorAll('[role=tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); renderBoard(); });
+$('#inbox-list').addEventListener('submit', safely(async (event) => {
+  event.preventDefault(); const form = event.target.closest('.inline-answer'); if (!form) return;
+  const data = Object.fromEntries(new FormData(form)); const decision = event.submitter?.value;
+  await request(`/v1/tickets/${form.dataset.ticket}/questions/${form.dataset.question}/answer`, { method: 'POST', body: JSON.stringify({ actor: actorId(), ...(decision ? { decision, note: data.note } : { answer: data.answer }) }) });
+  await refresh(); $('#status').textContent = decision === 'accept' ? 'Work accepted' : decision === 'request_changes' ? 'Changes requested' : 'Answer sent';
+}));
+$('#project-form').addEventListener('submit', safely(async (event) => { event.preventDefault(); const result = await request('/v1/projects', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.target))) }); event.target.reset(); await refresh(result.project.key); }));
+$('#ticket-form').addEventListener('submit', safely(async (event) => { event.preventDefault(); if (!state.project) throw new Error('Choose a project before creating a ticket'); await request('/v1/tickets', { method: 'POST', body: JSON.stringify({ project: state.project, title: new FormData(event.target).get('title') }) }); event.target.reset(); await refresh(); }));
+refresh().catch(report);

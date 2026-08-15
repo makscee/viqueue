@@ -1,0 +1,2 @@
+TARGETED TREE/URL/LOG/ARTIFACT SCAN
+PASS: no live pairing URL, private key/certificate/auth DB artifact; proposed source and history covered by secret-scan.txt

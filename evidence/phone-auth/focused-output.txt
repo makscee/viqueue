@@ -1,0 +1,134 @@
+TAP version 13
+# Subtest: dedicated CLI status, pair-create JSON and revoke lifecycle
+ok 1 - dedicated CLI status, pair-create JSON and revoke lifecycle
+  ---
+  duration_ms: 163.491802
+  type: 'test'
+  ...
+# (node:287196) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired is denied and pair token is one-use
+ok 2 - unpaired is denied and pair token is one-use
+  ---
+  duration_ms: 9.997123
+  type: 'test'
+  ...
+# Subtest: pair intent expires and is consumed exactly once
+ok 3 - pair intent expires and is consumed exactly once
+  ---
+  duration_ms: 5.818825
+  type: 'test'
+  ...
+# Subtest: proof is one-use and substitutions fail
+ok 4 - proof is one-use and substitutions fail
+  ---
+  duration_ms: 5.184912
+  type: 'test'
+  ...
+# Subtest: expired challenge and revoke invalidate, re-pair works
+ok 5 - expired challenge and revoke invalidate, re-pair works
+  ---
+  duration_ms: 3.279899
+  type: 'test'
+  ...
+# Subtest: second device denied, status and audit
+ok 6 - second device denied, status and audit
+  ---
+  duration_ms: 3.703928
+  type: 'test'
+  ...
+# Subtest: closed schemas and limits
+ok 7 - closed schemas and limits
+  ---
+  duration_ms: 2.308838
+  type: 'test'
+  ...
+# Subtest: only the latest pair intent is valid and revoke invalidates a pending intent
+ok 8 - only the latest pair intent is valid and revoke invalidates a pending intent
+  ---
+  duration_ms: 3.131844
+  type: 'test'
+  ...
+# Subtest: origin must be an exact canonical HTTPS origin
+ok 9 - origin must be an exact canonical HTTPS origin
+  ---
+  duration_ms: 0.409836
+  type: 'test'
+  ...
+# Subtest: pre-existing database parent permissions remain unchanged and database is 0600
+ok 10 - pre-existing database parent permissions remain unchanged and database is 0600
+  ---
+  duration_ms: 2.492291
+  type: 'test'
+  ...
+# Subtest: pair and challenge expire at the exact boundary
+ok 11 - pair and challenge expire at the exact boundary
+  ---
+  duration_ms: 6.316116
+  type: 'test'
+  ...
+# Subtest: concurrent second-device redemption has exactly one winner
+ok 12 - concurrent second-device redemption has exactly one winner
+  ---
+  duration_ms: 2.648144
+  type: 'test'
+  ...
+# (node:287198) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired API is denied before upstream
+ok 13 - unpaired API is denied before upstream
+  ---
+  duration_ms: 31.530252
+  type: 'test'
+  ...
+# Subtest: concurrent replay has exactly one winner/upstream request and strips request and response credentials
+ok 14 - concurrent replay has exactly one winner/upstream request and strips request and response credentials
+  ---
+  duration_ms: 24.546719
+  type: 'test'
+  ...
+# Subtest: auth JSON is limited to 8KiB and application bodies to 1MiB
+ok 15 - auth JSON is limited to 8KiB and application bodies to 1MiB
+  ---
+  duration_ms: 13.622373
+  type: 'test'
+  ...
+# Subtest: body substitution fails before upstream
+ok 16 - body substitution fails before upstream
+  ---
+  duration_ms: 6.619218
+  type: 'test'
+  ...
+# Subtest: source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+ok 17 - source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+  ---
+  duration_ms: 135.019131
+  type: 'test'
+  ...
+# Subtest: raw request-target rejects normalization hazards and binds exact target
+ok 18 - raw request-target rejects normalization hazards and binds exact target
+  ---
+  duration_ms: 9.347258
+  type: 'test'
+  ...
+# Subtest: only fixed public targets pass and unknown non-v1 targets are denied
+ok 19 - only fixed public targets pass and unknown non-v1 targets are denied
+  ---
+  duration_ms: 7.391931
+  type: 'test'
+  ...
+# Subtest: TLS configuration requires a complete keypair or explicit termination mode
+ok 20 - TLS configuration requires a complete keypair or explicit termination mode
+  ---
+  duration_ms: 2.128952
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 316.323668

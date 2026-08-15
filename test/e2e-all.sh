@@ -6,3 +6,4 @@ export VIQ_EVIDENCE_DIR
 bash test/e2e.sh
 bash test/mcp-e2e.sh
 node test/browser-e2e.js
+node test/phone-auth-e2e.js

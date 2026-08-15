@@ -1,0 +1,12 @@
+PASS root is an understandable all-project overview with four tickets
+PASS Maks identity is remembered and his question inbox is immediately obvious
+PASS Maks answers a text question inline without claim credentials
+PASS Maks can request changes and accept an approval inline
+PASS ticket facts avoid same-actor duplication and distinguish a humanized eligible role from the active worker
+PASS human detail is meaningful, shows accumulating questions, and hides agent internals
+PASS project browsing returns cleanly to All projects
+PASS validation errors are understandable and refresh recovers without console errors
+PASS desktop and 390px mobile have sensible navigation and no horizontal overflow
+PASS explanatory empty inbox appears after the final answer
+PASS no browser console errors or warnings during significant interactions
+BROWSER_E2E_OK

@@ -1,0 +1,108 @@
+TAP version 13
+# node:internal/modules/esm/resolve:275
+#     throw new ERR_MODULE_NOT_FOUND(
+#           ^
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/root/work/viqueue/src/phone-auth-store.js' imported from /root/work/viqueue/test/phone-auth.test.js
+#     at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+#     at moduleResolve (node:internal/modules/esm/resolve:861:10)
+#     at defaultResolve (node:internal/modules/esm/resolve:985:11)
+#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)
+#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)
+#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)
+#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+#   code: 'ERR_MODULE_NOT_FOUND',
+#   url: 'file:///root/work/viqueue/src/phone-auth-store.js'
+# }
+# Node.js v22.22.2
+# Subtest: test/phone-auth.test.js
+not ok 1 - test/phone-auth.test.js
+  ---
+  duration_ms: 51.874569
+  type: 'test'
+  location: '/root/work/viqueue/test/phone-auth.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 59.140922
+
+GREEN
+TAP version 13
+# (node:256804) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired is denied and pair token is one-use
+ok 1 - unpaired is denied and pair token is one-use
+  ---
+  duration_ms: 9.549314
+  type: 'test'
+  ...
+# Subtest: proof is one-use and substitutions fail
+ok 2 - proof is one-use and substitutions fail
+  ---
+  duration_ms: 7.201109
+  type: 'test'
+  ...
+# Subtest: expired challenge and revoke invalidate, re-pair works
+ok 3 - expired challenge and revoke invalidate, re-pair works
+  ---
+  duration_ms: 3.122897
+  type: 'test'
+  ...
+# Subtest: second device denied, status and audit
+ok 4 - second device denied, status and audit
+  ---
+  duration_ms: 2.435234
+  type: 'test'
+  ...
+# Subtest: closed schemas and limits
+ok 5 - closed schemas and limits
+  ---
+  duration_ms: 2.483219
+  type: 'test'
+  ...
+# (node:256805) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired API is denied before upstream
+ok 6 - unpaired API is denied before upstream
+  ---
+  duration_ms: 29.539272
+  type: 'test'
+  ...
+# Subtest: concurrent replay has exactly one winner/upstream request and strips credentials
+ok 7 - concurrent replay has exactly one winner/upstream request and strips credentials
+  ---
+  duration_ms: 21.815614
+  type: 'test'
+  ...
+# Subtest: body substitution and oversized body fail before upstream
+ok 8 - body substitution and oversized body fail before upstream
+  ---
+  duration_ms: 12.888882
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 171.259132
+
+REVIEWER FAIL -> GREEN (focused fix round)
+FAIL: source/device composite rate keys allowed unique-device bypass and unbounded growth; normalized URL routing admitted raw-target ambiguity; auth JSON used the 1 MiB application limit; noncanonical origins, parent chmod, Set-Cookie forwarding, missing explicit TLS-termination mode, incomplete full E2E coverage, tracked-only proposed-source scan, same-fragment second-context omission, and missing concurrent-second-device/exact-boundary proofs were reported.
+GREEN: focused store/gateway/CLI suite passes 19/19. Regression sends 130 unique valid-format fake device IDs from one source, observes 429 at request 121 onward, and asserts <=121 buckets. Raw absolute/network-path/backslash/encoded-dot targets are rejected; exact raw target proof/proxy succeeds. Dedicated tests cover 8 KiB/1 MiB limits, canonical origins, unchanged existing parent mode plus DB 0600, Set-Cookie stripping, explicit TLS termination, concurrent redemption, and exact expiry boundary. Phone E2E proves same valid fragment is tapped in a second isolated context and denied with no token leakage; full npm E2E includes it.
+
+POST-REVIEW HARDENING -> GREEN
+A final stale-bootstrap review identified that more than one pre-pair intent could exist and a pending intent survived a revoke when no device was active. `createPair` now atomically replaces every older intent, and `revoke` invalidates pending intents even with no active device. Pair-create JSON no longer duplicates the fragment secret in a standalone field. Focused suite passes 20/20; baseline remains 25/25; full suite passes 45/45. Fresh native Pi verifier: PASS, no defects.
