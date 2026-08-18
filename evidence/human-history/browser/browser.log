@@ -1,0 +1,4 @@
+PASS VIQ-3 one centered modal handles project/ticket forms, inside/backdrop, Escape, initial and restored focus
+PASS VIQ-3 questions open from inbox and ticket, accept Markdown, and render without executable HTML
+VIQ3_BROWSER_OK
+

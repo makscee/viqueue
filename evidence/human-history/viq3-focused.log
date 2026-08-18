@@ -1,0 +1,38 @@
+TAP version 13
+# (node:2353097) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: board assets expose the four canonical projections without agent controls
+ok 1 - board assets expose the four canonical projections without agent controls
+  ---
+  duration_ms: 31.911512
+  type: 'test'
+  ...
+# Subtest: Markdown rendering preserves useful formatting and escapes executable HTML
+ok 2 - Markdown rendering preserves useful formatting and escapes executable HTML
+  ---
+  duration_ms: 1.205884
+  type: 'test'
+  ...
+# Subtest: reusable modal closes only from backdrop or Escape and restores trigger focus
+ok 3 - reusable modal closes only from backdrop or Escape and restores trigger focus
+  ---
+  duration_ms: 0.337766
+  type: 'test'
+  ...
+# Subtest: ticket, question, project, and ticket-create flows share one modal shell
+ok 4 - ticket, question, project, and ticket-create flows share one modal shell
+  ---
+  duration_ms: 5.267382
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105.432437
+
+EXIT=0

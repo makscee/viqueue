@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store, DomainError } from './store.js';
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
-const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.css': ['app.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'] };
+const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.css': ['app.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/ui-core.js': ['ui-core.js', 'text/javascript; charset=utf-8'] };
 const send = (response, status, body) => { response.statusCode = status; response.setHeader('content-type', 'application/json'); response.end(body === undefined ? '' : `${JSON.stringify(body)}\n`); };
 async function json(request) { let raw = ''; for await (const chunk of request) { raw += chunk; if (raw.length > 1_000_000) throw new DomainError(413, 'body_too_large', 'request body exceeds 1MB'); } try { return raw ? JSON.parse(raw) : {}; } catch { throw new DomainError(400, 'invalid_json', 'request body must be valid JSON'); } }
 const authorize = (request, token) => { if (!token || request.headers.authorization !== `Bearer ${token}`) throw new DomainError(403, 'operator_forbidden', 'valid local operator authorization is required'); };
