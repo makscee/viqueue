@@ -14,9 +14,13 @@ Use GitHub **private vulnerability reporting** for `makscee/viqueue`:
 
 Do not disclose suspected vulnerabilities, exploit details, or secrets in public issues or discussions. If the GitHub private reporting control is unavailable, retain the details privately until the repository owner enables it; do not fall back to public disclosure. No separate security email address is claimed.
 
-## Local security boundaries
+## Private-alpha trust boundaries
 
-- The takeover bearer token is a local gate, not production authentication.
-- The HTTP server defaults to loopback and should not be exposed to untrusted networks.
-- Claim tokens and storage files are sensitive local data.
+- The phone gateway's single active paired browser device is its access boundary; it identifies a browser profile, not a person or selected actor.
+- The board actor selector is workflow identity for attribution and inbox routing, not authentication or access control.
+- The core and phone-gateway listeners default/remain on loopback; keep any separately approved tailnet ingress private. Never use Funnel or public ingress.
+- Agent mutations require the current claim's complete claim ID, actor, generation, and token. Assignment and actor selection grant no agent authority.
+- The takeover bearer token is a local gate, not production authentication. Claim tokens and storage files are sensitive local data.
 - MCP hosts execute the configured stdio command with the user's permissions; install only trusted source/bundles.
+
+These are accepted private-alpha boundaries, not IAM or a production-security claim. See [ADR 0011](docs/adr-0011-private-alpha-trust-boundaries.md).

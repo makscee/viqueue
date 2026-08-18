@@ -81,12 +81,27 @@ try {
   await page.locator('.column[data-column="ready"] .ticket-card[data-id="LIFE-2"] .ticket-open').click(); await page.getByRole('button', { name: 'Delete ticket' }).click(); await page.getByLabel('Confirm delete').check(); await page.getByRole('button', { name: 'Confirm delete' }).click(); await page.getByText('Ticket deleted').waitFor(); assert.equal(await page.locator('.ticket-card[data-id="LIFE-2"]').count(), 0); disposable = (await api('GET', '/v1/tickets/LIFE-2')).ticket; assert.ok(disposable.deleted_at); assert.ok((await api('GET', '/v1/events?ticket=LIFE-2')).events.length >= 10);
   note('PASS VIQ-5 human created, edited/moved/assigned without claim, changed state from board/details, progressed, questioned/answered, archived/restored, and explicitly deleted a disposable ticket with attributed timeline retained');
 
+  await api('POST', '/v1/tickets', { project: 'LIFE', title: 'Mobile disposable history', body: 'Initial **mobile** context.', assignee: { type: 'actor', id: 'maks' }, actor: 'maks' });
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
   mobile.on('console', (message) => { if (['error', 'warning'].includes(message.type())) problems.push(`mobile ${message.type()}: ${message.text()}`); }); mobile.on('pageerror', (error) => problems.push(`mobile pageerror: ${error.message}`));
-  await mobile.goto(base); await mobile.getByText('4 tickets shown').waitFor(); await mobile.getByLabel('Your name').selectOption('maks');
-  assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
-  await mobile.getByRole('tab', { name: /Working/ }).click(); assert.equal(await mobile.locator('.column:not([hidden])').count(), 1); await mobile.locator('.ticket-card[data-id="VIQ-1"] .ticket-open').click(); await mobile.locator('#modal[open]').waitFor();
-  assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true); await mobile.screenshot({ path: `${evidence}/screenshots/viq7-mobile-390.png`, fullPage: true }); await mobile.keyboard.press('Escape'); await mobile.close();
-  note('PASS VIQ-7 desktop acceptance retains independent 390px navigation, interaction, and overflow coverage');
-  assert.deepEqual(problems, []); note('VIQ3_BROWSER_OK'); note('VIQ4_BROWSER_OK'); note('VIQ5_BROWSER_OK'); note('VIQ7_BROWSER_OK');
+  const mobileFits = async () => assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  const mobileIds = () => mobile.locator('.ticket-card').evaluateAll((cards) => cards.map((card) => card.dataset.id).sort());
+  await mobile.goto(base); await mobile.getByText('5 tickets shown').waitFor(); await mobile.getByLabel('Your name').selectOption('maks'); await mobileFits();
+  await mobile.getByRole('button', { name: 'LIFE', exact: true }).click(); assert.deepEqual(await mobileIds(), ['LIFE-1', 'LIFE-3']);
+  await mobile.getByRole('button', { name: 'Maks', exact: true }).click(); assert.deepEqual(await mobileIds(), ['LIFE-1', 'LIFE-3']);
+  assert.equal(await mobile.getByRole('button', { name: 'LIFE', exact: true }).getAttribute('aria-pressed'), 'true'); assert.equal(await mobile.getByRole('button', { name: 'Maks', exact: true }).getAttribute('aria-pressed'), 'true');
+  await mobile.locator('.ticket-card[data-id="LIFE-3"] .ticket-open').click(); await mobile.getByRole('button', { name: 'Edit ticket' }).click();
+  await mobile.getByLabel('Ticket title').fill('Mobile edited history'); await mobile.getByLabel('Description (Markdown)').fill('Edited **on 390px**.'); await mobile.getByRole('button', { name: 'Save ticket' }).click(); await mobile.getByText('Ticket updated').waitFor();
+  let mobileTicket = (await api('GET', '/v1/tickets/LIFE-3')).ticket; assert.equal(mobileTicket.title, 'Mobile edited history'); assert.equal(mobileTicket.body, 'Edited **on 390px**.');
+  await mobile.locator('.ticket-card[data-id="LIFE-3"] .ticket-open').click(); await mobile.getByRole('button', { name: 'Add progress' }).click(); await mobile.getByLabel('Progress (Markdown)').fill('Mobile human **progress**.'); await mobile.getByRole('button', { name: 'Add progress' }).click(); await mobile.getByText('Progress added').waitFor();
+  assert.equal((await api('GET', '/v1/events?ticket=LIFE-3')).events.at(-1).message, 'Mobile human **progress**.');
+  await mobile.locator('.ticket-card[data-id="LIFE-3"] .card-state').selectOption('review'); await mobile.getByText('State changed to review').waitFor(); await mobile.getByRole('tab', { name: /Review/ }).click(); assert.equal(await mobile.locator('.column:not([hidden])').count(), 1);
+  await mobile.locator('.ticket-card[data-id="LIFE-3"] .ticket-open').click(); await mobile.getByRole('button', { name: 'Archive', exact: true }).click(); await mobile.getByText('Ticket archived').waitFor(); await mobile.getByRole('tab', { name: /Archived/ }).click();
+  await mobile.locator('.ticket-card[data-id="LIFE-3"]').getByRole('button', { name: 'Restore' }).click(); await mobile.getByText('Ticket restored').waitFor(); await mobile.getByRole('tab', { name: /Review/ }).click();
+  await mobile.locator('.ticket-card[data-id="LIFE-3"] .ticket-open').click(); await mobile.getByRole('button', { name: 'Delete ticket' }).click();
+  assert.equal(await mobile.getByLabel('Confirm delete').isChecked(), false); await mobile.getByRole('button', { name: 'Confirm delete' }).click(); await mobile.waitForTimeout(50); assert.equal((await api('GET', '/v1/tickets/LIFE-3')).ticket.deleted_at, null);
+  await mobile.getByLabel('Confirm delete').check(); await mobile.getByRole('button', { name: 'Confirm delete' }).click(); await mobile.getByText('Ticket deleted').waitFor(); mobileTicket = (await api('GET', '/v1/tickets/LIFE-3')).ticket; assert.ok(mobileTicket.deleted_at);
+  await mobileFits(); await mobile.screenshot({ path: `${evidence}/screenshots/viq8-mobile-390-history.png`, fullPage: true }); await mobile.close();
+  note('PASS VIQ-8 independent 390px flow composes project/assignee chips and performs attributed edit, progress, state, archive/restore, and checked delete without overflow; desktop coverage remains intact');
+  assert.deepEqual(problems, []); note('VIQ3_BROWSER_OK'); note('VIQ4_BROWSER_OK'); note('VIQ5_BROWSER_OK'); note('VIQ7_BROWSER_OK'); note('VIQ8_BROWSER_OK');
 } finally { await browser.close(); server.kill(); await writeFile(`${evidence}/browser.log`, `${[...log, ...problems].join('\n')}\n`); }

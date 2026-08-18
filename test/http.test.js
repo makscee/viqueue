@@ -70,7 +70,12 @@ test('HTTP exposes human ticket history edits, state, archive, restore, notes, a
   await request(base, 'POST', '/v1/tickets/ABC-1/archive', { actor: 'maks' });
   assert.equal((await request(base, 'GET', '/v1/projects/XYZ/tickets?include_archived=true')).body.tickets.length, 1);
   await request(base, 'POST', '/v1/tickets/ABC-1/restore', { actor: 'maks' });
-  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/delete', { actor: 'maks', confirmed: false })).body.error.code, 'delete_confirmation_required');
+  for (const confirmed of [undefined, false, null, 0, 1, 'true', [], {}]) {
+    const rejected = await request(base, 'POST', '/v1/tickets/ABC-1/delete', { actor: 'maks', ...(confirmed === undefined ? {} : { confirmed }) });
+    assert.equal(rejected.status, 409);
+    assert.equal(rejected.body.error.code, 'delete_confirmation_required');
+    assert.equal((await request(base, 'GET', '/v1/tickets/ABC-1')).body.ticket.deleted_at, null);
+  }
   assert.ok((await request(base, 'POST', '/v1/tickets/ABC-1/delete', { actor: 'maks', confirmed: true })).body.ticket.deleted_at);
 });
 

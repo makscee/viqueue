@@ -85,11 +85,14 @@ test('human ticket UI exposes every field, direct state, progress, archive, rest
   assert.match(app, /question_event_id/);
 });
 
-test('browser acceptance independently covers desktop and a 390px mobile page', async () => {
+test('browser acceptance independently covers desktop and a complete 390px human-history flow', async () => {
   const browser = await readFile('test/human-history-browser-e2e.js', 'utf8');
-  assert.match(browser, /width:\s*390/);
-  assert.match(browser, /mobile\.goto\(base\)/);
-  assert.match(browser, /documentElement\.scrollWidth\s*<=\s*document\.documentElement\.clientWidth/);
+  const mobile = browser.slice(browser.indexOf('const mobile ='));
+  assert.match(mobile, /width:\s*390/);
+  assert.match(mobile, /mobile\.goto\(base\)/);
+  assert.match(mobile, /documentElement\.scrollWidth\s*<=\s*document\.documentElement\.clientWidth/);
+  for (const interaction of ["name: 'LIFE'", "name: 'Maks'", "name: 'Edit ticket'", "name: 'Add progress'", "selectOption('review')", "name: 'Archive'", "name: 'Restore'", "name: 'Delete ticket'", "getByLabel('Confirm delete').check"])
+    assert.ok(mobile.includes(interaction), `missing mobile interaction: ${interaction}`);
 });
 
 test('nested modal flows restore their prior view before returning focus to an in-dialog trigger', async () => {

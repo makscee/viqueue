@@ -175,10 +175,13 @@ test('archive is reversible while confirmed delete tombstones without erasing hi
   assert.deepEqual(await store.listTickets('ABC'), []); assert.equal(await store.next({ project: 'ABC' }), null); await assert.rejects(store.claim(ticket.id, { actor: 'worker-a' }), (error) => error.code === 'ticket_unavailable');
   assert.deepEqual((await store.listTickets('ABC', { includeArchived: true })).map((item) => item.id), [ticket.id]);
   const restored = await store.restoreTicket(ticket.id, { actor: 'maks' }); assert.equal(restored.archived_at, null);
+  for (const confirmed of [undefined, false, null, 0, 1, 'true', [], {}]) {
+    await assert.rejects(store.deleteTicket(ticket.id, { actor: 'maks', ...(confirmed === undefined ? {} : { confirmed }) }), (error) => error.code === 'delete_confirmation_required');
+    assert.equal((await store.getTicket(ticket.id)).deleted_at, null);
+  }
   const deleted = await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true }); assert.ok(deleted.deleted_at);
   assert.deepEqual(await store.listTickets('ABC', { includeArchived: true }), []);
   assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.slice(-3).map((event) => event.type), ['archived', 'restored', 'deleted']);
-  await assert.rejects(store.deleteTicket(ticket.id, { actor: 'maks', confirmed: false }), (error) => error.code === 'delete_confirmation_required');
 });
 
 test('archived tickets are immutable and leave inboxes until restored', async () => {
