@@ -1,0 +1,60 @@
+$ viq project create ABC
+{"project":{"key":"ABC","next_number":1,"created_at":1787067682684}}
+$ viq actor create worker-a --name Worker\ A --kind agent --auth \[REDACTED\]
+{"actor":{"id":"worker-a","name":"Worker A","kind":"agent","machine":null,"active":true,"created_at":1787067682751,"updated_at":1787067682751}}
+$ viq actor create worker-b --name Worker\ B --kind agent --auth \[REDACTED\]
+{"actor":{"id":"worker-b","name":"Worker B","kind":"agent","machine":null,"active":true,"created_at":1787067682829,"updated_at":1787067682829}}
+$ viq actor create maks --name Maks --kind human --auth \[REDACTED\]
+{"actor":{"id":"maks","name":"Maks","kind":"human","machine":null,"active":true,"created_at":1787067682903,"updated_at":1787067682903}}
+$ viq ticket create ABC tracer
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"open","assigned_to":null,"assignee":null,"archived_at":null,"deleted_at":null,"created_at":1787067682974,"updated_at":1787067682974,"claim":null}}
+{
+  "ticket": {
+    "id": "ABC-1",
+    "project": "ABC",
+    "title": "tracer",
+    "body": "",
+    "state": "open",
+    "assigned_to": null,
+    "assignee": null,
+    "archived_at": null,
+    "deleted_at": null,
+    "created_at": 1787067682974,
+    "updated_at": 1787067683046,
+    "claim": {
+      "claim_id": "8f96efff-cea2-4787-b4e0-c573b00ef844",
+      "actor": "worker-a",
+      "generation": 1,
+      "claimed_at": 1787067683046
+    }
+  }
+}
+$ viq event post ABC-1 --claim-id 8f96efff-cea2-4787-b4e0-c573b00ef844 --actor worker-a --claim-token \[REDACTED\] --generation 1 --message working
+{"event":{"cursor":6,"ticket_id":"ABC-1","project":"ABC","type":"progress","actor":"worker-a","message":"working","metadata":null,"created_at":1787067683126},"cursor":6}
+{
+  "ticket": {
+    "id": "ABC-1",
+    "project": "ABC",
+    "title": "tracer",
+    "body": "",
+    "state": "open",
+    "assigned_to": null,
+    "assignee": null,
+    "archived_at": null,
+    "deleted_at": null,
+    "created_at": 1787067682974,
+    "updated_at": 1787067683194,
+    "claim": {
+      "claim_id": "bbfc2b03-801a-4f02-a0c5-be0adf6c4d2c",
+      "actor": "worker-b",
+      "generation": 2,
+      "claimed_at": 1787067683194
+    }
+  }
+}
+{"error":{"code":"stale_claim","message":"claim identity or generation is no longer current"}}
+$ viq ticket submit ABC-1 --claim-id bbfc2b03-801a-4f02-a0c5-be0adf6c4d2c --actor worker-b --claim-token \[REDACTED\] --generation 2 --reviewer maks
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"review","assigned_to":null,"assignee":null,"archived_at":null,"deleted_at":null,"created_at":1787067682974,"updated_at":1787067683339,"claim":null},"question":{"id":"q_tEtKCS_s8K74","ticket_id":"ABC-1","asked_by":"worker-b","target_type":"actor","target_id":"maks","kind":"approval","text":"Approve submitted work?","status":"open","answer":null,"answered_by":null,"question_event_id":9,"created_at":1787067683340,"answered_at":null}}
+$ viq ticket accept ABC-1 --actor maks --auth \[REDACTED\]
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"done","assigned_to":null,"assignee":null,"archived_at":null,"deleted_at":null,"created_at":1787067682974,"updated_at":1787067683409,"claim":null}}
+E2E_OK

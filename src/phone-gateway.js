@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { AuthStore } from './phone-auth-store.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
-const PUBLIC=new Set(['/','/phone-bootstrap.js','/app.css','/app.js','/health']);
+const PUBLIC=new Set(['/','/phone-bootstrap.js','/app.css','/app.js','/ui-core.js','/health']);
 const DEVICE_ID=/^[A-Za-z0-9_-]{16,100}$/;
 const DNS_TIMEOUT_MS=3000,CONNECT_TIMEOUT_MS=5000,REQUEST_TIMEOUT_MS=15000,MAX_DNS_ANSWERS=16;
 const json=(res,status,value)=>{if(res.headersSent)return res.destroy();res.statusCode=status;res.setHeader('content-type','application/json');res.end(JSON.stringify(value)+'\n')};
@@ -88,7 +88,7 @@ export async function createPhoneGateway({authDb,origin,upstream,upstreamAddress
  const deviceLimited=(device)=>DEVICE_ID.test(device)&&hit(`device:${device}`);
  const handler=async(req,res)=>{secure(res);try{const rawTarget=requestTarget(req),pathOnly=rawTarget.split('?',1)[0];
   if(req.method==='GET'&&rawTarget==='/'){res.setHeader('content-type','text/html; charset=utf-8');return res.end(await readFile(path.join(root,'phone-index.html')))}
-  if(req.method==='GET'&&['/phone-bootstrap.js','/app.css','/app.js'].includes(rawTarget)){res.setHeader('content-type',rawTarget.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');return res.end(await readFile(path.join(root,rawTarget.slice(1))))}
+  if(req.method==='GET'&&['/phone-bootstrap.js','/app.css','/app.js','/ui-core.js'].includes(rawTarget)){res.setHeader('content-type',rawTarget.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');return res.end(await readFile(path.join(root,rawTarget.slice(1))))}
   if(req.method==='POST'&&rawTarget==='/__phone/pair'){if(sourceLimited(req))throw Object.assign(new Error(),{status:429});const data=parse(await body(req,8192));if(deviceLimited(data?.device_id))throw Object.assign(new Error(),{status:429});return json(res,200,store.consumePair(data))}
   if(req.method==='POST'&&rawTarget==='/__phone/challenge'){if(sourceLimited(req))throw Object.assign(new Error(),{status:429});const data=parse(await body(req,8192));if(deviceLimited(data?.device_id))throw Object.assign(new Error(),{status:429});return json(res,200,store.challenge(data))}
   if(pathOnly.startsWith('/__phone/'))throw Object.assign(new Error(),{status:404});

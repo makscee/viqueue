@@ -1,0 +1,246 @@
+TAP version 13
+# (node:2383351) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: board assets expose the four canonical projections without agent controls
+ok 1 - board assets expose the four canonical projections without agent controls
+  ---
+  duration_ms: 34.026389
+  type: 'test'
+  ...
+# (node:2383352) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: actor lifecycle, role holder eligibility, typed assignment/filtering and claim restrictions
+ok 2 - actor lifecycle, role holder eligibility, typed assignment/filtering and claim restrictions
+  ---
+  duration_ms: 12.202788
+  type: 'test'
+  ...
+# Subtest: questions accumulate without stopping claim; inbox authorization/cursor metadata and duplicate race
+ok 3 - questions accumulate without stopping claim; inbox authorization/cursor metadata and duplicate race
+  ---
+  duration_ms: 9.402676
+  type: 'test'
+  ...
+# Subtest: human questions join the same event history without requiring or creating a claim
+ok 4 - human questions join the same event history without requiring or creating a claim
+  ---
+  duration_ms: 4.022091
+  type: 'test'
+  ...
+# Subtest: submit approval atomics, compatibility acceptance and reopen coherence
+ok 5 - submit approval atomics, compatibility acceptance and reopen coherence
+  ---
+  duration_ms: 7.678655
+  type: 'test'
+  ...
+# (node:2383358) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SQLite ticket fields, numbering, and event history survive store restart
+ok 6 - SQLite ticket fields, numbering, and event history survive store restart
+  ---
+  duration_ms: 17.686724
+  type: 'test'
+  ...
+# Subtest: durable claim survives arbitrary elapsed time and restart without liveness inference
+ok 7 - durable claim survives arbitrary elapsed time and restart without liveness inference
+  ---
+  duration_ms: 12.580216
+  type: 'test'
+  ...
+# Subtest: explicit release removes authority and makes open ticket ready
+ok 8 - explicit release removes authority and makes open ticket ready
+  ---
+  duration_ms: 4.510769
+  type: 'test'
+  ...
+# Subtest: submit review, accept done, and reopen open are explicit state transitions
+ok 9 - submit review, accept done, and reopen open are explicit state transitions
+  ---
+  duration_ms: 5.630009
+  type: 'test'
+  ...
+# Subtest: competing claims are atomic across independent SQLite connections
+ok 10 - competing claims are atomic across independent SQLite connections
+  ---
+  duration_ms: 5.730044
+  type: 'test'
+  ...
+# Subtest: explicit takeover increments generation and old owner is fenced
+ok 11 - explicit takeover increments generation and old owner is fenced
+  ---
+  duration_ms: 5.031271
+  type: 'test'
+  ...
+# Subtest: event cursor is global monotonic and polling after cursor filters project or ticket
+ok 12 - event cursor is global monotonic and polling after cursor filters project or ticket
+  ---
+  duration_ms: 4.869691
+  type: 'test'
+  ...
+# Subtest: human edits every ticket field while assignment remains distinct from the active claim
+ok 13 - human edits every ticket field while assignment remains distinct from the active claim
+  ---
+  duration_ms: 5.080214
+  type: 'test'
+  ...
+# Subtest: human direct state changes fence claims and progress stays in the ticket event chronology
+ok 14 - human direct state changes fence claims and progress stays in the ticket event chronology
+  ---
+  duration_ms: 6.174348
+  type: 'test'
+  ...
+# Subtest: direct state override resolves a pending approval instead of leaving a stale inbox question
+ok 15 - direct state override resolves a pending approval instead of leaving a stale inbox question
+  ---
+  duration_ms: 5.303218
+  type: 'test'
+  ...
+# Subtest: archive is reversible while confirmed delete tombstones without erasing history
+ok 16 - archive is reversible while confirmed delete tombstones without erasing history
+  ---
+  duration_ms: 5.522093
+  type: 'test'
+  ...
+# Subtest: ticket edit and assignment retain the minimal canonical fields and record events
+ok 17 - ticket edit and assignment retain the minimal canonical fields and record events
+  ---
+  duration_ms: 4.888564
+  type: 'test'
+  ...
+# (node:2383386) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: HTTP exposes the complete canonical lifecycle and event polling
+ok 18 - HTTP exposes the complete canonical lifecycle and event polling
+  ---
+  duration_ms: 71.563482
+  type: 'test'
+  ...
+# Subtest: HTTP release and authorized takeover preserve fencing
+ok 19 - HTTP release and authorized takeover preserve fencing
+  ---
+  duration_ms: 42.065815
+  type: 'test'
+  ...
+# Subtest: HTTP exposes human ticket history edits, state, archive, restore, notes, and confirmed delete
+ok 20 - HTTP exposes human ticket history edits, state, archive, restore, notes, and confirmed delete
+  ---
+  duration_ms: 43.412976
+  type: 'test'
+  ...
+# Subtest: HTTP edits minimal ticket fields and rejects malformed JSON
+ok 21 - HTTP edits minimal ticket fields and rejects malformed JSON
+  ---
+  duration_ms: 13.171664
+  type: 'test'
+  ...
+# Subtest: Markdown rendering preserves useful formatting and escapes executable HTML
+ok 22 - Markdown rendering preserves useful formatting and escapes executable HTML
+  ---
+  duration_ms: 1.249993
+  type: 'test'
+  ...
+# Subtest: reusable modal closes only from backdrop or Escape and restores trigger focus
+ok 23 - reusable modal closes only from backdrop or Escape and restores trigger focus
+  ---
+  duration_ms: 0.403132
+  type: 'test'
+  ...
+# Subtest: project chip left click is exclusive/toggle-All and right click excludes only that project
+ok 24 - project chip left click is exclusive/toggle-All and right click excludes only that project
+  ---
+  duration_ms: 0.661088
+  type: 'test'
+  ...
+# Subtest: project and assignee filters compose, including unassigned tickets
+ok 25 - project and assignee filters compose, including unassigned tickets
+  ---
+  duration_ms: 0.223336
+  type: 'test'
+  ...
+# Subtest: filter chips expose accessible selected state, context-menu exclusion, and empty reset
+ok 26 - filter chips expose accessible selected state, context-menu exclusion, and empty reset
+  ---
+  duration_ms: 6.398385
+  type: 'test'
+  ...
+# Subtest: human ticket UI exposes every field, direct state, progress, archive, restore, delete, and attributed timeline
+ok 27 - human ticket UI exposes every field, direct state, progress, archive, restore, delete, and attributed timeline
+  ---
+  duration_ms: 0.730969
+  type: 'test'
+  ...
+# Subtest: ticket, question, project, and ticket-create flows share one modal shell
+ok 28 - ticket, question, project, and ticket-create flows share one modal shell
+  ---
+  duration_ms: 1.14693
+  type: 'test'
+  ...
+# (node:2383401) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: accepted v0.3 SQLite migrates in place idempotently and preserves assignments claims events restart
+ok 29 - accepted v0.3 SQLite migrates in place idempotently and preserves assignments claims events restart
+  ---
+  duration_ms: 12.616738
+  type: 'test'
+  ...
+# (node:2383416) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired API is denied before upstream
+ok 30 - unpaired API is denied before upstream
+  ---
+  duration_ms: 48.590625
+  type: 'test'
+  ...
+# Subtest: concurrent replay has exactly one winner/upstream request and strips request and response credentials
+ok 31 - concurrent replay has exactly one winner/upstream request and strips request and response credentials
+  ---
+  duration_ms: 32.133487
+  type: 'test'
+  ...
+# Subtest: auth JSON is limited to 8KiB and application bodies to 1MiB
+ok 32 - auth JSON is limited to 8KiB and application bodies to 1MiB
+  ---
+  duration_ms: 13.480325
+  type: 'test'
+  ...
+# Subtest: body substitution fails before upstream
+ok 33 - body substitution fails before upstream
+  ---
+  duration_ms: 8.072434
+  type: 'test'
+  ...
+# Subtest: source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+ok 34 - source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+  ---
+  duration_ms: 143.532517
+  type: 'test'
+  ...
+# Subtest: raw request-target rejects normalization hazards and binds exact target
+ok 35 - raw request-target rejects normalization hazards and binds exact target
+  ---
+  duration_ms: 9.726614
+  type: 'test'
+  ...
+# Subtest: only fixed public targets pass and unknown non-v1 targets are denied
+ok 36 - only fixed public targets pass and unknown non-v1 targets are denied
+  ---
+  duration_ms: 8.996308
+  type: 'test'
+  ...
+# Subtest: TLS configuration requires a complete keypair or explicit termination mode
+ok 37 - TLS configuration requires a complete keypair or explicit termination mode
+  ---
+  duration_ms: 2.862486
+  type: 'test'
+  ...
+1..37
+# tests 37
+# suites 0
+# pass 37
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 552.375123
+
+EXIT=0

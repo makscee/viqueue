@@ -69,6 +69,17 @@ test('filter chips expose accessible selected state, context-menu exclusion, and
   assert.match(`${html}${app}`, /No tickets match these filters/);
 });
 
+test('human ticket UI exposes every field, direct state, progress, archive, restore, delete, and attributed timeline', async () => {
+  const app = await readFile('web/app.js', 'utf8');
+  for (const term of ['Edit ticket', 'Ticket title', 'Project', 'Assignee', 'State', 'Add progress', 'Archive', 'Restore', 'Delete ticket', 'Confirm delete']) assert.match(app, new RegExp(term));
+  assert.match(app, /\/state/);
+  assert.match(app, /\/notes/);
+  assert.match(app, /include_archived=true/);
+  assert.match(app, /event\.actor/);
+  assert.match(app, /event\.created_at/);
+  assert.match(app, /question_event_id/);
+});
+
 test('ticket, question, project, and ticket-create flows share one modal shell', async () => {
   const [html, app] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.js', 'utf8')]);
   assert.equal((html.match(/<dialog\b/g) || []).length, 1);

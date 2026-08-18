@@ -1,0 +1,141 @@
+
+> viqueue@0.4.1 e2e
+> VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh
+
+$ viq project create ABC
+{"project":{"key":"ABC","next_number":1,"created_at":1787067682684}}
+$ viq actor create worker-a --name Worker\ A --kind agent --auth \[REDACTED\]
+{"actor":{"id":"worker-a","name":"Worker A","kind":"agent","machine":null,"active":true,"created_at":1787067682751,"updated_at":1787067682751}}
+$ viq actor create worker-b --name Worker\ B --kind agent --auth \[REDACTED\]
+{"actor":{"id":"worker-b","name":"Worker B","kind":"agent","machine":null,"active":true,"created_at":1787067682829,"updated_at":1787067682829}}
+$ viq actor create maks --name Maks --kind human --auth \[REDACTED\]
+{"actor":{"id":"maks","name":"Maks","kind":"human","machine":null,"active":true,"created_at":1787067682903,"updated_at":1787067682903}}
+$ viq ticket create ABC tracer
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"open","assigned_to":null,"assignee":null,"archived_at":null,"deleted_at":null,"created_at":1787067682974,"updated_at":1787067682974,"claim":null}}
+{
+  "ticket": {
+    "id": "ABC-1",
+    "project": "ABC",
+    "title": "tracer",
+    "body": "",
+    "state": "open",
+    "assigned_to": null,
+    "assignee": null,
+    "archived_at": null,
+    "deleted_at": null,
+    "created_at": 1787067682974,
+    "updated_at": 1787067683046,
+    "claim": {
+      "claim_id": "8f96efff-cea2-4787-b4e0-c573b00ef844",
+      "actor": "worker-a",
+      "generation": 1,
+      "claimed_at": 1787067683046
+    }
+  }
+}
+$ viq event post ABC-1 --claim-id 8f96efff-cea2-4787-b4e0-c573b00ef844 --actor worker-a --claim-token \[REDACTED\] --generation 1 --message working
+{"event":{"cursor":6,"ticket_id":"ABC-1","project":"ABC","type":"progress","actor":"worker-a","message":"working","metadata":null,"created_at":1787067683126},"cursor":6}
+{
+  "ticket": {
+    "id": "ABC-1",
+    "project": "ABC",
+    "title": "tracer",
+    "body": "",
+    "state": "open",
+    "assigned_to": null,
+    "assignee": null,
+    "archived_at": null,
+    "deleted_at": null,
+    "created_at": 1787067682974,
+    "updated_at": 1787067683194,
+    "claim": {
+      "claim_id": "bbfc2b03-801a-4f02-a0c5-be0adf6c4d2c",
+      "actor": "worker-b",
+      "generation": 2,
+      "claimed_at": 1787067683194
+    }
+  }
+}
+{"error":{"code":"stale_claim","message":"claim identity or generation is no longer current"}}
+$ viq ticket submit ABC-1 --claim-id bbfc2b03-801a-4f02-a0c5-be0adf6c4d2c --actor worker-b --claim-token \[REDACTED\] --generation 2 --reviewer maks
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"review","assigned_to":null,"assignee":null,"archived_at":null,"deleted_at":null,"created_at":1787067682974,"updated_at":1787067683339,"claim":null},"question":{"id":"q_tEtKCS_s8K74","ticket_id":"ABC-1","asked_by":"worker-b","target_type":"actor","target_id":"maks","kind":"approval","text":"Approve submitted work?","status":"open","answer":null,"answered_by":null,"question_event_id":9,"created_at":1787067683340,"answered_at":null}}
+$ viq ticket accept ABC-1 --actor maks --auth \[REDACTED\]
+{"ticket":{"id":"ABC-1","project":"ABC","title":"tracer","body":"","state":"done","assigned_to":null,"assignee":null,"archived_at":null,"deleted_at":null,"created_at":1787067682974,"updated_at":1787067683409,"claim":null}}
+E2E_OK
+{"content":[{"type":"text","text":"{\"actor\":{\"id\":\"maks\",\"name\":\"Maks\",\"kind\":\"human\",\"machine\":\"mac-pi\",\"active\":true,\"created_at\":1787067683735,\"updated_at\":1787067683735}}"}],"structuredContent":{"actor":{"id":"maks","name":"Maks","kind":"human","machine":"mac-pi","active":true,"created_at":1787067683735,"updated_at":1787067683735}}}
+{"content":[{"type":"text","text":"{\"role\":{\"id\":\"reviewers\",\"name\":\"Reviewers\",\"created_at\":1787067683839}}"}],"structuredContent":{"role":{"id":"reviewers","name":"Reviewers","created_at":1787067683839}}}
+{"content":[{"type":"text","text":"{\"membership\":{\"actor_id\":\"maks\",\"role\":\"reviewers\"}}"}],"structuredContent":{"membership":{"actor_id":"maks","role":"reviewers"}}}
+{"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1,\"created_at\":1787067684043}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1,"created_at":1787067684043}}}
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"MCP tracer\",\"body\":\"\",\"state\":\"open\",\"assigned_to\":\"worker\",\"assignee\":{\"type\":\"actor\",\"id\":\"worker\"},\"archived_at\":null,\"deleted_at\":null,\"created_at\":1787067684151,\"updated_at\":1787067684151,\"claim\":null}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"MCP tracer","body":"","state":"open","assigned_to":"worker","assignee":{"type":"actor","id":"worker"},"archived_at":null,"deleted_at":null,"created_at":1787067684151,"updated_at":1787067684151,"claim":null}}}
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "[claim response redacted]"
+    }
+  ],
+  "structuredContent": {
+    "ticket": {
+      "id": "ABC-1",
+      "project": "ABC",
+      "title": "MCP tracer",
+      "body": "",
+      "state": "open",
+      "assigned_to": "worker",
+      "assignee": {
+        "type": "actor",
+        "id": "worker"
+      },
+      "archived_at": null,
+      "deleted_at": null,
+      "created_at": 1787067684151,
+      "updated_at": 1787067684260,
+      "claim": {
+        "claim_id": "38d477e7-71db-4dfb-8535-ccf35c34b0c6",
+        "actor": "worker",
+        "generation": 1,
+        "claimed_at": 1787067684260
+      }
+    }
+  }
+}
+{"content":[{"type":"text","text":"{\"actor\":{\"id\":\"maks\",\"name\":\"Maks\",\"kind\":\"human\",\"machine\":\"mac-pi\",\"active\":true,\"created_at\":1787067683735,\"updated_at\":1787067683735},\"questions\":[],\"events\":[],\"cursor\":6}"}],"structuredContent":{"actor":{"id":"maks","name":"Maks","kind":"human","machine":"mac-pi","active":true,"created_at":1787067683735,"updated_at":1787067683735},"questions":[],"events":[],"cursor":6}}
+{"content":[{"type":"text","text":"{\"events\":[{\"cursor\":5,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"ticket_created\",\"actor\":null,\"message\":null,\"metadata\":{\"assignee\":{\"type\":\"actor\",\"id\":\"worker\"}},\"created_at\":1787067684151},{\"cursor\":6,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"claimed\",\"actor\":\"worker\",\"message\":null,\"metadata\":{\"machine\":null},\"created_at\":1787067684260}],\"cursor\":6}"}],"structuredContent":{"events":[{"cursor":5,"ticket_id":"ABC-1","project":"ABC","type":"ticket_created","actor":null,"message":null,"metadata":{"assignee":{"type":"actor","id":"worker"}},"created_at":1787067684151},{"cursor":6,"ticket_id":"ABC-1","project":"ABC","type":"claimed","actor":"worker","message":null,"metadata":{"machine":null},"created_at":1787067684260}],"cursor":6}}
+MCP_E2E_OK
+PASS VIQ-3 one centered modal handles project/ticket forms, inside/backdrop, Escape, initial and restored focus
+PASS VIQ-3 questions open from inbox and ticket, accept Markdown, and render without executable HTML
+PASS VIQ-4 All/exclusive/toggle/right-exclude project gestures compose with assignee filters and empty reset
+PASS VIQ-5 human created, edited/moved/assigned without claim, changed state from board/details, progressed, questioned/answered, archived/restored, and explicitly deleted a disposable ticket with attributed timeline retained
+VIQ3_BROWSER_OK
+VIQ4_BROWSER_OK
+VIQ5_BROWSER_OK
+(node:2381477) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: 404 /ui-core.js, 404 /ui-core.js
++ actual - expected
+
++ [
++   'error:Failed to load resource: the server responded with a status of 404 (Not Found)',
++   'error:Failed to load resource: the server responded with a status of 404 (Not Found)'
++ ]
+- []
+
+    at file:///root/worktrees/viq-human-history/test/phone-auth-e2e.js:4:1613 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    'error:Failed to load resource: the server responded with a status of 404 (Not Found)',
+    'error:Failed to load resource: the server responded with a status of 404 (Not Found)'
+  ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.22.2
+
+EXIT=1
