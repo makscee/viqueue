@@ -20,6 +20,18 @@ export function selectProject(projects, selected, project, mode = 'exclusive') {
   return new Set([project]);
 }
 
+export function reconcileProjectSelection(projectsOrPrevious, projectsOrSelected, selectedOrAll, preferred = null) {
+  if (projectsOrSelected instanceof Set) {
+    const projects = projectsOrPrevious; const selected = projectsOrSelected; const allProjects = selectedOrAll;
+    return allProjects ? new Set(projects) : new Set([...selected].filter((key) => projects.includes(key)));
+  }
+  const previousProjects = projectsOrPrevious; const projects = projectsOrSelected; const selected = selectedOrAll;
+  const wasAll = previousProjects.length === selected.size && previousProjects.every((key) => selected.has(key));
+  if (wasAll) return new Set(projects);
+  if (preferred && projects.includes(preferred)) return new Set([preferred]);
+  return new Set([...selected].filter((key) => projects.includes(key)));
+}
+
 export function createModalController(dialog, { requestClose } = {}) {
   let trigger = null;
   const close = () => { if (dialog.open && !requestClose?.()) dialog.close(); };

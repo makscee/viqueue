@@ -181,6 +181,42 @@ test('archive is reversible while confirmed delete tombstones without erasing hi
   await assert.rejects(store.deleteTicket(ticket.id, { actor: 'maks', confirmed: false }), (error) => error.code === 'delete_confirmation_required');
 });
 
+test('archived tickets are immutable and leave inboxes until restored', async () => {
+  const { store, ticket } = await seeded();
+  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const asked = await store.askQuestion(ticket.id, { ...identity(claim), text: 'Still active?', target_type: 'actor', target_id: 'maks' });
+  await store.archiveTicket(ticket.id, { actor: 'maks' });
+  assert.deepEqual((await store.actorInbox('maks')).questions, []);
+  for (const operation of [
+    () => store.editTicket(ticket.id, { actor: 'maks', title: 'archived edit' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'archived progress' }),
+    () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'archived?', target_type: 'actor', target_id: 'worker-a' }),
+    () => store.answerQuestion(ticket.id, asked.question.id, { actor: 'maks', answer: 'not yet' }),
+    () => store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true })
+  ]) await assert.rejects(operation(), (error) => error.code === 'ticket_archived');
+  await store.restoreTicket(ticket.id, { actor: 'maks' });
+  assert.deepEqual((await store.actorInbox('maks')).questions.map((question) => question.id), [asked.question.id]);
+  await store.answerQuestion(ticket.id, asked.question.id, { actor: 'maks', answer: 'restored' });
+});
+
+test('archive and delete checks remain correct when the clock returns zero', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'viq-zero-time-'));
+  const store = new Store(path.join(dir, 'data.sqlite'), { now: () => 0 });
+  await store.init(); await store.createProject('ABC'); await store.createActor({ id: 'maks', name: 'Maks', kind: 'human' });
+  const archivedTicket = await store.createTicket({ project: 'ABC', title: 'Archived at epoch' });
+  const archived = await store.archiveTicket(archivedTicket.id, { actor: 'maks' });
+  assert.equal(archived.archived_at, 0);
+  assert.deepEqual(await store.listTickets('ABC'), []);
+  await assert.rejects(store.editTicket(archived.id, { actor: 'maks', title: 'epoch zombie' }), (error) => error.code === 'ticket_archived');
+  assert.equal((await store.restoreTicket(archived.id, { actor: 'maks' })).archived_at, null);
+  const deleted = await store.deleteTicket(archived.id, { actor: 'maks', confirmed: true });
+  assert.equal(deleted.deleted_at, 0);
+  assert.deepEqual(await store.listTickets('ABC', { includeArchived: true }), []);
+  await assert.rejects(store.editTicket(deleted.id, { actor: 'maks', title: 'epoch tombstone' }), (error) => error.code === 'ticket_deleted');
+  await store.close();
+});
+
 test('deleted tombstones reject subsequent human mutations', async () => {
   const { store, ticket } = await seeded(); await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true });
   for (const operation of [

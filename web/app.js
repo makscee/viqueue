@@ -1,7 +1,7 @@
-import { applyTicketFilters, createModalController, renderMarkdown, selectProject } from './ui-core.js';
+import { applyTicketFilters, createModalController, reconcileProjectSelection, renderMarkdown, selectProject } from './ui-core.js';
 
 const $ = (selector) => document.querySelector(selector);
-const state = { projects: [], tickets: [], actors: [], roles: [], active: 'ready', inbox: [], selectedProjects: new Set(), selectedAssignees: new Set(), filtersReady: false };
+const state = { projects: [], tickets: [], actors: [], roles: [], active: 'ready', inbox: [], selectedProjects: new Set(), selectedAssignees: new Set(), allProjects: true };
 const columns = [['ready', 'Ready'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done'], ['archived', 'Archived']];
 const modalStack = [];
 function restoreModal() {
@@ -22,7 +22,7 @@ const actorId = () => $('#actor-select').value;
 const actorName = (id) => state.actors.find((actor) => actor.id === id)?.name || id;
 const roleName = (id) => state.roles.find((role) => role.id === id)?.name || 'Assigned group';
 const assigneeName = (assignee) => assignee?.type === 'actor' ? actorName(assignee.id) : assignee?.type === 'role' ? roleName(assignee.id) : 'Unassigned';
-const projection = (ticket) => ticket.archived_at ? 'archived' : ticket.state === 'open' ? (ticket.claim ? 'working' : 'ready') : ticket.state;
+const projection = (ticket) => ticket.archived_at !== null ? 'archived' : ticket.state === 'open' ? (ticket.claim ? 'working' : 'ready') : ticket.state;
 const stateName = (ticket) => ({ ready: 'Ready', working: 'Working', review: 'Awaiting review', done: 'Done', archived: 'Archived' })[projection(ticket)];
 function report(error) { $('#status').textContent = `Something went wrong: ${error.message}`; }
 function safely(handler) { return async (event) => { try { await handler(event); } catch (error) { report(error); } }; }
@@ -34,19 +34,19 @@ function openModal({ title, eyebrow = '', content, trigger, initialFocus }) {
 }
 
 const visibleTickets = () => applyTicketFilters(state.tickets, state.selectedProjects, state.selectedAssignees);
-function resetFilters() { state.selectedProjects = new Set(state.projects.map((project) => project.key)); state.selectedAssignees.clear(); renderFilters(); renderBoard(); }
+function resetFilters() { state.allProjects = true; state.selectedProjects = new Set(state.projects.map((project) => project.key)); state.selectedAssignees.clear(); renderFilters(); renderBoard(); }
 function chip(label, pressed, action) {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'filter-chip'; button.textContent = label; button.setAttribute('aria-pressed', String(pressed));
   button.addEventListener('click', action); return button;
 }
 function renderFilters() {
   const keys = state.projects.map((project) => project.key); const projects = $('#project-chips'); projects.replaceChildren();
-  projects.append(chip('All', state.selectedProjects.size === keys.length, () => { state.selectedProjects = new Set(keys); renderFilters(); renderBoard(); }));
+  projects.append(chip('All', state.allProjects, () => { state.allProjects = true; state.selectedProjects = new Set(keys); renderFilters(); renderBoard(); }));
   for (const key of keys) {
-    const button = chip(key, state.selectedProjects.has(key), () => { state.selectedProjects = selectProject(keys, state.selectedProjects, key, 'exclusive'); renderFilters(); renderBoard(); });
+    const button = chip(key, state.selectedProjects.has(key), () => { state.selectedProjects = selectProject(keys, state.selectedProjects, key, 'exclusive'); state.allProjects = state.selectedProjects.size === keys.length; renderFilters(); renderBoard(); });
     button.classList.toggle('excluded', !state.selectedProjects.has(key));
-    button.addEventListener('contextmenu', (event) => { event.preventDefault(); state.selectedProjects = selectProject(keys, state.selectedProjects, key, 'exclude'); renderFilters(); renderBoard(); });
-    button.addEventListener('keydown', (event) => { if (event.shiftKey && ['Enter', ' '].includes(event.key)) { event.preventDefault(); state.selectedProjects = selectProject(keys, state.selectedProjects, key, 'exclude'); renderFilters(); renderBoard(); } });
+    button.addEventListener('contextmenu', (event) => { event.preventDefault(); state.selectedProjects = selectProject(keys, state.selectedProjects, key, 'exclude'); state.allProjects = false; renderFilters(); renderBoard(); });
+    button.addEventListener('keydown', (event) => { if (event.shiftKey && ['Enter', ' '].includes(event.key)) { event.preventDefault(); state.selectedProjects = selectProject(keys, state.selectedProjects, key, 'exclude'); state.allProjects = false; renderFilters(); renderBoard(); } });
     projects.append(button);
   }
   const assignees = new Map(state.tickets.map((ticket) => [ticket.assignee ? `${ticket.assignee.type}:${ticket.assignee.id}` : 'none', assigneeName(ticket.assignee)]));
@@ -68,7 +68,7 @@ function renderBoard() {
       card.addEventListener('click', safely(async (event) => { if (event.target === card) await showDetail(ticket.id, card); }));
       card.addEventListener('keydown', safely(async (event) => { if (event.target === card && ['Enter', ' '].includes(event.key)) { event.preventDefault(); await showDetail(ticket.id, card); } }));
       card.append(summary);
-      if (ticket.archived_at) { const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'secondary card-action'; restore.textContent = 'Restore'; restore.addEventListener('click', safely(async () => { await ticketAction(ticket.id, 'restore'); })); card.append(restore); }
+      if (ticket.archived_at !== null) { const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'secondary card-action'; restore.textContent = 'Restore'; restore.addEventListener('click', safely(async () => { await ticketAction(ticket.id, 'restore'); })); card.append(restore); }
       else { const label = document.createElement('label'); label.textContent = 'State'; const select = document.createElement('select'); select.className = 'card-state'; for (const [value, text] of [['open', 'Open'], ['review', 'Review'], ['done', 'Done']]) select.append(new Option(text, value)); select.value = ticket.state; select.addEventListener('click', (event) => event.stopPropagation()); select.addEventListener('change', safely(async (event) => { event.stopPropagation(); await changeState(ticket.id, event.target.value); })); label.append(select); card.append(label); }
       section.append(card);
     }
@@ -117,9 +117,8 @@ async function refresh(preferred = null) {
   $('#actor-select').replaceChildren(new Option('Choose your name', ''), ...state.actors.filter((actor) => actor.kind === 'human').map((actor) => new Option(actor.name, actor.id)));
   $('#actor-select').value = state.actors.some((actor) => actor.id === identity && actor.kind === 'human') ? identity : '';
   const keys = state.projects.map((project) => project.key);
-  if (!state.filtersReady) { state.selectedProjects = new Set(keys); state.filtersReady = true; }
-  else state.selectedProjects = new Set([...state.selectedProjects].filter((key) => keys.includes(key)));
-  if (preferred) state.selectedProjects = new Set([preferred]);
+  state.selectedProjects = reconcileProjectSelection(keys, state.selectedProjects, state.allProjects);
+  if (preferred && !state.allProjects) state.selectedProjects = new Set([preferred]);
   state.tickets = (await Promise.all(state.projects.map((project) => request(`/v1/projects/${encodeURIComponent(project.key)}/tickets?include_archived=true`)))).flatMap((body) => body.tickets);
   renderFilters(); renderBoard(); await refreshInbox(); $('#status').textContent = `${visibleTickets().length} tickets shown`;
 }
@@ -164,7 +163,7 @@ async function showDetail(id, trigger) {
   const fact = (term, value) => { const box = document.createElement('div'); const dt = document.createElement('dt'); const dd = document.createElement('dd'); dt.textContent = term; dd.textContent = value; box.append(dt, dd); return box; };
   facts.append(fact('Project', ticket.project)); if (ticket.assignee) facts.append(fact(ticket.assignee.type === 'role' ? 'Eligible group' : 'Assigned person', assigneeName(ticket.assignee))); if (ticket.claim) facts.append(fact('Worker', actorName(ticket.claim.actor))); facts.append(fact('Status', stateName(ticket))); content.append(facts);
   const controls = document.createElement('div'); controls.className = 'detail-actions';
-  if (!ticket.archived_at) {
+  if (ticket.archived_at === null) {
     const edit = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Edit ticket' }); edit.addEventListener('click', () => openEditTicket(ticket, edit));
     const progress = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Add progress' }); progress.className = 'secondary'; progress.addEventListener('click', () => openProgress(ticket, progress));
     const question = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Ask question' }); question.className = 'secondary'; question.addEventListener('click', () => openQuestion(ticket, question));
@@ -194,7 +193,7 @@ function openProjectCreate(trigger) {
 function openTicketCreate(trigger) {
   const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Project<select name="project" required></select></label><label>Ticket title<input name="title" required></label><label>Context (Markdown)<textarea name="body" rows="5"></textarea></label><button>Create ticket</button>';
   form.elements.project.replaceChildren(new Option('Choose a project', ''), ...state.projects.map((project) => new Option(project.key, project.key))); const exclusive = [...state.selectedProjects]; form.elements.project.value = exclusive.length === 1 ? exclusive[0] : '';
-  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); await request('/v1/tickets', { method: 'POST', body: JSON.stringify(data) }); modal.dismiss(); await refresh(data.project); }));
+  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); await request('/v1/tickets', { method: 'POST', body: JSON.stringify({ ...data, actor: requireHuman() }) }); modal.dismiss(); await refresh(data.project); }));
   openModal({ title: 'Create ticket', content: form, trigger, initialFocus: exclusive.length === 1 ? form.elements.title : form.elements.project });
 }
 

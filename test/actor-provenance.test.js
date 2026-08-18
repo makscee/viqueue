@@ -41,6 +41,24 @@ test('ticket edit rejects an inactive actor', async () => {
   assert.equal((await store.getTicket(ticket.id)).title, 'Original');
 });
 
+test('ticket edit rejects an active agent because direct history edits are human-only', async () => {
+  const { store, ticket } = await fixture();
+  await store.createActor({ id: 'worker', name: 'Worker', kind: 'agent' });
+  await assert.rejects(store.editTicket(ticket.id, { title: 'Agent direct edit', actor: 'worker' }), (error) => error.code === 'human_required');
+  assert.equal((await store.getTicket(ticket.id)).title, 'Original');
+  assert.deepEqual(await editEvents(store, ticket.id), []);
+});
+
+test('selected human creator is recorded canonically on ticket_created', async () => {
+  const { store } = await fixture();
+  const created = await store.createTicket({ project: 'ABC', title: 'Human-created', actor: 'Maks' });
+  const [event] = (await store.listEvents({ ticket: created.id })).events;
+  assert.equal(event.type, 'ticket_created');
+  assert.equal(event.actor, 'maks');
+  await store.createActor({ id: 'worker', name: 'Worker', kind: 'agent' });
+  await assert.rejects(store.createTicket({ project: 'ABC', title: 'Agent-created directly', actor: 'worker' }), (error) => error.code === 'human_required');
+});
+
 test('valid human edit records the validated canonical actor', async () => {
   const { store, ticket } = await fixture();
   await store.editTicket(ticket.id, { title: 'Human edit', actor: 'Maks' });

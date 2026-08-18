@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-import { applyTicketFilters, createModalController, selectProject, renderMarkdown } from '../web/ui-core.js';
+import { applyTicketFilters, createModalController, reconcileProjectSelection, selectProject, renderMarkdown } from '../web/ui-core.js';
 
 test('Markdown rendering preserves useful formatting and escapes executable HTML', () => {
   const html = renderMarkdown('# Update\n\n**done** [safe](https://example.com) <img src=x onerror=alert(1)> [bad](javascript:alert(1))');
@@ -50,6 +50,11 @@ test('project chip left click is exclusive/toggle-All and right click excludes o
   assert.deepEqual([...selected], ['LIFE', 'WORK']);
 });
 
+test('semantic All projects includes projects discovered by refresh', () => {
+  assert.deepEqual([...reconcileProjectSelection(['LIFE', 'VIQ'], ['LIFE', 'NEW', 'VIQ'], new Set(['LIFE', 'VIQ']))], ['LIFE', 'NEW', 'VIQ']);
+  assert.deepEqual([...reconcileProjectSelection(['LIFE', 'VIQ'], ['LIFE', 'NEW', 'VIQ'], new Set(['VIQ']))], ['VIQ']);
+});
+
 test('project and assignee filters compose, including unassigned tickets', () => {
   const tickets = [
     { id: 'LIFE-1', project: 'LIFE', assignee: { type: 'actor', id: 'maks' } },
@@ -78,6 +83,13 @@ test('human ticket UI exposes every field, direct state, progress, archive, rest
   assert.match(app, /event\.actor/);
   assert.match(app, /event\.created_at/);
   assert.match(app, /question_event_id/);
+});
+
+test('browser acceptance independently covers desktop and a 390px mobile page', async () => {
+  const browser = await readFile('test/human-history-browser-e2e.js', 'utf8');
+  assert.match(browser, /width:\s*390/);
+  assert.match(browser, /mobile\.goto\(base\)/);
+  assert.match(browser, /documentElement\.scrollWidth\s*<=\s*document\.documentElement\.clientWidth/);
 });
 
 test('nested modal flows restore their prior view before returning focus to an in-dialog trigger', async () => {

@@ -95,7 +95,7 @@ test('HTTP edits minimal ticket fields and rejects malformed JSON', async (t) =>
   const { app, base } = await fixture(); t.after(() => app.close());
   await request(base, 'POST', '/v1/projects', { key: 'ABC' });
   await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'old' });
-  await request(base,'POST','/v1/actors',{id:'eva',name:'Eva',kind:'agent'},true);
+  await request(base,'POST','/v1/actors',{id:'eva',name:'Eva',kind:'human'},true);
   const edited = await request(base, 'PATCH', '/v1/tickets/ABC-1', { title: 'new', body: 'body', assigned_to: 'eva', actor: 'eva' });
   assert.equal(edited.body.ticket.assigned_to, 'eva');
   const malformed = await fetch(`${base}/v1/projects`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' });

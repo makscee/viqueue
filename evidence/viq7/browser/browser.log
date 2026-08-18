@@ -1,0 +1,9 @@
+PASS VIQ-3 one centered modal handles project/ticket forms, inside/backdrop, Escape, initial and restored focus
+PASS VIQ-3 questions open from inbox and ticket, accept Markdown, and render without executable HTML
+PASS VIQ-4 All/exclusive/toggle/right-exclude project gestures compose with assignee filters and empty reset
+PASS VIQ-5 human created, edited/moved/assigned without claim, changed state from board/details, progressed, questioned/answered, archived/restored, and explicitly deleted a disposable ticket with attributed timeline retained
+PASS VIQ-7 desktop acceptance retains independent 390px navigation, interaction, and overflow coverage
+VIQ3_BROWSER_OK
+VIQ4_BROWSER_OK
+VIQ5_BROWSER_OK
+VIQ7_BROWSER_OK

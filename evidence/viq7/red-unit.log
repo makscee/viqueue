@@ -1,0 +1,120 @@
+TAP version 13
+# (node:2466650) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: direct history edit is human-only while agent progress remains claim-authorized
+not ok 1 - direct history edit is human-only while agent progress remains claim-authorized
+  ---
+  duration_ms: 10.879571
+  type: 'test'
+  location: '/root/worktrees/viq-human-history/test/viq7-review-repair.test.js:23:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    async TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/viq7-review-repair.test.js:27:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: human ticket creator is validated and persisted on ticket_created
+not ok 2 - human ticket creator is validated and persisted on ticket_created
+  ---
+  duration_ms: 5.730499
+  type: 'test'
+  location: '/root/worktrees/viq-human-history/test/viq7-review-repair.test.js:33:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    null !== 'maks'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'maks'
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/viq7-review-repair.test.js:39:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: archived ticket is immutable and absent from inbox until explicit restore
+not ok 3 - archived ticket is immutable and absent from inbox until explicit restore
+  ---
+  duration_ms: 6.189281
+  type: 'test'
+  location: '/root/worktrees/viq-human-history/test/viq7-review-repair.test.js:43:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+    + [
+    +   {
+    +     answer: null,
+    +     answered_at: null,
+    +     answered_by: null,
+    +     asked_by: 'maks',
+    +     created_at: 1787072129611,
+    +     id: 'q_JzK7rWEka7pX',
+    +     kind: 'text',
+    +     question_event_id: 5,
+    +     status: 'open',
+    +     target_id: 'eva',
+    +     target_type: 'actor',
+    +     text: 'Pending?',
+    +     ticket_id: 'ABC-1'
+    +   }
+    + ]
+    - []
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      id: 'q_JzK7rWEka7pX'
+      ticket_id: 'ABC-1'
+      asked_by: 'maks'
+      target_type: 'actor'
+      target_id: 'eva'
+      kind: 'text'
+      text: 'Pending?'
+      status: 'open'
+      answer: ~
+      answered_by: ~
+      question_event_id: 5
+      created_at: 1787072129611
+      answered_at: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/viq7-review-repair.test.js:48:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: archive and delete timestamps use NULL semantics when clock is zero
+not ok 4 - archive and delete timestamps use NULL semantics when clock is zero
+  ---
+  duration_ms: 6.480194
+  type: 'test'
+  location: '/root/worktrees/viq-human-history/test/viq7-review-repair.test.js:65:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    async TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/viq7-review-repair.test.js:70:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 88.688087
+
+EXIT=1
