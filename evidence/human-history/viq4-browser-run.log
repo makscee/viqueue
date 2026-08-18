@@ -4,3 +4,4 @@ PASS VIQ-4 All/exclusive/toggle/right-exclude project gestures compose with assi
 VIQ3_BROWSER_OK
 VIQ4_BROWSER_OK
 
+EXIT=0

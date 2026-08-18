@@ -8,6 +8,18 @@ const inlineMarkdown = (value) => escapeHtml(value)
   .replace(/\*([^*]+)\*/g, '<em>$1</em>')
   .replace(/\[([^\]]+)]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="noreferrer noopener" target="_blank">$1</a>');
 
+export function applyTicketFilters(tickets, selectedProjects, selectedAssignees) {
+  return tickets.filter((ticket) => selectedProjects.has(ticket.project) && (
+    selectedAssignees.size === 0 || selectedAssignees.has(ticket.assignee ? `${ticket.assignee.type}:${ticket.assignee.id}` : 'none')
+  ));
+}
+
+export function selectProject(projects, selected, project, mode = 'exclusive') {
+  if (mode === 'exclude') return new Set(projects.filter((key) => key !== project));
+  if (selected.size === 1 && selected.has(project)) return new Set(projects);
+  return new Set([project]);
+}
+
 export function createModalController(dialog) {
   let trigger = null;
   dialog.addEventListener('click', (event) => { if (event.target === event.currentTarget) dialog.close(); });
