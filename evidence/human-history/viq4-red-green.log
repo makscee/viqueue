@@ -110,7 +110,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
   failureType: 'testCodeFailure'
   error: |-
     The input did not match the regular expression /id="project-chips"/. Input:
-    
+
     '<!doctype html>\n' +
       '<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>viqueue</title><link rel="stylesheet" href="/app.css"><script type="module" src="/app.js"></script></head>\n' +
       '<body><header class="masthead"><div><h1>viqueue</h1><p>A shared queue for people and their workers</p></div><button id="refresh" type="button">Refresh</button></header>\n' +
@@ -122,7 +122,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       '<nav id="state-tabs" class="state-tabs" role="tablist" aria-label="Ticket state"><button role="tab" data-tab="ready" aria-selected="true">Ready <span>0</span></button><button role="tab" data-tab="working" aria-selected="false">Working <span>0</span></button><button role="tab" data-tab="review" aria-selected="false">Review <span>0</span></button><button role="tab" data-tab="done" aria-selected="false">Done <span>0</span></button></nav><section id="board" class="board"></section></main>\n' +
       '<dialog id="modal" aria-labelledby="modal-title"><div class="dialog-head"><div><p id="modal-eyebrow" class="eyebrow"></p><h2 id="modal-title">viqueue</h2></div><button id="close-modal" type="button" class="secondary">Close</button></div><div id="modal-content"></div></dialog>\n' +
       '</body></html>\n'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -138,7 +138,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
     <nav id="state-tabs" class="state-tabs" role="tablist" aria-label="Ticket state"><button role="tab" data-tab="ready" aria-selected="true">Ready <span>0</span></button><button role="tab" data-tab="working" aria-selected="false">Working <span>0</span></button><button role="tab" data-tab="review" aria-selected="false">Review <span>0</span></button><button role="tab" data-tab="done" aria-selected="false">Done <span>0</span></button></nav><section id="board" class="board"></section></main>
     <dialog id="modal" aria-labelledby="modal-title"><div class="dialog-head"><div><p id="modal-eyebrow" class="eyebrow"></p><h2 id="modal-title">viqueue</h2></div><button id="close-modal" type="button" class="secondary">Close</button></div><div id="modal-content"></div></dialog>
     </body></html>
-    
+
   operator: 'match'
   stack: |-
     TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/human-history-ui.test.js:65:81)
@@ -166,7 +166,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
   failureType: 'testCodeFailure'
   error: |-
     The input did not match the regular expression /No tickets match these filters/. Input:
-    
+
     "import { applyTicketFilters, createModalController, renderMarkdown, selectProject } from './ui-core.js';\n" +
       '\n' +
       'const $ = (selector) => document.querySelector(selector);\n' +
@@ -276,18 +276,18 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       "  $('#actor-select').value = state.actors.some((actor) => actor.id === identity && actor.kind === 'human') ? identity : '';\n" +
       '  const keys = state.projects.map((project) => project.key);\n' +
       '  if (!state.filtersReady) { state.sel'... 5871 more characters
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
   actual: |-
     import { applyTicketFilters, createModalController, renderMarkdown, selectProject } from './ui-core.js';
-    
+
     const $ = (selector) => document.querySelector(selector);
     const state = { projects: [], tickets: [], actors: [], roles: [], active: 'ready', inbox: [], selectedProjects: new Set(), selectedAssignees: new Set(), filtersReady: false };
     const columns = [['ready', 'Ready'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done']];
     const modal = createModalController($('#modal'));
-    
+
     async function request(path, options = {}) {
       const response = await fetch(path, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
       const text = await response.text();
@@ -310,7 +310,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       $('#modal-content').replaceChildren(content);
       modal.open({ trigger, initialFocus });
     }
-    
+
     const visibleTickets = () => applyTicketFilters(state.tickets, state.selectedProjects, state.selectedAssignees);
     function resetFilters() { state.selectedProjects = new Set(state.projects.map((project) => project.key)); state.selectedAssignees.clear(); renderFilters(); renderBoard(); }
     function chip(label, pressed, action) {
@@ -349,7 +349,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
         document.querySelector(`[data-tab="${key}"] span`).textContent = tickets.length;
       }
     }
-    
+
     function openAnswer(question, trigger) {
       if (!actorId()) throw new Error('Choose your name before answering');
       const form = document.createElement('form'); form.className = 'modal-form answer-form'; form.dataset.ticket = question.ticket_id; form.dataset.question = question.id;
@@ -363,7 +363,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       }));
       openModal({ title: question.kind === 'approval' ? 'Review request' : 'Answer question', eyebrow: question.ticket_id, content: form, trigger, initialFocus: form.querySelector('textarea') });
     }
-    
+
     function answerCard(question) {
       const ticket = state.tickets.find((item) => item.id === question.ticket_id);
       const article = document.createElement('article'); article.className = 'question-card'; article.tabIndex = 0; article.setAttribute('role', 'button');
@@ -374,7 +374,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       article.addEventListener('keydown', (event) => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); openAnswer(question, article); } });
       return article;
     }
-    
+
     async function refreshInbox() {
       const actor = actorId(); state.inbox = actor ? (await request(`/v1/actors/${encodeURIComponent(actor)}/inbox?after=0`)).questions : [];
       const list = $('#inbox-list');
@@ -382,7 +382,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       else if (!state.inbox.length) { $('#inbox-count').textContent = 'All clear'; list.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Nothing needs your answer. New questions will appear here.' })); }
       else { $('#inbox-count').textContent = `${state.inbox.length} ${state.inbox.length === 1 ? 'question needs' : 'questions need'} your answer`; list.replaceChildren(...state.inbox.map(answerCard)); }
     }
-    
+
     async function refresh(preferred = null) {
       [state.actors, state.roles, state.projects] = await Promise.all([request('/v1/actors?active=true').then((body) => body.actors), request('/v1/roles').then((body) => body.roles), request('/v1/projects').then((body) => body.projects)]);
       const identity = actorId() || localStorage.getItem('viq.actor') || '';
@@ -395,7 +395,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       state.tickets = (await Promise.all(state.projects.map((project) => request(`/v1/projects/${encodeURIComponent(project.key)}/tickets`)))).flatMap((body) => body.tickets);
       renderFilters(); renderBoard(); await refreshInbox(); $('#status').textContent = `${visibleTickets().length} tickets shown`;
     }
-    
+
     async function showDetail(id, trigger) {
       const [{ ticket }, { questions }, { events }] = await Promise.all([request(`/v1/tickets/${id}`), request(`/v1/tickets/${id}/questions`), request(`/v1/events?ticket=${id}`)]);
       const content = document.createElement('div'); content.className = 'ticket-detail';
@@ -421,7 +421,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       if (!list.children.length) list.append(Object.assign(document.createElement('li'), { textContent: 'No questions have been asked.' })); timeline.append(list); content.append(timeline);
       openModal({ title: ticket.title, eyebrow: ticket.id, content, trigger });
     }
-    
+
     function openProjectCreate(trigger) {
       const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Project key<input name="key" required pattern="[A-Za-z][A-Za-z0-9]{1,9}" autocomplete="off"></label><button>Create project</button>';
       form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const result = await request('/v1/projects', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) }); modal.close(); await refresh(result.project.key); }));
@@ -433,7 +433,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
       form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); await request('/v1/tickets', { method: 'POST', body: JSON.stringify(data) }); modal.close(); await refresh(data.project); }));
       openModal({ title: 'Create ticket', content: form, trigger, initialFocus: state.project ? form.elements.title : form.elements.project });
     }
-    
+
     $('#close-modal').addEventListener('click', () => modal.close());
     $('#refresh').addEventListener('click', safely(async () => refresh()));
     $('#actor-select').addEventListener('change', safely(async (event) => { localStorage.setItem('viq.actor', event.target.value); await refreshInbox(); }));
@@ -442,7 +442,7 @@ not ok 1 - filter chips expose accessible selected state, context-menu exclusion
     $('#open-project-create').addEventListener('click', (event) => openProjectCreate(event.currentTarget));
     $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
     refresh().catch(report);
-    
+
   operator: 'match'
   stack: |-
     TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/human-history-ui.test.js:69:10)

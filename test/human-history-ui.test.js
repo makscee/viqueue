@@ -80,6 +80,13 @@ test('human ticket UI exposes every field, direct state, progress, archive, rest
   assert.match(app, /question_event_id/);
 });
 
+test('nested modal flows restore their prior view before returning focus to an in-dialog trigger', async () => {
+  const app = await readFile('web/app.js', 'utf8');
+  assert.match(app, /modalStack/);
+  assert.match(app, /restoreModal/);
+  assert.match(app, /\.dismiss\(\)/);
+});
+
 test('ticket, question, project, and ticket-create flows share one modal shell', async () => {
   const [html, app] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.js', 'utf8')]);
   assert.equal((html.match(/<dialog\b/g) || []).length, 1);

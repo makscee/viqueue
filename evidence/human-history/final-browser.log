@@ -5,3 +5,5 @@ PASS VIQ-5 human created, edited/moved/assigned without claim, changed state fro
 VIQ3_BROWSER_OK
 VIQ4_BROWSER_OK
 VIQ5_BROWSER_OK
+
+EXIT=0

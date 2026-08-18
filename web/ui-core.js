@@ -20,18 +20,19 @@ export function selectProject(projects, selected, project, mode = 'exclusive') {
   return new Set([project]);
 }
 
-export function createModalController(dialog) {
+export function createModalController(dialog, { requestClose } = {}) {
   let trigger = null;
-  dialog.addEventListener('click', (event) => { if (event.target === event.currentTarget) dialog.close(); });
-  dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); dialog.close(); } });
+  const close = () => { if (dialog.open && !requestClose?.()) dialog.close(); };
+  dialog.addEventListener('click', (event) => { if (event.target === event.currentTarget) close(); });
+  dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); close(); } });
   dialog.addEventListener('close', () => { const previous = trigger; trigger = null; previous?.focus(); });
   return {
     open({ trigger: nextTrigger = null, initialFocus = null } = {}) {
-      trigger = nextTrigger;
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) { trigger = nextTrigger; dialog.showModal(); }
       initialFocus?.focus();
     },
-    close() { if (dialog.open) dialog.close(); }
+    close,
+    dismiss() { if (dialog.open) dialog.close(); }
   };
 }
 

@@ -47,9 +47,9 @@ not ok 1 - Markdown rendering preserves useful formatting and escapes executable
   failureType: 'testCodeFailure'
   error: |-
     The input was expected to not match the regular expression /<img|onerror|href="javascript:/i. Input:
-    
+
     '<h1>Update</h1><p><strong>done</strong> <a href="https://example.com" rel="noreferrer noopener" target="_blank">safe</a> &lt;img src=x onerror=alert(1)&gt; [bad](javascript:alert(1))</p>'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -152,7 +152,7 @@ not ok 1 - ticket, question, project, and ticket-create flows share one modal sh
   failureType: 'testCodeFailure'
   error: |-
     The input did not match the regular expression /id="open-project-create"/. Input:
-    
+
     '<!doctype html>\n' +
       '<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>viqueue</title><link rel="stylesheet" href="/app.css"><script type="module" src="/app.js"></script></head>\n' +
       '<body><header class="masthead"><div><h1>viqueue</h1><p>A shared queue for people and their workers</p></div><button id="refresh" type="button">Refresh</button></header>\n' +
@@ -164,7 +164,7 @@ not ok 1 - ticket, question, project, and ticket-create flows share one modal sh
       '<nav id="state-tabs" class="state-tabs" role="tablist" aria-label="Ticket state"><button role="tab" data-tab="ready" aria-selected="true">Ready <span>0</span></button><button role="tab" data-tab="working" aria-selected="false">Working <span>0</span></button><button role="tab" data-tab="review" aria-selected="false">Review <span>0</span></button><button role="tab" data-tab="done" aria-selected="false">Done <span>0</span></button></nav><section id="board" class="board"></section></main>\n' +
       '<dialog id="detail"><div class="dialog-head"><div><p id="detail-id" class="eyebrow"></p><h2 id="detail-title">Ticket</h2></div><button id="close-detail" type="button">Close ticket</button></div><p id="detail-body" class="detail-body"></p><dl class="ticket-facts"><div id="detail-assignment-fact"><dt id="detail-assignment-label">Assigned person</dt><dd id="detail-assignee"></dd></div><div id="detail-worker-fact"><dt>Worker</dt><dd id="detail-worker"></dd></div><div><dt>Status</dt><dd id="detail-state"></dd></div></dl><section><h3>Latest progress</h3><p id="detail-progress"></p></section><section><div class="section-head"><h3>Questions and answers</h3><small id="question-note"></small></div><ol id="questions" class="detail-questions"></ol></section></dialog>\n' +
       '</body></html>\n'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -180,7 +180,7 @@ not ok 1 - ticket, question, project, and ticket-create flows share one modal sh
     <nav id="state-tabs" class="state-tabs" role="tablist" aria-label="Ticket state"><button role="tab" data-tab="ready" aria-selected="true">Ready <span>0</span></button><button role="tab" data-tab="working" aria-selected="false">Working <span>0</span></button><button role="tab" data-tab="review" aria-selected="false">Review <span>0</span></button><button role="tab" data-tab="done" aria-selected="false">Done <span>0</span></button></nav><section id="board" class="board"></section></main>
     <dialog id="detail"><div class="dialog-head"><div><p id="detail-id" class="eyebrow"></p><h2 id="detail-title">Ticket</h2></div><button id="close-detail" type="button">Close ticket</button></div><p id="detail-body" class="detail-body"></p><dl class="ticket-facts"><div id="detail-assignment-fact"><dt id="detail-assignment-label">Assigned person</dt><dd id="detail-assignee"></dd></div><div id="detail-worker-fact"><dt>Worker</dt><dd id="detail-worker"></dd></div><div><dt>Status</dt><dd id="detail-state"></dd></div></dl><section><h3>Latest progress</h3><p id="detail-progress"></p></section><section><div class="section-head"><h3>Questions and answers</h3><small id="question-note"></small></div><ol id="questions" class="detail-questions"></ol></section></dialog>
     </body></html>
-    
+
   operator: 'match'
   stack: |-
     TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/human-history-ui.test.js:45:83)

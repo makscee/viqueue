@@ -1,8 +1,8 @@
-{"content":[{"type":"text","text":"{\"actor\":{\"id\":\"maks\",\"name\":\"Maks\",\"kind\":\"human\",\"machine\":\"mac-pi\",\"active\":true,\"created_at\":1787067683735,\"updated_at\":1787067683735}}"}],"structuredContent":{"actor":{"id":"maks","name":"Maks","kind":"human","machine":"mac-pi","active":true,"created_at":1787067683735,"updated_at":1787067683735}}}
-{"content":[{"type":"text","text":"{\"role\":{\"id\":\"reviewers\",\"name\":\"Reviewers\",\"created_at\":1787067683839}}"}],"structuredContent":{"role":{"id":"reviewers","name":"Reviewers","created_at":1787067683839}}}
+{"content":[{"type":"text","text":"{\"actor\":{\"id\":\"maks\",\"name\":\"Maks\",\"kind\":\"human\",\"machine\":\"mac-pi\",\"active\":true,\"created_at\":1787068443698,\"updated_at\":1787068443698}}"}],"structuredContent":{"actor":{"id":"maks","name":"Maks","kind":"human","machine":"mac-pi","active":true,"created_at":1787068443698,"updated_at":1787068443698}}}
+{"content":[{"type":"text","text":"{\"role\":{\"id\":\"reviewers\",\"name\":\"Reviewers\",\"created_at\":1787068443803}}"}],"structuredContent":{"role":{"id":"reviewers","name":"Reviewers","created_at":1787068443803}}}
 {"content":[{"type":"text","text":"{\"membership\":{\"actor_id\":\"maks\",\"role\":\"reviewers\"}}"}],"structuredContent":{"membership":{"actor_id":"maks","role":"reviewers"}}}
-{"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1,\"created_at\":1787067684043}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1,"created_at":1787067684043}}}
-{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"MCP tracer\",\"body\":\"\",\"state\":\"open\",\"assigned_to\":\"worker\",\"assignee\":{\"type\":\"actor\",\"id\":\"worker\"},\"archived_at\":null,\"deleted_at\":null,\"created_at\":1787067684151,\"updated_at\":1787067684151,\"claim\":null}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"MCP tracer","body":"","state":"open","assigned_to":"worker","assignee":{"type":"actor","id":"worker"},"archived_at":null,"deleted_at":null,"created_at":1787067684151,"updated_at":1787067684151,"claim":null}}}
+{"content":[{"type":"text","text":"{\"project\":{\"key\":\"ABC\",\"next_number\":1,\"created_at\":1787068443998}}"}],"structuredContent":{"project":{"key":"ABC","next_number":1,"created_at":1787068443998}}}
+{"content":[{"type":"text","text":"{\"ticket\":{\"id\":\"ABC-1\",\"project\":\"ABC\",\"title\":\"MCP tracer\",\"body\":\"\",\"state\":\"open\",\"assigned_to\":\"worker\",\"assignee\":{\"type\":\"actor\",\"id\":\"worker\"},\"archived_at\":null,\"deleted_at\":null,\"created_at\":1787068444095,\"updated_at\":1787068444095,\"claim\":null}}"}],"structuredContent":{"ticket":{"id":"ABC-1","project":"ABC","title":"MCP tracer","body":"","state":"open","assigned_to":"worker","assignee":{"type":"actor","id":"worker"},"archived_at":null,"deleted_at":null,"created_at":1787068444095,"updated_at":1787068444095,"claim":null}}}
 {
   "content": [
     {
@@ -24,17 +24,17 @@
       },
       "archived_at": null,
       "deleted_at": null,
-      "created_at": 1787067684151,
-      "updated_at": 1787067684260,
+      "created_at": 1787068444095,
+      "updated_at": 1787068444192,
       "claim": {
-        "claim_id": "38d477e7-71db-4dfb-8535-ccf35c34b0c6",
+        "claim_id": "e56a0616-1d66-47de-b13d-702d75965964",
         "actor": "worker",
         "generation": 1,
-        "claimed_at": 1787067684260
+        "claimed_at": 1787068444192
       }
     }
   }
 }
-{"content":[{"type":"text","text":"{\"actor\":{\"id\":\"maks\",\"name\":\"Maks\",\"kind\":\"human\",\"machine\":\"mac-pi\",\"active\":true,\"created_at\":1787067683735,\"updated_at\":1787067683735},\"questions\":[],\"events\":[],\"cursor\":6}"}],"structuredContent":{"actor":{"id":"maks","name":"Maks","kind":"human","machine":"mac-pi","active":true,"created_at":1787067683735,"updated_at":1787067683735},"questions":[],"events":[],"cursor":6}}
-{"content":[{"type":"text","text":"{\"events\":[{\"cursor\":5,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"ticket_created\",\"actor\":null,\"message\":null,\"metadata\":{\"assignee\":{\"type\":\"actor\",\"id\":\"worker\"}},\"created_at\":1787067684151},{\"cursor\":6,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"claimed\",\"actor\":\"worker\",\"message\":null,\"metadata\":{\"machine\":null},\"created_at\":1787067684260}],\"cursor\":6}"}],"structuredContent":{"events":[{"cursor":5,"ticket_id":"ABC-1","project":"ABC","type":"ticket_created","actor":null,"message":null,"metadata":{"assignee":{"type":"actor","id":"worker"}},"created_at":1787067684151},{"cursor":6,"ticket_id":"ABC-1","project":"ABC","type":"claimed","actor":"worker","message":null,"metadata":{"machine":null},"created_at":1787067684260}],"cursor":6}}
+{"content":[{"type":"text","text":"{\"actor\":{\"id\":\"maks\",\"name\":\"Maks\",\"kind\":\"human\",\"machine\":\"mac-pi\",\"active\":true,\"created_at\":1787068443698,\"updated_at\":1787068443698},\"questions\":[],\"events\":[],\"cursor\":6}"}],"structuredContent":{"actor":{"id":"maks","name":"Maks","kind":"human","machine":"mac-pi","active":true,"created_at":1787068443698,"updated_at":1787068443698},"questions":[],"events":[],"cursor":6}}
+{"content":[{"type":"text","text":"{\"events\":[{\"cursor\":5,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"ticket_created\",\"actor\":null,\"message\":null,\"metadata\":{\"assignee\":{\"type\":\"actor\",\"id\":\"worker\"}},\"created_at\":1787068444095},{\"cursor\":6,\"ticket_id\":\"ABC-1\",\"project\":\"ABC\",\"type\":\"claimed\",\"actor\":\"worker\",\"message\":null,\"metadata\":{\"machine\":null},\"created_at\":1787068444192}],\"cursor\":6}"}],"structuredContent":{"events":[{"cursor":5,"ticket_id":"ABC-1","project":"ABC","type":"ticket_created","actor":null,"message":null,"metadata":{"assignee":{"type":"actor","id":"worker"}},"created_at":1787068444095},{"cursor":6,"ticket_id":"ABC-1","project":"ABC","type":"claimed","actor":"worker","message":null,"metadata":{"machine":null},"created_at":1787068444192}],"cursor":6}}
 MCP_E2E_OK
