@@ -1362,3 +1362,106 @@ ok 1 - accepted v0.4 question events gain links while ticket and question histor
 # duration_ms 68.506545
 
 [review S3 migration coverage] EXIT=0
+TAP version 13
+# (node:2397458) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: deleted tombstones reject subsequent human mutations
+not ok 1 - deleted tombstones reject subsequent human mutations
+  ---
+  duration_ms: 9.44539
+  type: 'test'
+  location: '/root/worktrees/viq-human-history/test/domain.test.js:184:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    async TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/domain.test.js:191:6)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 70.048271
+
+[review S2 tombstone mutation RED] EXIT=1
+TAP version 13
+# (node:2397970) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: deleted tombstones reject subsequent human mutations
+ok 1 - deleted tombstones reject subsequent human mutations
+  ---
+  duration_ms: 10.080056
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 66.892809
+
+[review S2 tombstone mutation GREEN] EXIT=0
+TAP version 13
+# (node:2409439) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: deleted tombstones reject subsequent human mutations
+not ok 1 - deleted tombstones reject subsequent human mutations
+  ---
+  duration_ms: 11.004352
+  type: 'test'
+  location: '/root/worktrees/viq-human-history/test/domain.test.js:184:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The validation function is expected to return "true". Received false
+
+    Caught error:
+
+    Error: only review tickets can be accepted
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    async TestContext.<anonymous> (file:///root/worktrees/viq-human-history/test/domain.test.js:193:6)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 68.204739
+
+[final review S2 lifecycle tombstone RED] EXIT=1
+TAP version 13
+# (node:2409614) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: deleted tombstones reject subsequent human mutations
+ok 1 - deleted tombstones reject subsequent human mutations
+  ---
+  duration_ms: 10.637609
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 72.191742
+
+[final review S2 lifecycle tombstone GREEN] EXIT=0

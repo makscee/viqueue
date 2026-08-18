@@ -181,6 +181,19 @@ test('archive is reversible while confirmed delete tombstones without erasing hi
   await assert.rejects(store.deleteTicket(ticket.id, { actor: 'maks', confirmed: false }), (error) => error.code === 'delete_confirmation_required');
 });
 
+test('deleted tombstones reject subsequent human mutations', async () => {
+  const { store, ticket } = await seeded(); await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true });
+  for (const operation of [
+    () => store.editTicket(ticket.id, { actor: 'maks', title: 'zombie' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'zombie' }),
+    () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'zombie?', target_type: 'actor', target_id: 'worker-a' }),
+    () => store.accept(ticket.id, { actor: 'maks' }),
+    () => store.reopen(ticket.id, { actor: 'maks' })
+  ]) await assert.rejects(operation(), (error) => error.code === 'ticket_deleted');
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'deleted']);
+});
+
 test('ticket edit and assignment retain the minimal canonical fields and record events', async () => {
   const { store, ticket } = await seeded();
   const edited = await store.editTicket(ticket.id, { title: 'Updated', body: 'new body', assigned_to: null, actor: 'maks' });
