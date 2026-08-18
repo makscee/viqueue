@@ -168,7 +168,7 @@ export class Store {
   #eligible(ticket, actor) { if (!ticket.assignee) return actor.kind === 'agent'; if (ticket.assignee.type === 'actor') return ticket.assignee.id === actor.id; return Boolean(this.#db.prepare('SELECT 1 FROM actor_roles WHERE actor_id=? AND role_id=?').get(actor.id, ticket.assignee.id)); }
   async next({ project: rawProject, actor: actorId } = {}) { const actor = actorId ? this.#actor(actorId) : null; let query = "SELECT t.*,NULL claim_id,NULL claim_actor,NULL generation,NULL claimed_at FROM tickets t WHERE t.state='open' AND t.archived_at IS NULL AND t.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM claims c WHERE c.ticket_id=t.id AND c.released_at IS NULL)"; const values = []; if (rawProject) { query += ' AND t.project=?'; values.push(this.#project(rawProject).key); } query += ' ORDER BY t.created_at,t.project,t.number'; const rows = this.#db.prepare(query).all(...values).map((r) => this.#publicTicket(r)); return actor ? rows.find((t) => this.#eligible(t, actor)) ?? null : rows[0] ?? null; }
   async editTicket(id, changes = {}) { return this.#transaction(() => {
-    const ticket = this.#mutableTicket(id); const row = this.#row(id); let title = ticket.title; let body = ticket.body; let assignee = ticket.assignee; let project = ticket.project; let number = row.number;
+    const ticket = this.#mutableTicket(id); const actor = this.#actor(changes.actor); const row = this.#row(id); let title = ticket.title; let body = ticket.body; let assignee = ticket.assignee; let project = ticket.project; let number = row.number;
     let edited = false; let assigned = false; let moved = false;
     if ('title' in changes) { title = this.#title(changes.title); edited ||= title !== ticket.title; }
     if ('body' in changes) { body = cleanOptional(changes.body, 'body') ?? ''; edited ||= body !== ticket.body; }
@@ -176,10 +176,9 @@ export class Store {
     if ('assignee' in changes || 'assignment' in changes || 'assigned_to' in changes) { const value = changes.assignee ?? changes.assignment ?? (cleanOptional(changes.assigned_to, 'assigned_to') ? { type: 'actor', id: changes.assigned_to } : null); assignee = value ? this.#target(value, { assignment: true }) : null; assigned = JSON.stringify(assignee) !== JSON.stringify(ticket.assignee); }
     if (!edited && !assigned && !moved) return ticket;
     this.#db.prepare('UPDATE tickets SET project=?,number=?,title=?,body=?,assigned_to=NULL,assignee_type=?,assignee_id=?,updated_at=? WHERE id=?').run(project, number, title, body, assignee?.type ?? null, assignee?.id ?? null, this.#now(), id);
-    const actor = cleanOptional(changes.actor, 'actor');
-    if (edited) this.#event(id, project, 'ticket_edited', actor, 'Updated ticket title or description.', { previous: { title: ticket.title, body: ticket.body }, current: { title, body } });
-    if (moved) this.#event(id, project, 'ticket_moved', actor, `Moved from ${ticket.project} to ${project}.`, { from: ticket.project, to: project });
-    if (assigned) this.#event(id, project, 'assigned', actor, assignee ? `Assigned to ${assignee.type} ${assignee.id}.` : 'Assignment cleared.', { previous: ticket.assignee, assignee });
+    if (edited) this.#event(id, project, 'ticket_edited', actor.id, 'Updated ticket title or description.', { previous: { title: ticket.title, body: ticket.body }, current: { title, body } });
+    if (moved) this.#event(id, project, 'ticket_moved', actor.id, `Moved from ${ticket.project} to ${project}.`, { from: ticket.project, to: project });
+    if (assigned) this.#event(id, project, 'assigned', actor.id, assignee ? `Assigned to ${assignee.type} ${assignee.id}.` : 'Assignment cleared.', { previous: ticket.assignee, assignee });
     return this.#ticket(id);
   }); }
 
