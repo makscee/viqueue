@@ -6,9 +6,9 @@ viqueue is a minimalist pull-based ticket dispatcher for agents and humans. The 
 
 The HTTP JSON core is the only state machine. `viq`, MCP stdio, and the browser are thin HTTP clients. Runtime data lives in one SQLite file using Node 22's built-in `node:sqlite` and normalized projects, tickets, claims, events, actors, roles, actor-role memberships, and questions.
 
-Tickets have only `open`, `review`, and `done` states. Registered actors and roles provide typed actor/role assignment. Active agents may claim unassigned work; assigned work requires matching actor or role membership. Claim owners can ask fenced questions while continuing progress, and submission explicitly targets a reviewer whose approval answer atomically accepts or requests changes. The board projects them as Ready (open without a claim), Working (open with a claim), Review, and Done.
+Tickets have only `open`, `review`, and `done` states. Registered actors and roles provide typed actor/role assignment. Active agents may claim unassigned work; assigned work requires matching actor or role membership. Claim owners can ask fenced questions while continuing progress, and submission explicitly targets a reviewer whose approval answer atomically accepts or requests changes. The board projects active tickets as Ready (open without a claim), Working (open with a claim), Review, and Done, with Archived as a separate fifth history column.
 
-**A claim persists until an explicit release, submission, or takeover. Silence changes nothing.** Claims are authority locks, not liveness. Claim identity contains an opaque `claim_id`, actor, generation, and an unguessable token whose hash—not plaintext—is stored. Executor mutations require all current credentials. Explicit local-operator takeover increments generation and fences every older owner.
+**A claim persists until an explicit release, submission, or takeover. Silence changes nothing.** Claims are authority locks, not liveness. Claim identity contains an opaque `claim_id`, actor, generation, and an unguessable token whose hash—not plaintext—is stored. Executor mutations require all current credentials. Agent text-question answers likewise require the current claim credentials for that ticket and the claimed actor must match; human answers use actor/role authorization without claim credentials, and approvals are human-only. Explicit local-operator takeover increments generation and fences every older owner.
 
 **Progress events are observations, not proof of liveness.** Events form append-only per-ticket and global streams with a monotonic cursor. Agents pull work; viqueue never starts workers.
 
@@ -22,7 +22,7 @@ npm run build
 VIQ_OPERATOR_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.sqlite
 ```
 
-Open `http://127.0.0.1:7373` for the responsive four-column board and prominent **Questions for you** inbox. The persisted actor selector is private-alpha workflow context, not authentication; server-side actor/role eligibility is still enforced.
+Open `http://127.0.0.1:7373` for the responsive board (four active columns plus Archived) and prominent **Questions for you** inbox. The persisted actor selector is private-alpha workflow context, not authentication; server-side actor/role eligibility is still enforced.
 
 Representative CLI operations:
 
@@ -35,7 +35,7 @@ viq ticket list ABC --assignee eva     viq ticket show ABC-1
 viq ticket edit ABC-1 --assignee-role builders
 viq ticket next --project ABC          viq ticket claim ABC-1 --actor eva
 viq question ask ABC-1 <claim credentials> --text "Need input" --target-role reviewers
-viq question answer ABC-1 Q --actor maks --answer "yes"
+viq question answer ABC-1 Q --actor maks --answer "yes" # agents also pass claim credentials
 viq ticket submit ABC-1 <claim credentials> --reviewer-role reviewers
 viq ticket takeover ABC-1 --actor maks --auth LOCAL_TOKEN
 viq ticket accept|reopen ABC-1 --actor maks --auth LOCAL_TOKEN
@@ -59,6 +59,8 @@ The one-shot importer preserves project keys, next numbers, ticket IDs/titles, s
 
 `npm run bundle` creates deterministic `release/viqueue-v0.4.1-rc.tar.gz` plus SHA-256. Its reversible installer adds the launchers `viq`, `viq-import`, `viq-phone-auth`, `viq-trace-tailscale-upstream`, `viqueue-server`, `viqueue-mcp`, and `viqueue-phone-gateway` under `${VIQ_PREFIX:-~/.local}`; uninstall preserves separately located ticket data. Nothing here publishes, pushes, tags, deploys, or launches workers. See the [isolated phone-auth staging runbook](docs/phone-auth-staging-runbook.md) before configuring a gateway.
 
-`npm run e2e` exercises CLI, MCP, the standard Chromium flow, and the isolated HTTPS phone-browser flow and writes evidence/screenshots when `VIQ_EVIDENCE_DIR` is set. See [ADR 0008](docs/adr-0008-v03-daily-alpha-core.md), [CHANGELOG.md](CHANGELOG.md), and [release notes](release-notes/v0.4.1.md).
+`npm run e2e` exercises CLI, MCP, the standard Chromium flow, and the isolated HTTPS phone-browser flow. Evidence is written only to `VIQ_EVIDENCE_DIR` when explicitly set; otherwise the command uses disposable temporary output.
+
+Browser coverage is intentionally non-duplicative: desktop (1280px) owns the full changed-control flow, including Markdown questions/answers, linked and human-readable history, editing, assignment, project/state changes, archive/restore, and deletion. Mobile (390px) is a representative layout/modal/filter/edit/archive/delete smoke with overflow checks; it does not repeat the full desktop suite. See [ADR 0008](docs/adr-0008-v03-daily-alpha-core.md), the accepted [private-alpha trust boundaries](docs/adr-0011-private-alpha-trust-boundaries.md), [CHANGELOG.md](CHANGELOG.md), and [release notes](release-notes/v0.4.1.md).
 
 viqueue is licensed under the [Apache License 2.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

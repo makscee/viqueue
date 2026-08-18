@@ -58,12 +58,50 @@ test('HTTP release and authorized takeover preserve fencing', async (t) => {
   assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/release', identity(current.body))).body.ticket.claim, null);
 });
 
+test('HTTP exposes human ticket history edits, state, archive, restore, notes, and confirmed delete', async (t) => {
+  const { app, base } = await fixture(); t.after(() => app.close());
+  for (const key of ['ABC', 'XYZ']) await request(base, 'POST', '/v1/projects', { key });
+  for (const [id, kind] of [['maks', 'human'], ['worker', 'agent']]) await request(base, 'POST', '/v1/actors', { id, name: id, kind }, true);
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'History', assignee: { type: 'actor', id: 'worker' } });
+  const edited = await request(base, 'PATCH', '/v1/tickets/ABC-1', { project: 'XYZ', title: 'Edited', body: '**body**', assignee: null, actor: 'maks' });
+  assert.equal(edited.body.ticket.project, 'XYZ');
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/state', { state: 'done', actor: 'maks' })).body.ticket.state, 'done');
+  assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/notes', { message: 'Human note', actor: 'maks' })).body.event.actor, 'maks');
+  await request(base, 'POST', '/v1/tickets/ABC-1/archive', { actor: 'maks' });
+  assert.equal((await request(base, 'GET', '/v1/projects/XYZ/tickets?include_archived=true')).body.tickets.length, 1);
+  await request(base, 'POST', '/v1/tickets/ABC-1/restore', { actor: 'maks' });
+  for (const confirmed of [undefined, false, null, 0, 1, 'true', [], {}]) {
+    const rejected = await request(base, 'POST', '/v1/tickets/ABC-1/delete', { actor: 'maks', ...(confirmed === undefined ? {} : { confirmed }) });
+    assert.equal(rejected.status, 409);
+    assert.equal(rejected.body.error.code, 'delete_confirmation_required');
+    assert.equal((await request(base, 'GET', '/v1/tickets/ABC-1')).body.ticket.deleted_at, null);
+  }
+  assert.ok((await request(base, 'POST', '/v1/tickets/ABC-1/delete', { actor: 'maks', confirmed: true })).body.ticket.deleted_at);
+});
+
+test('HTTP ticket edits fail closed without an active actor and persist canonical provenance', async (t) => {
+  const { app, base } = await fixture(); t.after(() => app.close());
+  await request(base, 'POST', '/v1/projects', { key: 'ABC' });
+  await request(base, 'POST', '/v1/actors', { id: 'maks', name: 'Maks', kind: 'human' }, true);
+  await request(base, 'POST', '/v1/actors', { id: 'inactive', name: 'Inactive', kind: 'human' }, true);
+  await request(base, 'POST', '/v1/actors/inactive/deactivate', {}, true);
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Original' });
+  for (const [body, code] of [[{ title: 'Missing' }, 'actor_not_found'], [{ title: 'Unknown', actor: 'unknown' }, 'actor_not_found'], [{ title: 'Inactive', actor: 'inactive' }, 'actor_inactive']]) {
+    const rejected = await request(base, 'PATCH', '/v1/tickets/ABC-1', body);
+    assert.equal(rejected.body.error.code, code);
+  }
+  assert.equal((await request(base, 'GET', '/v1/tickets/ABC-1')).body.ticket.title, 'Original');
+  assert.equal((await request(base, 'PATCH', '/v1/tickets/ABC-1', { title: 'Edited', actor: 'Maks' })).status, 200);
+  const events = (await request(base, 'GET', '/v1/events?ticket=ABC-1')).body.events;
+  assert.equal(events.find((event) => event.type === 'ticket_edited').actor, 'maks');
+});
+
 test('HTTP edits minimal ticket fields and rejects malformed JSON', async (t) => {
   const { app, base } = await fixture(); t.after(() => app.close());
   await request(base, 'POST', '/v1/projects', { key: 'ABC' });
   await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'old' });
-  await request(base,'POST','/v1/actors',{id:'eva',name:'Eva',kind:'agent'},true);
-  const edited = await request(base, 'PATCH', '/v1/tickets/ABC-1', { title: 'new', body: 'body', assigned_to: 'eva', actor: 'maks' });
+  await request(base,'POST','/v1/actors',{id:'eva',name:'Eva',kind:'human'},true);
+  const edited = await request(base, 'PATCH', '/v1/tickets/ABC-1', { title: 'new', body: 'body', assigned_to: 'eva', actor: 'eva' });
   assert.equal(edited.body.ticket.assigned_to, 'eva');
   const malformed = await fetch(`${base}/v1/projects`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' });
   assert.equal(malformed.status, 400);

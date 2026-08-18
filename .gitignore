@@ -1,5 +1,8 @@
 dist/
 release/
+evidence/
+test-results/
+playwright-report/
 node_modules/
 .pi-subagents/
 *.tmp

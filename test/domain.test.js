@@ -129,6 +129,110 @@ test('event cursor is global monotonic and polling after cursor filters project 
   assert.ok(ticketEvents.cursor >= progress.cursor);
 });
 
+test('human edits every ticket field while assignment remains distinct from the active claim', async () => {
+  const { store, ticket } = await seeded();
+  await store.createProject('XYZ');
+  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const edited = await store.editTicket(ticket.id, { title: 'Moved', body: '**new** body', project: 'XYZ', assignee: { type: 'actor', id: 'worker-b' }, actor: 'maks' });
+  assert.equal(edited.id, ticket.id);
+  assert.equal(edited.project, 'XYZ');
+  assert.equal(edited.title, 'Moved');
+  assert.equal(edited.body, '**new** body');
+  assert.deepEqual(edited.assignee, { type: 'actor', id: 'worker-b' });
+  assert.equal(edited.claim.claim_id, claim.ticket.claim.claim_id);
+  assert.equal(edited.claim.actor, 'worker-a');
+  const events = (await store.listEvents({ ticket: ticket.id })).events.slice(2);
+  assert.deepEqual(events.map((event) => event.type), ['ticket_edited', 'ticket_moved', 'assigned']);
+  assert.ok(events.every((event) => event.actor === 'maks'));
+});
+
+test('human direct state changes fence claims and progress stays in the ticket event chronology', async () => {
+  const { store, ticket, advance } = await seeded();
+  await store.claim(ticket.id, { actor: 'worker-a' });
+  const review = await store.setTicketState(ticket.id, { state: 'review', actor: 'maks' });
+  assert.equal(review.state, 'review'); assert.equal(review.claim, null);
+  advance(1000);
+  const progress = await store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'Human **progress** note.' });
+  assert.equal(progress.event.type, 'progress'); assert.equal(progress.event.actor, 'maks');
+  await store.setTicketState(ticket.id, { state: 'done', actor: 'maks' });
+  await store.setTicketState(ticket.id, { state: 'open', actor: 'maks' });
+  const events = (await store.listEvents({ ticket: ticket.id })).events.filter((event) => ['state_changed', 'progress'].includes(event.type));
+  assert.deepEqual(events.map((event) => event.type), ['state_changed', 'progress', 'state_changed', 'state_changed']);
+  assert.ok(events.every((event) => event.actor === 'maks' && event.created_at && event.message));
+});
+
+test('direct state override resolves a pending approval instead of leaving a stale inbox question', async () => {
+  const { store, ticket } = await seeded(); const claim = await store.claim(ticket.id, { actor: 'worker-a' }); const submitted = await store.submit(ticket.id, { ...identity(claim), reviewer: { type: 'actor', id: 'maks' } });
+  await store.setTicketState(ticket.id, { state: 'open', actor: 'maks' });
+  const question = (await store.listQuestions(ticket.id)).questions.find((item) => item.id === submitted.question.id);
+  assert.equal(question.status, 'answered'); assert.equal(JSON.parse(question.answer).decision, 'request_changes');
+  const answer = (await store.listEvents({ ticket: ticket.id })).events.find((event) => event.type === 'question_answered'); assert.equal(answer.metadata.question_event_id, question.question_event_id);
+});
+
+test('archive is reversible while confirmed delete tombstones without erasing history', async () => {
+  const { store, ticket } = await seeded(); const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const archived = await store.archiveTicket(ticket.id, { actor: 'maks' }); assert.ok(archived.archived_at); assert.equal(archived.claim, null); await assert.rejects(store.verify(ticket.id, identity(claim)), (error) => error.code === 'stale_claim');
+  assert.deepEqual(await store.listTickets('ABC'), []); assert.equal(await store.next({ project: 'ABC' }), null); await assert.rejects(store.claim(ticket.id, { actor: 'worker-a' }), (error) => error.code === 'ticket_unavailable');
+  assert.deepEqual((await store.listTickets('ABC', { includeArchived: true })).map((item) => item.id), [ticket.id]);
+  const restored = await store.restoreTicket(ticket.id, { actor: 'maks' }); assert.equal(restored.archived_at, null);
+  for (const confirmed of [undefined, false, null, 0, 1, 'true', [], {}]) {
+    await assert.rejects(store.deleteTicket(ticket.id, { actor: 'maks', ...(confirmed === undefined ? {} : { confirmed }) }), (error) => error.code === 'delete_confirmation_required');
+    assert.equal((await store.getTicket(ticket.id)).deleted_at, null);
+  }
+  const deleted = await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true }); assert.ok(deleted.deleted_at);
+  assert.deepEqual(await store.listTickets('ABC', { includeArchived: true }), []);
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.slice(-3).map((event) => event.type), ['archived', 'restored', 'deleted']);
+});
+
+test('archived tickets are immutable and leave inboxes until restored', async () => {
+  const { store, ticket } = await seeded();
+  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const asked = await store.askQuestion(ticket.id, { ...identity(claim), text: 'Still active?', target_type: 'actor', target_id: 'maks' });
+  await store.archiveTicket(ticket.id, { actor: 'maks' });
+  assert.deepEqual((await store.actorInbox('maks')).questions, []);
+  for (const operation of [
+    () => store.editTicket(ticket.id, { actor: 'maks', title: 'archived edit' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'archived progress' }),
+    () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'archived?', target_type: 'actor', target_id: 'worker-a' }),
+    () => store.answerQuestion(ticket.id, asked.question.id, { actor: 'maks', answer: 'not yet' }),
+    () => store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true })
+  ]) await assert.rejects(operation(), (error) => error.code === 'ticket_archived');
+  await store.restoreTicket(ticket.id, { actor: 'maks' });
+  assert.deepEqual((await store.actorInbox('maks')).questions.map((question) => question.id), [asked.question.id]);
+  await store.answerQuestion(ticket.id, asked.question.id, { actor: 'maks', answer: 'restored' });
+});
+
+test('archive and delete checks remain correct when the clock returns zero', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'viq-zero-time-'));
+  const store = new Store(path.join(dir, 'data.sqlite'), { now: () => 0 });
+  await store.init(); await store.createProject('ABC'); await store.createActor({ id: 'maks', name: 'Maks', kind: 'human' });
+  const archivedTicket = await store.createTicket({ project: 'ABC', title: 'Archived at epoch' });
+  const archived = await store.archiveTicket(archivedTicket.id, { actor: 'maks' });
+  assert.equal(archived.archived_at, 0);
+  assert.deepEqual(await store.listTickets('ABC'), []);
+  await assert.rejects(store.editTicket(archived.id, { actor: 'maks', title: 'epoch zombie' }), (error) => error.code === 'ticket_archived');
+  assert.equal((await store.restoreTicket(archived.id, { actor: 'maks' })).archived_at, null);
+  const deleted = await store.deleteTicket(archived.id, { actor: 'maks', confirmed: true });
+  assert.equal(deleted.deleted_at, 0);
+  assert.deepEqual(await store.listTickets('ABC', { includeArchived: true }), []);
+  await assert.rejects(store.editTicket(deleted.id, { actor: 'maks', title: 'epoch tombstone' }), (error) => error.code === 'ticket_deleted');
+  await store.close();
+});
+
+test('deleted tombstones reject subsequent human mutations', async () => {
+  const { store, ticket } = await seeded(); await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true });
+  for (const operation of [
+    () => store.editTicket(ticket.id, { actor: 'maks', title: 'zombie' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'zombie' }),
+    () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'zombie?', target_type: 'actor', target_id: 'worker-a' }),
+    () => store.accept(ticket.id, { actor: 'maks' }),
+    () => store.reopen(ticket.id, { actor: 'maks' })
+  ]) await assert.rejects(operation(), (error) => error.code === 'ticket_deleted');
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'deleted']);
+});
+
 test('ticket edit and assignment retain the minimal canonical fields and record events', async () => {
   const { store, ticket } = await seeded();
   const edited = await store.editTicket(ticket.id, { title: 'Updated', body: 'new body', assigned_to: null, actor: 'maks' });
