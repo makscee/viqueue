@@ -1,7 +1,0 @@
-Independent fresh Pi verifier: cass
-Verdict: ACCEPT — no requirement blockers found.
-Prior blockers verified fixed across HTTP/CLI/MCP: role member-list, actor active update/filter, question status filter, and active asker validation.
-Nonblocking risks: Node node:sqlite experimental warning; release hygiene addressed by final validation, local commit, and clean worktree.
-Full verifier session: /root/.pi/agent/sessions/--root-work-viqueue--/2026-08-13T20-09-15-175Z_019ffcbe-42a7-7c7b-b6ab-c4680794dbd4/0432be72/run-0/session.jsonl
-Focused post-migration verifier: ACCEPT — exact legacy assignment and claim identities preserved; targeted tests, full suite, and build pass.
-Focused session: /root/.pi/agent/sessions/--root-work-viqueue--/2026-08-13T20-09-15-175Z_019ffcbe-42a7-7c7b-b6ab-c4680794dbd4/126a04b2/run-0/session.jsonl

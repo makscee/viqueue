@@ -85,7 +85,7 @@ test('human ticket UI exposes every field, direct state, progress, archive, rest
   assert.match(app, /question_event_id/);
 });
 
-test('browser acceptance independently covers desktop and a complete 390px human-history flow', async () => {
+test('browser acceptance keeps full desktop coverage and a representative non-duplicative 390px smoke', async () => {
   const browser = await readFile('test/human-history-browser-e2e.js', 'utf8');
   const mobile = browser.slice(browser.indexOf('const mobile ='));
   assert.match(mobile, /width:\s*390/);

@@ -1,5 +1,0 @@
-
-> viqueue@0.2.0 build
-> node scripts/build.js
-
-built dist/

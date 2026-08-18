@@ -1,3 +1,0 @@
-desktop exercised typed assignment, fenced ask while claimed, inline text answer, explicit role review submit, and inline accept
-mobile shows Questions for you inbox, badges, actor/machine selector and four-column tab projection
-BROWSER_E2E_OK

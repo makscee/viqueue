@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
-const evidence = process.env.VIQ_EVIDENCE_DIR || 'evidence/human-history/browser';
-await mkdir(`${evidence}/screenshots`, { recursive: true });
 const work = await mkdtemp(path.join(tmpdir(), 'viq-history-browser-'));
+const evidence = process.env.VIQ_EVIDENCE_DIR || path.join(work, 'evidence');
+await mkdir(`${evidence}/screenshots`, { recursive: true });
 const socket = net.createServer(); await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise((resolve) => socket.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, ['src/server.js', `--port=${port}`, `--storage=${work}/data.sqlite`, '--operator-token=e2e-only']);
@@ -75,10 +75,11 @@ try {
   await page.locator('.ticket-card[data-id="LIFE-2"] .ticket-open').click(); await page.getByRole('button', { name: 'Add progress' }).click(); await page.getByLabel('Progress (Markdown)').fill('Human **progress** entry.'); await page.getByRole('button', { name: 'Add progress' }).click(); await page.getByText('Progress added').waitFor();
   await page.locator('.ticket-card[data-id="LIFE-2"] .ticket-open').click(); await page.getByRole('button', { name: 'Ask question' }).click(); await page.getByLabel('Question (Markdown)').fill('Eva, is **history** clear?'); await page.locator('#modal-content select[name="target"]').selectOption('actor:eva'); await page.getByRole('button', { name: 'Ask question' }).click(); await page.getByText('Question asked').waitFor();
   await page.getByLabel('Your name').selectOption('eva'); const humanQuestion = page.locator('.question-card').filter({ hasText: 'is history clear?' }); await humanQuestion.click(); await page.getByLabel('Your answer (Markdown)').fill('Yes, **clear** and chronological.'); await page.getByRole('button', { name: 'Send answer' }).click(); await page.getByText('Answer sent').waitFor();
-  await page.locator('.ticket-card[data-id="LIFE-2"] .ticket-open').click(); await page.locator('.event-question_answered[data-question-event]').waitFor(); const timeline = page.locator('.event-timeline'); assert.ok(await timeline.locator('.event').count() >= 8); assert.equal(await timeline.locator('.event-head time').count(), await timeline.locator('.event').count()); assert.match(await timeline.innerText(), /Eva.*Question answered|Question answered.*Eva/s); assert.equal(await page.locator('#modal-content img').count(), 0);
+  const lifeEvents = (await api('GET', '/v1/events?ticket=LIFE-2')).events; const askedEvent = lifeEvents.find((event) => event.type === 'question_asked');
+  await page.locator('.ticket-card[data-id="LIFE-2"] .ticket-open').click(); const linkedAnswer = page.locator('.event-question_answered[data-question-event]'); await linkedAnswer.waitFor(); const timeline = page.locator('.event-timeline'); assert.ok(await timeline.locator('.event').count() >= 8); assert.equal(await timeline.locator('.event-head time').count(), await timeline.locator('.event').count()); assert.equal(await linkedAnswer.getAttribute('data-question-event'), String(askedEvent.cursor)); assert.equal(await linkedAnswer.locator('strong').filter({ hasText: 'clear' }).count(), 1); assert.match(await timeline.innerText(), /Ticket edited[\s\S]*Updated ticket title or description\.[\s\S]*Project changed[\s\S]*Moved from LIFE to WORK\.[\s\S]*Assignment changed[\s\S]*Assigned to actor worker\.[\s\S]*State changed[\s\S]*Moved from review to done\.[\s\S]*State changed[\s\S]*Moved from done to open\./); assert.match(await timeline.innerText(), /Eva.*Question answered|Question answered.*Eva/s); assert.equal(await page.locator('#modal-content img').count(), 0);
   await page.screenshot({ path: `${evidence}/screenshots/viq5-editable-event-history.png`, fullPage: true });
-  await page.getByRole('button', { name: 'Archive', exact: true }).click(); await page.getByText('Ticket archived').waitFor(); await page.locator('.column[data-column="archived"] .ticket-card[data-id="LIFE-2"]').waitFor(); await page.screenshot({ path: `${evidence}/screenshots/viq5-archived-reversible.png`, fullPage: true }); await page.locator('.ticket-card[data-id="LIFE-2"]').getByRole('button', { name: 'Restore' }).click(); await page.getByText('Ticket restored').waitFor();
-  await page.locator('.column[data-column="ready"] .ticket-card[data-id="LIFE-2"] .ticket-open').click(); await page.getByRole('button', { name: 'Delete ticket' }).click(); await page.getByLabel('Confirm delete').check(); await page.getByRole('button', { name: 'Confirm delete' }).click(); await page.getByText('Ticket deleted').waitFor(); assert.equal(await page.locator('.ticket-card[data-id="LIFE-2"]').count(), 0); disposable = (await api('GET', '/v1/tickets/LIFE-2')).ticket; assert.ok(disposable.deleted_at); assert.ok((await api('GET', '/v1/events?ticket=LIFE-2')).events.length >= 10);
+  await page.getByRole('button', { name: 'Archive', exact: true }).click(); await page.getByText('Ticket archived').waitFor(); const archivedCard = page.locator('.column[data-column="archived"] .ticket-card[data-id="LIFE-2"]'); await archivedCard.waitFor(); await archivedCard.locator('.ticket-open').click(); assert.match(await page.locator('.event-archived').innerText(), /Archived[\s\S]*Archived ticket\./); await page.screenshot({ path: `${evidence}/screenshots/viq5-archived-reversible.png`, fullPage: true }); await page.locator('#modal-content .detail-actions').getByRole('button', { name: 'Restore' }).click(); await page.getByText('Ticket restored').waitFor();
+  await page.locator('.column[data-column="ready"] .ticket-card[data-id="LIFE-2"] .ticket-open').click(); assert.match(await page.locator('.event-restored').innerText(), /Restored[\s\S]*Restored ticket from archive\./); await page.getByRole('button', { name: 'Delete ticket' }).click(); await page.getByLabel('Confirm delete').check(); await page.getByRole('button', { name: 'Confirm delete' }).click(); await page.getByText('Ticket deleted').waitFor(); assert.equal(await page.locator('.ticket-card[data-id="LIFE-2"]').count(), 0); disposable = (await api('GET', '/v1/tickets/LIFE-2')).ticket; assert.ok(disposable.deleted_at); assert.ok((await api('GET', '/v1/events?ticket=LIFE-2')).events.length >= 10);
   note('PASS VIQ-5 human created, edited/moved/assigned without claim, changed state from board/details, progressed, questioned/answered, archived/restored, and explicitly deleted a disposable ticket with attributed timeline retained');
 
   await api('POST', '/v1/tickets', { project: 'LIFE', title: 'Mobile disposable history', body: 'Initial **mobile** context.', assignee: { type: 'actor', id: 'maks' }, actor: 'maks' });
@@ -104,4 +105,4 @@ try {
   await mobileFits(); await mobile.screenshot({ path: `${evidence}/screenshots/viq8-mobile-390-history.png`, fullPage: true }); await mobile.close();
   note('PASS VIQ-8 independent 390px flow composes project/assignee chips and performs attributed edit, progress, state, archive/restore, and checked delete without overflow; desktop coverage remains intact');
   assert.deepEqual(problems, []); note('VIQ3_BROWSER_OK'); note('VIQ4_BROWSER_OK'); note('VIQ5_BROWSER_OK'); note('VIQ7_BROWSER_OK'); note('VIQ8_BROWSER_OK');
-} finally { await browser.close(); server.kill(); await writeFile(`${evidence}/browser.log`, `${[...log, ...problems].join('\n')}\n`); }
+} finally { await browser.close(); server.kill(); await writeFile(`${evidence}/browser.log`, `${[...log, ...problems].join('\n')}\n`); if (!process.env.VIQ_EVIDENCE_DIR) await rm(work, { recursive: true, force: true }); }

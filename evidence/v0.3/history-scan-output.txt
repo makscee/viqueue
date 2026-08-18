@@ -1,2 +1,0 @@
-History scan is included in `npm run scan:secrets`; see `secret-scan-output.txt`:
-secret scan passed: tracked files and git patch history; 0 high-confidence matches.
