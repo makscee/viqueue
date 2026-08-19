@@ -6,7 +6,7 @@
 2. Choose a separate durable auth directory (new directories are created 0700; an existing parent is never chmodded), database (0600), and canonical approved HTTPS phone origin.
 3. Select exactly one upstream mode:
    - Default/local: `--upstream=http://127.0.0.1:7373`. Loopback HTTP is the only mode when no address policy is supplied.
-   - Exact tailnet HTTPS: `--upstream=https://cc-worker.twin-pogona.ts.net --upstream-address-policy=tailscale`. Remote HTTP, IP literals, nondefault ports, credentials, paths, queries, fragments, and every policy name other than `tailscale` are rejected.
+   - Exact tailnet HTTPS: `--upstream=https://APPROVED-TAILNET-UPSTREAM --upstream-address-policy=tailscale`. Supply the deployment's approved tailnet DNS origin; no upstream is built into the package. Remote HTTP, IP literals, nondefault ports, credentials, paths, queries, fragments, and every policy name other than `tailscale` are rejected.
 4. Either run gateway-managed inbound TLS with both `--cert` and `--key`, or use an already approved TLS ingress and explicitly pass `--tls-terminated=true`. The latter is safe only while the gateway remains bound to loopback and that approved ingress is the sole caller. A partial keypair is rejected.
 5. Run `viq-phone-auth pair-create --db=… --origin=https://…`. Do not paste its URL into logs or tickets.
 6. On the phone, open the fragment URL and tap **Pair this phone**. That is the single minimal phone action after the cutover gate.
@@ -18,7 +18,7 @@ Example inert command for the approved mcow topology (paths and phone origin rem
 viqueue-phone-gateway \
   --auth-db=/APPROVED/PATH/phone-auth.sqlite \
   --origin=https://APPROVED-PHONE-ORIGIN \
-  --upstream=https://cc-worker.twin-pogona.ts.net \
+  --upstream=https://APPROVED-TAILNET-UPSTREAM \
   --upstream-address-policy=tailscale \
   --tls-terminated=true \
   --port=7443
@@ -28,7 +28,7 @@ viqueue-phone-gateway \
 
 ## Read-only upstream tracer
 
-From the gateway host and without proxy variables, `viq-trace-tailscale-upstream` performs only `GET /health` and `GET /v1/projects` against the exact `cc-worker.twin-pogona.ts.net` origin. It uses the production trust store and hostname verification, validates actual tailnet DNS answers, pins those answers into the request lookup, caps response bytes, and does not follow redirects. It creates no pairing or application state.
+From the gateway host and without proxy variables, supply the approved origin explicitly: `viq-trace-tailscale-upstream --origin=https://APPROVED-TAILNET-UPSTREAM`. `VIQ_TAILSCALE_UPSTREAM_ORIGIN` is the equivalent environment input. The neutral default probes are `GET /health` and `GET /v1/projects`; repeat `--path=/APPROVED-PATH` to override them. The tracer uses the production trust store and hostname verification, validates actual tailnet DNS answers, pins those answers into the request lookup, caps response bytes, and does not follow redirects. It creates no pairing or application state.
 
 ## Cutover gate (Eva approval required)
 
