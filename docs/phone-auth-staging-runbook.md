@@ -8,9 +8,9 @@
    - Default/local: `--upstream=http://127.0.0.1:7373`. Loopback HTTP is the only mode when no address policy is supplied.
    - Exact tailnet HTTPS: `--upstream=https://cc-worker.twin-pogona.ts.net --upstream-address-policy=tailscale`. Remote HTTP, IP literals, nondefault ports, credentials, paths, queries, fragments, and every policy name other than `tailscale` are rejected.
 4. Either run gateway-managed inbound TLS with both `--cert` and `--key`, or use an already approved TLS ingress and explicitly pass `--tls-terminated=true`. The latter is safe only while the gateway remains bound to loopback and that approved ingress is the sole caller. A partial keypair is rejected.
-5. Run `viq-phone-auth pair-create --db=… --origin=https://…`. Do not paste its URL into logs or tickets.
-6. On the phone, open the fragment URL and tap **Pair this phone**. That is the single minimal phone action after the cutover gate.
-7. Inspect `viq-phone-auth status --db=… --origin=https://…` (`--json` is available). If a key/profile is lost or access must end, run `revoke`; create a new pair only afterward.
+5. Mint one ten-minute, one-use code with `viq-phone-auth pair-code --db=… --origin=https://… [--label=…]`. Do not paste its code into logs or tickets. The older `pair-create` fragment command remains available for compatibility.
+6. On the new device, enter the six-digit code and optional label. Once paired, **Add device** can mint subsequent codes without disabling current devices.
+7. Inspect `viq-phone-auth status --db=… --origin=https://…` (`--json` is available). Use the paired device list to revoke one device; the CLI `revoke` command remains a bounded emergency revoke-all operation.
 
 Example inert command for the approved mcow topology (paths and phone origin remain cutover inputs):
 
@@ -36,6 +36,6 @@ Before activation, Eva must approve **the phone hostname and specific ingress**,
 
 ## Rollback
 
-Stop/remove only the gateway ingress/process, revoke the active device, and archive or delete the separate auth DB according to policy. Do not alter the existing server, tailnet route, DNS, firewall, or application DB. Direct loopback/tailnet behavior remains available and unchanged.
+Stop/remove only the gateway ingress/process, revoke the active devices, and archive or delete the separate auth DB according to policy. Do not alter the existing server, tailnet route, DNS, firewall, or application DB. Direct loopback/tailnet behavior remains available and unchanged.
 
 Never package or track auth databases, private keys, certificates, or pairing URLs.
