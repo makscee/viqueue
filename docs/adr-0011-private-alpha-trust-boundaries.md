@@ -4,7 +4,7 @@ Status: accepted for private alpha
 
 The private alpha deliberately has no IAM layer. Access and workflow identity are separate:
 
-- The phone gateway's single active paired browser device, proved on every API request, is the phone access boundary. Pairing identifies a browser profile, not a person; revocation ends that access.
+- The phone gateway's active paired browser devices, each proved on every API request, are the phone access boundary. Pairing identifies a browser profile, not a person; individual revocation ends that device's access.
 - The board actor selector is trusted workflow identity for human attribution and inbox routing. Selecting an actor grants no network access and is not authentication.
 - The core listener defaults to loopback. The phone gateway also listens on loopback; any approved private TLS/tailnet ingress must remain non-public. Funnel and public ingress are outside this boundary.
 - Agent mutations are authorized by the current claim's complete `claim_id`, actor, generation, and claim token. Actor registration, assignment, and the board selector do not grant agent mutation authority.

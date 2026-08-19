@@ -1,3 +1,8 @@
+export function createFetchBridge(scope = globalThis) {
+  const nativeFetch = scope.fetch.bind(scope);
+  return { nativeFetch, install(wrapper) { if (scope.fetch !== wrapper) scope.fetch = wrapper; } };
+}
+
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 })[character]);

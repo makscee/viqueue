@@ -1,12 +1,12 @@
 # Isolated phone gateway threat model
 
-This gateway binds one browser profile to staging API access. It is **not** hardware attestation, user presence, a person identity, or authorization derived from the selected workflow actor. The IndexedDB private `CryptoKey` is non-extractable, but browser compromise can still use it.
+This gateway binds paired browser profiles to staging API access. It is **not** hardware attestation, user presence, a person identity, or authorization derived from the selected workflow actor. The IndexedDB private `CryptoKey` is non-extractable, but browser compromise can still use it.
 
 ## Browser and request boundary
 
-The operator creates a five-minute intent locally. Only a domain-separated SHA-256 verifier is stored; the fragment secret is erased from visible history before another browser request and is never sent over HTTP. A domain-separated HMAC binds pairing to the configured HTTPS phone origin, intent, device, and public coordinates. Exactly one active device is enforced until local revocation.
+The normal flow creates a six-digit, ten-minute, one-use code and stores only its domain-separated SHA-256 hash; redemption attempts have a small source-local rate limit. Each browser generates its own non-extractable key. Multiple devices remain active and can be revoked individually. For compatibility, the older five-minute fragment intent still stores only a domain-separated verifier, erases its fragment before another request, and binds pairing to the configured HTTPS phone origin, intent, device, and public coordinates.
 
-Every `/v1/*` call obtains a 32-byte, 30-second, one-use challenge bound to active device epoch, method, exact raw request-target, and hash of the exact (at most 1 MiB) body. Absolute-form, network-path, backslash/control, encoded traversal, and ambiguous targets are rejected before routing. Auth JSON is limited to 8 KiB. ECDSA P-256 signs a length-prefixed record that also binds origin/audience. Authorization and challenge consumption run under `BEGIN IMMEDIATE`; revocation changes the active epoch boundary before future authorization can commit. Cookies confer no identity.
+Every `/v1/*` call and paired device-management call obtains a 32-byte, 30-second, one-use challenge bound to active device epoch, method, exact raw request-target, and hash of the exact (at most 1 MiB) body. Absolute-form, network-path, backslash/control, encoded traversal, and ambiguous targets are rejected before routing. Auth JSON is limited to 8 KiB. ECDSA P-256 signs a length-prefixed record that also binds origin/audience. Authorization and challenge consumption run under `BEGIN IMMEDIATE`; revocation changes the active epoch boundary before future authorization can commit. Cookies confer no identity.
 
 The gateway strips credentials, cookies, client `Host`, forwarding, hop-by-hop, and proof headers. It preserves only the exact accepted origin, method, raw path/query, and bounded body. Redirect responses are returned without being followed; they cannot select another upstream connection.
 
