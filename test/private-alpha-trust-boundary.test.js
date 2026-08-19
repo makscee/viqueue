@@ -23,11 +23,11 @@ test('accepted private-alpha trust boundary is explicit and mapped to enforced i
     readFile('web/app.js', 'utf8')
   ]);
   assert.match(adr, /Status: accepted for private alpha/);
-  for (const boundary of [/single active paired browser device[\s\S]*access boundary/i, /actor selector[\s\S]*workflow identity/i, /core listener defaults to loopback/i, /Agent mutations are authorized by the current claim/i, /no IAM layer/i]) assert.match(adr, boundary);
+  for (const boundary of [/active paired browser devices[\s\S]*access boundary/i, /actor selector[\s\S]*workflow identity/i, /core listener defaults to loopback/i, /Agent mutations are authorized by the current claim/i, /no IAM layer/i]) assert.match(adr, boundary);
   assert.match(security, /accepted private-alpha boundaries, not IAM/);
   assert.match(server, /host = '127\.0\.0\.1'/);
   assert.match(gateway, /s\.listen\(port,'127\.0\.0\.1'/);
-  assert.match(authStore, /one_active_device ON devices\(active\) WHERE active=1/);
+  assert.match(authStore, /DROP INDEX IF EXISTS one_active_device/);
   assert.match(app, /localStorage\.setItem\('viq\.actor'/);
 });
 
