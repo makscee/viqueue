@@ -159,6 +159,8 @@ cat > /etc/systemd/system/viq15-auto-rollback.service <<EOF
 Description=VIQ-15 automatic cutover rollback
 [Service]
 Type=oneshot
+# A deadline firing during apply must remain queued on the shared lock, not time out.
+TimeoutStartSec=infinity
 ExecStart=/bin/bash $STATE/rollback.sh automatic-timeout
 EOF
 viq15_timer_write /etc/systemd/system/viq15-auto-rollback.timer "$ROLLBACK_DEADLINE"

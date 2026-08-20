@@ -9,6 +9,7 @@ import test from 'node:test';
 const root = resolve(import.meta.dirname, '..');
 const lib = join(root, 'scripts/viq15-cutover/transaction-lib.sh');
 const restore = join(root, 'scripts/viq15-cutover/sqlite-family-restore.sh');
+const applyScript = join(root, 'scripts/viq15-cutover/apply.sh');
 const tmpRoot = process.env.TMPDIR;
 if (!tmpRoot) throw new Error('TMPDIR is required for isolated cutover fixtures');
 
@@ -64,6 +65,11 @@ test('shared exclusion rejects apply contention and queued rollback acquires aft
   assert.deepEqual(await holderExit, [0, null]);
   assert.deepEqual(await acquired, ['ACQUIRED']);
   assert.deepEqual(await waiterExit, [0, null]);
+});
+
+test('automatic rollback lock wait cannot be killed by systemd start timeout', async () => {
+  const source = await readFile(applyScript, 'utf8');
+  assert.match(source, /Type=oneshot\n(?:#[^\n]*\n)*TimeoutStartSec=infinity\nExecStart=.*rollback\.sh automatic-timeout/);
 });
 
 test('deadline is sealed as canonical absolute UTC and timer readback is calendar-persistent', async () => {
