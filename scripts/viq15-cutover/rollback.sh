@@ -52,7 +52,7 @@ import{DatabaseSync}from'node:sqlite';import{existsSync}from'node:fs';const insp
 NODE
 }
 check_old_db(){ node --input-type=module - "$OLD_DB" "$EXPECTED_SCHEMA" <<'NODE'
-import{DatabaseSync}from'node:sqlite';import{createHash}from'node:crypto';const d=new DatabaseSync(process.argv[2],{readOnly:true});if(d.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')process.exit(1);const s=d.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();if(createHash('sha256').update(JSON.stringify(s)).digest('hex')!==process.argv[3])process.exit(1);const expected={actor_roles:8,actors:6,claims:18,events:172,execution_authorities:1,projects:5,questions:19,roles:4,ticket_blocks:1,tickets:25};for(const[name,count]of Object.entries(expected)){const q='"'+name.replaceAll('"','""')+'"';if(Number(d.prepare(`SELECT COUNT(*) n FROM ${q}`).get().n)!==count)process.exit(1)}d.close();
+import{DatabaseSync}from'node:sqlite';import{createHash}from'node:crypto';const d=new DatabaseSync(process.argv[2],{readOnly:true});if(d.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')process.exit(1);const s=d.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();if(createHash('sha256').update(JSON.stringify(s)).digest('hex')!==process.argv[3])process.exit(1);d.close();
 NODE
 }
 

@@ -45,7 +45,15 @@ test('exact preflight classifies two claims and eight questions without row cont
   assert.equal(JSON.stringify(result).includes('redacted fixture'), false);
 }));
 
-test('preflight fails closed on any exact unsettled-state drift', () => inTemp((dir) => {
+test('reconciliation inspect fails closed on exact active-claim identity drift', () => inTemp((dir) => {
+  const file = fixture(dir);
+  const db = new DatabaseSync(file);
+  db.prepare('UPDATE claims SET actor=? WHERE claim_id=?').run('unexpected-worker', EXPECTED.claims[0].claim_id);
+  db.close();
+  assert.throws(() => inspectDatabase(file), /active_claims_drift/);
+}));
+
+test('reconciliation inspect fails closed on exact open-question drift', () => inTemp((dir) => {
   const file = fixture(dir);
   const db = new DatabaseSync(file);
   db.prepare('UPDATE questions SET status=? WHERE id=?').run('answered', EXPECTED.questions[0].id);
@@ -53,7 +61,7 @@ test('preflight fails closed on any exact unsettled-state drift', () => inTemp((
   assert.throws(() => inspectDatabase(file), /open_questions_drift/);
 }));
 
-test('legacy assigned_to drift fails closed for claim and question tickets', () => inTemp((dir) => {
+test('reconciliation inspect fails closed on exact assignment drift for claim and question tickets', () => inTemp((dir) => {
   for (const item of [EXPECTED.claims[0], EXPECTED.questions[0]]) {
     const file = fixture(dir);
     const db = new DatabaseSync(file);
@@ -64,7 +72,7 @@ test('legacy assigned_to drift fails closed for claim and question tickets', () 
   }
 }));
 
-test('claim claimed_at drift fails closed before apply', () => inTemp((dir) => {
+test('reconciliation inspect fails closed on exact claim timestamp drift before apply', () => inTemp((dir) => {
   const file = fixture(dir);
   const db = new DatabaseSync(file);
   db.prepare('UPDATE claims SET claimed_at=claimed_at+1 WHERE claim_id=?').run(EXPECTED.claims[0].claim_id);

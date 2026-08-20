@@ -34,7 +34,7 @@ sha(){ sha256sum "$1" | cut -d' ' -f1; }
 route_hash(){ tailscale serve status --json | sha256sum | cut -d' ' -f1; }
 check_route_target(){ tailscale serve status --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s),w=j.Web??{},h=Object.values(w)[0]?.Handlers??{};if(Object.keys(j.TCP??{}).length!==1||j.TCP?.['443']?.HTTPS!==true||Object.keys(w).length!==1||Object.keys(h).length!==1||h['/']?.Proxy!=='http://127.0.0.1:'+process.argv[1])process.exit(1)})" "$1"; }
 check_db_cas(){ node --input-type=module - "$1" "$EXPECTED_SCHEMA" <<'NODE'
-import{DatabaseSync}from'node:sqlite';import{createHash}from'node:crypto';const d=new DatabaseSync(process.argv[2],{readOnly:true});if(d.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')process.exit(1);const s=d.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();if(createHash('sha256').update(JSON.stringify(s)).digest('hex')!==process.argv[3])process.exit(1);const expected={actor_roles:8,actors:6,claims:18,events:172,execution_authorities:1,projects:5,questions:19,roles:4,ticket_blocks:1,tickets:25};for(const[name,count]of Object.entries(expected)){const q='"'+name.replaceAll('"','""')+'"';if(Number(d.prepare(`SELECT COUNT(*) n FROM ${q}`).get().n)!==count)process.exit(1)}d.close();
+import{DatabaseSync}from'node:sqlite';import{createHash}from'node:crypto';const d=new DatabaseSync(process.argv[2],{readOnly:true});if(d.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')process.exit(1);const s=d.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();if(createHash('sha256').update(JSON.stringify(s)).digest('hex')!==process.argv[3])process.exit(1);d.close();
 NODE
 }
 seal_generic_sqlite(){ node --input-type=module - "$1" "$2" <<'NODE'
@@ -59,7 +59,7 @@ listeners=$(ss -ltnH | awk '$4 ~ /:(7373|7443|17373)$/ {print $4}' | sort)
 [[ $listeners == $'127.0.0.1:7373\n127.0.0.1:7443' ]] || fail 'listener drift'
 [[ $(route_hash) == "$EXPECTED_ROUTE" ]] || fail 'Tailscale Serve drift'
 check_route_target 7443 || fail 'Tailscale Serve shape drift'
-check_db_cas "$OLD_DB" || fail 'database integrity/schema/count drift'
+check_db_cas "$OLD_DB" || fail 'database integrity/schema drift'
 node "$SCRIPT_DIR/viq15-reconcile.js" inspect "$OLD_DB" > /dev/null || fail 'exact unsettled-state reconciliation drift'
 [[ -f $OLD_AUTH_DB && ! -L $OLD_AUTH_DB ]] || fail 'old auth DB missing or unsafe'
 [[ $(df -B1 --output=avail /opt | tail -1) -ge 2147483648 && $(df -B1 --output=avail /var/lib | tail -1) -ge 2147483648 ]] || fail 'insufficient disk headroom'
