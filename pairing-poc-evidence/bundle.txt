@@ -1,0 +1,11 @@
+
+> viqueue@0.4.1 bundle
+> npm run build && node scripts/bundle.js
+
+
+> viqueue@0.4.1 build
+> node scripts/build.js
+
+built dist/
+built /root/worktrees/viq15-minimal-cutover/release/viqueue-v0.4.1-rc.tar.gz
+sha256 77f4d0736a607297ce8cf19796e6ed1a9364f714a2a2f8e6c25e05a1b58d7e1f
