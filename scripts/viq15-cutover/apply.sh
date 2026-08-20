@@ -77,9 +77,21 @@ tailscale serve status --json > "$STATE/tailscale-serve.before.json"; chmod 600 
 cp -a /etc/systemd/system/viqueue.service "$STATE/viqueue.service.before"
 cp -a /etc/systemd/system/viqueue-phone-gateway.service "$STATE/viqueue-phone-gateway.service.before"
 printf '%s\n' "$OLD_RELEASE" > "$STATE/old-release"
+printf '%s\n' "$OLD_WORKER_COMMIT" > "$STATE/old-worker-commit"
+chmod 600 "$STATE/old-release" "$STATE/old-worker-commit"
 tar -xzf "$BUNDLE" -C "$STATE"
 STAGE=$STATE/viqueue-v0.4.1-rc
 [[ $(cat "$STAGE/SOURCE_COMMIT") == "$CANDIDATE" && $(cat "$STAGE/SOURCE_TREE") == "$TREE" ]] || fail 'embedded source identity mismatch'
+ROLLBACK_MANIFEST_MEMBERS=(
+  rollback.sh transaction-lib.sh sqlite-family-restore.sh install-viq-worker.sh
+  rollback-viq-worker.sh viq15-reconcile.js tailscale-serve.before.json
+  viqueue.service.before viqueue-phone-gateway.service.before old-release
+  old-worker-commit viqueue-v0.4.1-rc/sqlite-backup.js
+)
+# The root-owned mode-0700 STATE directory is the local trust root. The threat
+# model covers accidental/non-root artifact tampering, not a hostile root that
+# can replace both artifacts and this mode-0600 manifest.
+viq15_manifest_seal "$STATE" "${ROLLBACK_MANIFEST_MEMBERS[@]}" || fail 'initial rollback manifest seal failed'
 MUTATION_STARTED=1
 
 # Quiesce writers: ingress first, then core, then prove no DB holder remains.
@@ -90,14 +102,13 @@ systemctl stop viqueue.service
 ! fuser -s "$OLD_DB" || fail 'database writer/holder remains'
 ! fuser -s "$OLD_AUTH_DB" || fail 'old auth database holder remains'
 seal_generic_sqlite "$OLD_AUTH_DB" "$STATE/old-auth.sqlite"
-printf '%s  old-auth.sqlite\n' "$(sha "$STATE/old-auth.sqlite")" > "$STATE/old-auth.sha256"
 
 # Offline sealed backup and a separate new database; old DB remains rollback lineage.
 node "$STAGE/sqlite-backup.js" "$OLD_DB" "$STATE/precutover.sqlite"
 chmod 600 "$STATE/precutover.sqlite"
 check_db_cas "$STATE/precutover.sqlite" || fail 'offline backup verification failed'
 [[ $(stat -c %a "$STATE/precutover.sqlite") == 600 ]] || fail 'offline backup permissions failed'
-printf '%s  precutover.sqlite\n' "$(sha "$STATE/precutover.sqlite")" > "$STATE/precutover.sha256"
+viq15_manifest_seal "$STATE" "${ROLLBACK_MANIFEST_MEMBERS[@]}" old-auth.sqlite precutover.sqlite || fail 'database rollback manifest seal failed'
 install -d -o viqueue -g viqueue -m 750 "$NEW_STATE"
 node "$STAGE/sqlite-backup.js" "$STATE/precutover.sqlite" "$NEW_DB.staged"
 check_db_cas "$NEW_DB.staged" || fail 'staged candidate DB verification failed'
@@ -123,7 +134,8 @@ install -d -m 700 "$STATE/credentials"
   node -e "const fs=require('fs'),file=process.argv[1];let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const c=JSON.parse(s).credential;if(typeof c!=='string'||c.length<32)process.exit(1);fs.writeFileSync(file,c+'\\n',{mode:0o600,flag:'wx'})})" "$STATE/credentials/bootstrap.credential"
 chmod 600 "$STATE/credentials/bootstrap.credential"; chown -R viqueue:viqueue "$NEW_STATE"; chmod 640 "$NEW_DB"
 
-cat > "$NEW_UNIT" <<EOF
+NEW_UNIT_SOURCE=$STATE/viqueue-paired.service.new
+cat > "$NEW_UNIT_SOURCE" <<EOF
 [Unit]
 Description=viqueue paired-device candidate
 After=network.target
@@ -141,7 +153,7 @@ ReadWritePaths=$NEW_STATE
 [Install]
 WantedBy=multi-user.target
 EOF
-chmod 644 "$NEW_UNIT"
+viq15_atomic_install_file "$NEW_UNIT_SOURCE" "$NEW_UNIT" 0644 || fail 'candidate unit atomic install failed'
 systemctl daemon-reload
 systemctl enable --now viqueue-paired.service >/dev/null
 for _ in {1..100}; do curl -fsS http://127.0.0.1:17373/health >/dev/null && break; sleep .1; done
@@ -154,7 +166,9 @@ NODE
 
 # Seal one absolute UTC deadline. Persistent calendar timers catch up after reboot.
 ROLLBACK_DEADLINE=$(viq15_deadline_create "$STATE")
-cat > /etc/systemd/system/viq15-auto-rollback.service <<EOF
+ROLLBACK_SERVICE_SOURCE=$STATE/viq15-auto-rollback.service.new
+ROLLBACK_TIMER_SOURCE=$STATE/viq15-auto-rollback.timer.new
+cat > "$ROLLBACK_SERVICE_SOURCE" <<EOF
 [Unit]
 Description=VIQ-15 automatic cutover rollback
 [Service]
@@ -163,9 +177,10 @@ Type=oneshot
 TimeoutStartSec=infinity
 ExecStart=/bin/bash $STATE/rollback.sh automatic-timeout
 EOF
-viq15_timer_write /etc/systemd/system/viq15-auto-rollback.timer "$ROLLBACK_DEADLINE"
-chmod 644 /etc/systemd/system/viq15-auto-rollback.service /etc/systemd/system/viq15-auto-rollback.timer
-viq15_timer_verify /etc/systemd/system/viq15-auto-rollback.timer "$ROLLBACK_DEADLINE" || fail 'rollback timer file semantics invalid'
+viq15_timer_write "$ROLLBACK_TIMER_SOURCE" "$ROLLBACK_DEADLINE"
+viq15_timer_verify "$ROLLBACK_TIMER_SOURCE" "$ROLLBACK_DEADLINE" || fail 'rollback timer file semantics invalid'
+viq15_atomic_install_file "$ROLLBACK_SERVICE_SOURCE" /etc/systemd/system/viq15-auto-rollback.service 0644 || fail 'rollback service atomic install failed'
+viq15_atomic_install_file "$ROLLBACK_TIMER_SOURCE" /etc/systemd/system/viq15-auto-rollback.timer 0644 || fail 'rollback timer atomic install failed'
 systemctl daemon-reload
 systemctl enable --now viq15-auto-rollback.timer >/dev/null
 [[ $(systemctl is-active viq15-auto-rollback.timer) == active ]] || fail 'rollback timer did not arm'

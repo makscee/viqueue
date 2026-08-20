@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { chmod, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -10,6 +10,7 @@ const root = resolve(import.meta.dirname, '..');
 const lib = join(root, 'scripts/viq15-cutover/transaction-lib.sh');
 const restore = join(root, 'scripts/viq15-cutover/sqlite-family-restore.sh');
 const applyScript = join(root, 'scripts/viq15-cutover/apply.sh');
+const rollbackScript = join(root, 'scripts/viq15-cutover/rollback.sh');
 const tmpRoot = process.env.TMPDIR;
 if (!tmpRoot) throw new Error('TMPDIR is required for isolated cutover fixtures');
 
@@ -70,6 +71,55 @@ test('shared exclusion rejects apply contention and queued rollback acquires aft
 test('automatic rollback lock wait cannot be killed by systemd start timeout', async () => {
   const source = await readFile(applyScript, 'utf8');
   assert.match(source, /Type=oneshot\n(?:#[^\n]*\n)*TimeoutStartSec=infinity\nExecStart=.*rollback\.sh automatic-timeout/);
+});
+
+test('rollback authenticates a deterministic complete manifest before its first mutation', async () => {
+  const source = await readFile(rollbackScript, 'utf8');
+  const verify = source.indexOf('sha256sum --check --strict --quiet rollback-manifest.sha256');
+  const firstMutation = source.indexOf('systemctl stop viqueue-phone-gateway.service');
+  assert.ok(verify > 0 && firstMutation > verify);
+
+  const fixture = await mkdtemp(join(tmpRoot, 'viq15-manifest-'));
+  const files = ['rollback.sh', 'transaction-lib.sh', 'sqlite-family-restore.sh', 'viqueue.service.before', 'tailscale-serve.before.json'];
+  for (const file of files) await writeFile(join(fixture, file), `${file}\n`);
+  await makeDb(join(fixture, 'precutover.sqlite'), 'sealed-row');
+  const members = [...files, 'precutover.sqlite'];
+  const seal = run('bash', ['-c', 'source "$1"; shift; viq15_manifest_seal "$1" "${@:2}"', 'bash', lib, fixture, ...members]);
+  assert.equal(seal.status, 0, seal.stderr);
+  const manifest = await readFile(join(fixture, 'rollback-manifest.sha256'), 'utf8');
+  assert.deepEqual(manifest.trim().split('\n').map((line) => line.split(/  /)[1]), [...members].sort());
+  const verifyOk = () => run('bash', ['-c', 'source "$1"; viq15_manifest_verify "$2"', 'bash', lib, fixture]);
+  assert.equal(verifyOk().status, 0);
+
+  const tamperDb = run(process.execPath, ['--input-type=module', '-e', `
+    import { DatabaseSync } from 'node:sqlite';
+    const db = new DatabaseSync(process.argv[1]); db.prepare('UPDATE proof SET value=?').run('valid-row-tamper'); db.close();
+  `, join(fixture, 'precutover.sqlite')]);
+  assert.equal(tamperDb.status, 0, tamperDb.stderr);
+  assert.notEqual(verifyOk().status, 0, 'valid SQLite row tamper must fail authentication');
+
+  for (const file of ['rollback.sh', 'sqlite-family-restore.sh', 'viqueue.service.before', 'tailscale-serve.before.json']) {
+    await makeDb(join(fixture, 'precutover.sqlite'), 'sealed-row').catch(() => {});
+    const reseal = run('bash', ['-c', 'source "$1"; shift; viq15_manifest_seal "$1" "${@:2}"', 'bash', lib, fixture, ...members]);
+    assert.equal(reseal.status, 0, reseal.stderr);
+    await writeFile(join(fixture, file), `tampered-${file}\n`);
+    assert.notEqual(verifyOk().status, 0, `${file} tamper must fail authentication`);
+    await writeFile(join(fixture, file), `${file}\n`);
+  }
+});
+
+test('systemd unit install is same-directory fsynced atomic replacement', async () => {
+  const fixture = await mkdtemp(join(tmpRoot, 'viq15-unit-'));
+  const source = join(fixture, 'captured.service');
+  const targetDirectory = join(fixture, 'systemd');
+  const target = join(targetDirectory, 'viqueue.service');
+  await mkdir(targetDirectory);
+  await writeFile(source, '[Service]\nExecStart=/sealed\n');
+  await writeFile(target, 'old\n');
+  const result = run('bash', ['-c', 'source "$1"; viq15_atomic_install_file "$2" "$3" 0644', 'bash', lib, source, target]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(target, 'utf8'), '[Service]\nExecStart=/sealed\n');
+  assert.equal((await stat(target)).mode & 0o777, 0o644);
 });
 
 test('deadline is sealed as canonical absolute UTC and timer readback is calendar-persistent', async () => {

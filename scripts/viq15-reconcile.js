@@ -6,18 +6,18 @@ import { pathToFileURL } from 'node:url';
 
 export const EXPECTED = Object.freeze({
   claims: [
-    { claim_id: '8cd6809e-031a-4a22-81eb-6aedee635755', ticket_id: 'VIQ-15', actor: 'tower-pi', generation: 1, ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { claim_id: 'dd73e877-3e93-4fa3-9965-e5680fe3e6c7', ticket_id: 'VIQ-13', actor: 'tower-pi', generation: 1, ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi' }
+    { claim_id: '8cd6809e-031a-4a22-81eb-6aedee635755', ticket_id: 'VIQ-15', actor: 'tower-pi', generation: 1, claimed_at: 1787217604770, ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { claim_id: 'dd73e877-3e93-4fa3-9965-e5680fe3e6c7', ticket_id: 'VIQ-13', actor: 'tower-pi', generation: 1, claimed_at: 1787182922436, ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null }
   ],
   questions: [
-    { id: 'q_9euMacGH6DMO', ticket_id: 'VIQ-7', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_B7XmcV2uTkiL', ticket_id: 'VIQ-4', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_D5UqQ97yPkIJ', ticket_id: 'VIQ-2', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'text', status: 'open', ticket_state: 'done', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_D8p6Q4SysglS', ticket_id: 'VIQ-1', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'text', status: 'open', ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_Ft-khfUJ8FG_', ticket_id: 'VIQ-3', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_HoKblqSQeomB', ticket_id: 'VIQ-5', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_J75fQCqmgfJt', ticket_id: 'VIQ-6', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi' },
-    { id: 'q_UogU_5WKPQcP', ticket_id: 'VIQ-1', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'text', status: 'open', ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi' }
+    { id: 'q_9euMacGH6DMO', ticket_id: 'VIQ-7', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_B7XmcV2uTkiL', ticket_id: 'VIQ-4', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_D5UqQ97yPkIJ', ticket_id: 'VIQ-2', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'text', status: 'open', ticket_state: 'done', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_D8p6Q4SysglS', ticket_id: 'VIQ-1', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'text', status: 'open', ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_Ft-khfUJ8FG_', ticket_id: 'VIQ-3', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_HoKblqSQeomB', ticket_id: 'VIQ-5', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_J75fQCqmgfJt', ticket_id: 'VIQ-6', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'approval', status: 'open', ticket_state: 'review', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null },
+    { id: 'q_UogU_5WKPQcP', ticket_id: 'VIQ-1', asked_by: 'tower-pi', target_type: 'actor', target_id: 'maks', kind: 'text', status: 'open', ticket_state: 'open', assignee_type: 'actor', assignee_id: 'tower-pi', assigned_to: null }
   ],
   actors: [
     { id: 'maks', kind: 'human', active: 1 },
@@ -40,9 +40,9 @@ function integrity(db) {
 }
 function snapshot(db) {
   integrity(db);
-  const claims = db.prepare(`SELECT c.claim_id,c.ticket_id,c.actor,c.generation,t.state ticket_state,t.assignee_type,t.assignee_id
+  const claims = db.prepare(`SELECT c.claim_id,c.ticket_id,c.actor,c.generation,c.claimed_at,t.state ticket_state,t.assignee_type,t.assignee_id,t.assigned_to
     FROM claims c JOIN tickets t ON t.id=c.ticket_id WHERE c.released_at IS NULL ORDER BY c.claim_id`).all();
-  const questions = db.prepare(`SELECT q.id,q.ticket_id,q.asked_by,q.target_type,q.target_id,q.kind,q.status,t.state ticket_state,t.assignee_type,t.assignee_id
+  const questions = db.prepare(`SELECT q.id,q.ticket_id,q.asked_by,q.target_type,q.target_id,q.kind,q.status,t.state ticket_state,t.assignee_type,t.assignee_id,t.assigned_to
     FROM questions q JOIN tickets t ON t.id=q.ticket_id WHERE q.status='open' ORDER BY q.id`).all();
   const actors = db.prepare("SELECT id,kind,active FROM actors WHERE id IN ('maks','tower-pi') ORDER BY id").all();
   return { claims, questions, actors };
@@ -76,7 +76,10 @@ export function applyReconciliation(file, now = Date.now()) {
     try {
       assertPreflight(snapshot(db));
       for (const item of EXPECTED.claims) {
-        const changed = db.prepare('UPDATE claims SET released_at=? WHERE claim_id=? AND ticket_id=? AND actor=? AND released_at IS NULL').run(now, item.claim_id, item.ticket_id, item.actor);
+        const changed = db.prepare(`UPDATE claims SET released_at=?
+          WHERE claim_id=? AND ticket_id=? AND actor=? AND generation=? AND claimed_at=? AND released_at IS NULL
+          AND EXISTS (SELECT 1 FROM tickets t WHERE t.id=claims.ticket_id AND t.state=? AND t.assignee_type=? AND t.assignee_id=? AND t.assigned_to IS ?)`)
+          .run(now, item.claim_id, item.ticket_id, item.actor, item.generation, item.claimed_at, item.ticket_state, item.assignee_type, item.assignee_id, item.assigned_to);
         if (changed.changes !== 1) throw new Error('claim_release_race');
         db.prepare('UPDATE tickets SET updated_at=? WHERE id=?').run(now, item.ticket_id);
         db.prepare("INSERT INTO events(ticket_id,project,type,actor,message,created_at,metadata) SELECT id,project,'claim_reconciled',NULL,NULL,?,? FROM tickets WHERE id=?")
@@ -92,8 +95,9 @@ function readbackWithDatabase(db, { requirePairings }) {
   integrity(db);
   const active = db.prepare('SELECT claim_id FROM claims WHERE released_at IS NULL ORDER BY claim_id').all();
   assertExact('post_active_claims', active, []);
-  const released = db.prepare(`SELECT claim_id,ticket_id,actor FROM claims WHERE claim_id IN (?,?) AND released_at IS NOT NULL ORDER BY claim_id`).all(...EXPECTED.claims.map((x) => x.claim_id));
-  assertExact('released_claims', released, EXPECTED.claims.map(({ claim_id, ticket_id, actor }) => ({ claim_id, ticket_id, actor })));
+  const released = db.prepare(`SELECT c.claim_id,c.ticket_id,c.actor,c.generation,c.claimed_at,t.state ticket_state,t.assignee_type,t.assignee_id,t.assigned_to
+    FROM claims c JOIN tickets t ON t.id=c.ticket_id WHERE c.claim_id IN (?,?) AND c.released_at IS NOT NULL ORDER BY c.claim_id`).all(...EXPECTED.claims.map((x) => x.claim_id));
+  assertExact('released_claims', released, EXPECTED.claims);
   const value = snapshot(db);
   assertExact('post_open_questions', value.questions, EXPECTED.questions);
   assertExact('post_actors', value.actors, EXPECTED.actors);

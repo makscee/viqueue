@@ -3,6 +3,70 @@
 
 VIQ15_LOCK_PATH=${VIQ15_LOCK_PATH:-/run/lock/viq15-paired-cutover.lock}
 
+viq15_manifest_seal() {
+  local state=${1:?state directory required}; shift
+  local manifest=$state/rollback-manifest.sha256 temporary=$state/.rollback-manifest.$$
+  [[ -d $state && ! -L $state ]] || { echo 'trusted rollback state missing or unsafe' >&2; return 1; }
+  (( $# > 0 )) || { echo 'rollback manifest cannot be empty' >&2; return 1; }
+  local item
+  for item in "$@"; do
+    [[ $item != /* && $item != *'..'* && -f $state/$item && ! -L $state/$item ]] || {
+      echo "unsafe rollback manifest member: $item" >&2; return 1;
+    }
+  done
+  (
+    cd "$state"
+    printf '%s\n' "$@" | LC_ALL=C sort -u | while IFS= read -r item; do sha256sum -- "$item"; done
+  ) > "$temporary"
+  chmod 600 "$temporary"
+  sync -f "$temporary"
+  mv -Tf "$temporary" "$manifest"
+  sync -f "$state"
+}
+
+viq15_manifest_verify() {
+  local state=${1:?state directory required}
+  local manifest=$state/rollback-manifest.sha256
+  [[ -d $state && ! -L $state && -f $manifest && ! -L $manifest ]] || {
+    echo 'trusted rollback manifest missing or unsafe' >&2; return 1;
+  }
+  awk 'NF!=2 || $1!~/^[0-9a-f]{64}$/ || $2~/^\// || $2~/(^|\/)\.\.(\/|$)/ {exit 1} END {if(NR==0)exit 1}' "$manifest" || {
+    echo 'rollback manifest format invalid' >&2; return 1;
+  }
+  (cd "$state" && sha256sum --check --strict --quiet rollback-manifest.sha256) || {
+    echo 'rollback manifest authentication failed' >&2; return 1;
+  }
+}
+
+viq15_manifest_has() {
+  local state=${1:?state directory required} item=${2:?manifest member required}
+  awk -v item="$item" '$2==item{found=1} END{exit !found}' "$state/rollback-manifest.sha256"
+}
+
+# Unit files are staged beside their destination, fsynced, atomically renamed on
+# the same device, then followed by a directory fsync. This requires a local
+# filesystem that supports atomic rename and fsync; every capability is exercised
+# before success is reported.
+viq15_atomic_install_file() {
+  local source=${1:?source required} target=${2:?target required} mode=${3:?mode required}
+  local directory base temporary
+  directory=$(dirname -- "$target"); base=$(basename -- "$target")
+  [[ -f $source && ! -L $source && -d $directory && ! -L $directory ]] || {
+    echo 'atomic install source or destination directory unsafe' >&2; return 1;
+  }
+  [[ ! -e $target || ( -f $target && ! -L $target ) ]] || {
+    echo 'atomic install target unsafe' >&2; return 1;
+  }
+  temporary=$(mktemp "$directory/.${base}.viq15.XXXXXX") || return
+  if ! install -m "$mode" -- "$source" "$temporary" ||
+     [[ $(stat -c %d "$temporary") != $(stat -c %d "$directory") ]] ||
+     ! sync -f "$temporary" || ! mv -Tf -- "$temporary" "$target" || ! sync -f "$directory"; then
+    rm -f -- "$temporary"
+    echo 'same-device atomic install or fsync failed' >&2
+    return 1
+  fi
+}
+
 viq15_lock() {
   local mode=${1:?lock mode required} fd=${2:?lock fd required}
   local inherited=${VIQ15_INHERITED_LOCK_FD:-}

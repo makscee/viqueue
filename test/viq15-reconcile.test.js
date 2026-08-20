@@ -22,9 +22,9 @@ function fixture(dir) {
   const ticketRows = new Map([...EXPECTED.claims, ...EXPECTED.questions].map((x) => [x.ticket_id, x]));
   const ticket = db.prepare('INSERT INTO tickets(id,project,number,title,body,state,assigned_to,created_at,updated_at,assignee_type,assignee_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
   let number = 1;
-  for (const item of ticketRows.values()) ticket.run(item.ticket_id, 'VIQ', number++, 'redacted fixture', '', item.ticket_state, item.assignee_id, 1, 1, item.assignee_type, item.assignee_id);
+  for (const item of ticketRows.values()) ticket.run(item.ticket_id, 'VIQ', number++, 'redacted fixture', '', item.ticket_state, item.assigned_to, 1, 1, item.assignee_type, item.assignee_id);
   const claim = db.prepare('INSERT INTO claims(claim_id,ticket_id,actor,generation,token_hash,claimed_at,released_at) VALUES(?,?,?,?,?,?,NULL)');
-  for (const item of EXPECTED.claims) claim.run(item.claim_id, item.ticket_id, item.actor, item.generation, Buffer.from('not-a-secret'), 1);
+  for (const item of EXPECTED.claims) claim.run(item.claim_id, item.ticket_id, item.actor, item.generation, Buffer.from('not-a-secret'), item.claimed_at);
   const question = db.prepare("INSERT INTO questions(id,ticket_id,asked_by,target_type,target_id,kind,text,status,created_at) VALUES(?,?,?,?,?,?,?,'open',?)");
   for (const item of EXPECTED.questions) question.run(item.id, item.ticket_id, item.asked_by, item.target_type, item.target_id, item.kind, 'redacted fixture', 1);
   db.close();
@@ -53,6 +53,29 @@ test('preflight fails closed on any exact unsettled-state drift', () => inTemp((
   assert.throws(() => inspectDatabase(file), /open_questions_drift/);
 }));
 
+test('legacy assigned_to drift fails closed for claim and question tickets', () => inTemp((dir) => {
+  for (const item of [EXPECTED.claims[0], EXPECTED.questions[0]]) {
+    const file = fixture(dir);
+    const db = new DatabaseSync(file);
+    db.prepare('UPDATE tickets SET assigned_to=? WHERE id=?').run('drifted-legacy-assignment', item.ticket_id);
+    db.close();
+    assert.throws(() => inspectDatabase(file), item.claim_id ? /active_claims_drift/ : /open_questions_drift/);
+    rmSync(file);
+  }
+}));
+
+test('claim claimed_at drift fails closed before apply', () => inTemp((dir) => {
+  const file = fixture(dir);
+  const db = new DatabaseSync(file);
+  db.prepare('UPDATE claims SET claimed_at=claimed_at+1 WHERE claim_id=?').run(EXPECTED.claims[0].claim_id);
+  db.close();
+  assert.throws(() => inspectDatabase(file), /active_claims_drift/);
+  const before = process.env.VIQ15_RECONCILE_CONFIRM;
+  process.env.VIQ15_RECONCILE_CONFIRM = 'SEALED-CANDIDATE-COPY';
+  try { assert.throws(() => applyReconciliation(file, 2), /active_claims_drift/); }
+  finally { if (before === undefined) delete process.env.VIQ15_RECONCILE_CONFIRM; else process.env.VIQ15_RECONCILE_CONFIRM = before; }
+}));
+
 test('apply refuses the authoritative live database path before opening it', () => {
   const before = process.env.VIQ15_RECONCILE_CONFIRM;
   process.env.VIQ15_RECONCILE_CONFIRM = 'SEALED-CANDIDATE-COPY';
@@ -79,7 +102,17 @@ test('one-shot reconciliation releases only exact claims and preserves resumable
     insert.run('tower-pi', 'Tower Pi', 'worker', Buffer.from('hash'), 2);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM events WHERE type='claim_reconciled'").get().n, 2);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM questions WHERE status='open'").get().n, 8);
+    db.prepare('UPDATE claims SET claimed_at=claimed_at+1 WHERE claim_id=?').run(EXPECTED.claims[0].claim_id);
     db.close();
+    assert.throws(() => readbackDatabase(file), /released_claims_drift/);
+    const repairClaim = new DatabaseSync(file);
+    repairClaim.prepare('UPDATE claims SET claimed_at=? WHERE claim_id=?').run(EXPECTED.claims[0].claimed_at, EXPECTED.claims[0].claim_id);
+    repairClaim.prepare('UPDATE tickets SET assigned_to=? WHERE id=?').run('drifted-legacy-assignment', EXPECTED.claims[0].ticket_id);
+    repairClaim.close();
+    assert.throws(() => readbackDatabase(file), /released_claims_drift/);
+    const repairAssignment = new DatabaseSync(file);
+    repairAssignment.prepare('UPDATE tickets SET assigned_to=NULL WHERE id=?').run(EXPECTED.claims[0].ticket_id);
+    repairAssignment.close();
     const post = readbackDatabase(file);
     assert.equal(post.status, 'exact_postcutover_readback_pass');
     assert.equal(post.active_claims, 0);

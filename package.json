@@ -19,7 +19,8 @@
     "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
     "e2e:browser": "node test/browser-e2e.js",
     "e2e:browser-pairing": "node test/browser-pairing-e2e.js",
-    "e2e:coordinator-worker": "node test/coordinator-worker-browser-e2e.js"
+    "e2e:coordinator-worker": "node test/coordinator-worker-browser-e2e.js",
+    "e2e:coordinator-worker:hermetic": "bash scripts/run-coordinator-worker-browser-e2e.sh"
   },
   "engines": {
     "node": ">=22"
@@ -50,6 +51,6 @@
     "extensions"
   ],
   "devDependencies": {
-    "playwright": "^1.62.1"
+    "playwright": "1.62.1"
   }
 }

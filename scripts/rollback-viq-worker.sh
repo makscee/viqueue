@@ -10,7 +10,8 @@ releases=$root/releases
 current=$root/current
 [[ -L $current && $(readlink -f "$current") == "$releases/$candidate" ]] || { echo 'current pointer does not match installed candidate' >&2; exit 1; }
 [[ -d $releases/$rollback && $(cat "$releases/$rollback/SOURCE_COMMIT") == "$rollback" ]] || { echo 'rollback release identity mismatch' >&2; exit 1; }
-[[ -f $root/PREVIOUS_COMMIT && $(cat "$root/PREVIOUS_COMMIT") == "$rollback" ]] || { echo 'sealed previous commit mismatch' >&2; exit 1; }
+previous_seal=${VIQ_WORKER_PREVIOUS_SEAL:-$root/PREVIOUS_COMMIT}
+[[ -f $previous_seal && ! -L $previous_seal && $(cat "$previous_seal") == "$rollback" ]] || { echo 'sealed previous commit mismatch' >&2; exit 1; }
 trap 'rm -f "$root/.current.$$"' EXIT
 ln -s "$releases/$rollback" "$root/.current.$$"
 mv -Tf "$root/.current.$$" "$current"

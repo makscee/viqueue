@@ -1,19 +1,28 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { chmod, chown, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { chromium } from 'playwright';
 import { Store } from '../src/store.js';
 
-const work = await mkdtemp(path.join(tmpdir(), 'viq-coordinator-worker-'));
-const install = await mkdtemp('/var/tmp/viq-worker-browser-');
+const tmpRoot = process.env.TMPDIR;
+const workerTmpRoot = process.env.VIQ_WORKER_TMPDIR;
+if (!tmpRoot || !workerTmpRoot || !path.isAbsolute(tmpRoot) || !path.isAbsolute(workerTmpRoot)) throw new Error('explicit absolute TMPDIR and VIQ_WORKER_TMPDIR are required');
+const workerUser = process.env.VIQ_WORKER_USER ?? 'viq-worker';
+const workerUid = Number(execFileSync('id', ['-u', workerUser], { encoding: 'utf8' }).trim());
+const workerGid = Number(execFileSync('id', ['-g', workerUser], { encoding: 'utf8' }).trim());
+const work = await mkdtemp(path.join(tmpRoot, 'viq-coordinator-worker-'));
+const install = await mkdtemp(path.join(workerTmpRoot, 'viq-worker-browser-'));
 const release = process.env.VIQ_WORKER_RELEASE ? path.resolve(process.env.VIQ_WORKER_RELEASE) : path.join(install, 'current');
 const helper = path.join(install, 'real-worker-helper.mjs');
+const discoveryHelper = path.join(install, 'pi-worker-discovery.mjs');
 const stateHome = path.join(install, 'state');
+const jobsRoot = path.join(install, 'jobs');
+const workspace = path.join(jobsRoot, 'browser-proof');
+const piAgentDir = path.join(install, 'pi-agent');
 if (!process.env.VIQ_WORKER_RELEASE) {
   await mkdir(path.join(release, 'extensions'), { recursive: true });
   await cp('extensions/viq-worker', path.join(release, 'extensions/viq-worker'), { recursive: true });
@@ -21,9 +30,12 @@ if (!process.env.VIQ_WORKER_RELEASE) {
   await writeFile(path.join(release, 'package.json'), `${JSON.stringify({ name: pkg.name, pi: pkg.pi })}\n`);
 }
 await cp('test/fixtures/real-worker-helper.mjs', helper);
+await cp('test/fixtures/pi-worker-discovery.mjs', discoveryHelper);
 await mkdir(stateHome, { mode: 0o700 });
-async function giveToWorker(target) { const entries = await import('node:fs/promises').then((fs) => fs.readdir(target, { withFileTypes: true })); await chown(target, 994, 986); await chmod(target, entries.some((e) => e.isDirectory()) ? 0o755 : 0o700); for (const entry of entries) if (entry.isDirectory()) await giveToWorker(path.join(target, entry.name)); }
-await giveToWorker(install); await chmod(stateHome, 0o700);
+await mkdir(workspace, { recursive: true, mode: 0o700 });
+await mkdir(piAgentDir, { mode: 0o700 });
+async function giveToWorker(target) { const fs = await import('node:fs/promises'); const entries = await fs.readdir(target, { withFileTypes: true }); await chown(target, workerUid, workerGid); await chmod(target, 0o755); for (const entry of entries) { const child = path.join(target, entry.name); if (entry.isDirectory()) await giveToWorker(child); else { await chown(child, workerUid, workerGid); await chmod(child, 0o600); } } }
+await giveToWorker(install); await chmod(stateHome, 0o700); await chmod(workspace, 0o700); await chmod(piAgentDir, 0o700);
 const storage = path.join(work, 'viqueue.sqlite');
 let store = new Store(storage); await store.init();
 const bootstrap = await store.bootstrapCoordinator({ id: 'bootstrap', name: 'Bootstrap' });
@@ -44,10 +56,21 @@ try {
   await page.getByRole('button', { name: 'Pairing and roles' }).click();
   const pairing = page.locator('.pairing-code-form'); await pairing.getByLabel('Device kind').selectOption('worker'); await pairing.getByRole('button', { name: 'Issue code' }).click();
   const workerCode = await pairing.locator('.one-time-code').textContent(); assert.ok(workerCode);
-  worker = spawn('runuser', ['-u', 'viq-worker', '--', process.execPath, helper, release], { env: { ...process.env, VIQ_URL: base, XDG_STATE_HOME: stateHome }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const workerEnv = { ...process.env, VIQ_URL: base, XDG_STATE_HOME: stateHome, PI_CODING_AGENT_DIR: piAgentDir, VIQ_WORKER_ROOT: jobsRoot, VIQ_WORKER_UID: String(workerUid), VIQ_WORKER_GID: String(workerGid) };
+  if (process.env.VIQ_PI_WORKER_PROOF === '1') {
+    const discovery = spawn('runuser', ['-u', workerUser, '--', process.execPath, discoveryHelper, release], { cwd: workspace, env: workerEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+    let discoveryOut = ''; let discoveryErr = '';
+    discovery.stdout.on('data', (chunk) => { discoveryOut += String(chunk); });
+    discovery.stderr.on('data', (chunk) => { if (discoveryErr.length < 4096) discoveryErr += String(chunk); });
+    const discoveryStatus = await Promise.race([new Promise((resolve) => discovery.once('exit', resolve)), new Promise((_, reject) => setTimeout(() => reject(new Error('Pi discovery timeout')), 15000))]);
+    assert.equal(discoveryStatus, 0, discoveryErr || 'Pi discovery failed');
+    assert.match(discoveryOut, /PI_WORKER_COMMAND_DISCOVERED/);
+  }
+  worker = spawn('runuser', ['-u', workerUser, '--', process.execPath, helper, release], { cwd: workspace, env: workerEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+  let workerError = ''; worker.stderr.on('data', (chunk) => { if (workerError.length < 4096) workerError += String(chunk); });
   const lines = createInterface({ input: worker.stdout }); const queue = []; const waiters = []; lines.on('line', (line) => { const waiter = waiters.shift(); if (waiter) waiter(line); else queue.push(line); });
-  const nextLine = () => queue.length ? Promise.resolve(queue.shift()) : new Promise((resolve) => waiters.push(resolve));
-  worker.stdin.write(`${workerCode}\n`); assert.equal(await nextLine(), 'PAIRED');
+  const nextLine = () => queue.length ? Promise.resolve(queue.shift()) : Promise.race([new Promise((resolve) => waiters.push(resolve)), new Promise((_, reject) => setTimeout(() => reject(new Error(`worker response timeout: ${workerError.slice(-2000)}`)), 15000))]);
+  worker.stdin.write(`${workerCode}\n`); assert.equal(await nextLine(), 'PAIRED_AND_DENIED');
   await pairing.getByRole('button', { name: 'Clear code' }).click();
   assert.equal(await page.evaluate((code) => document.body.innerText.includes(code) || location.href.includes(code), workerCode), false);
   const role = page.locator('.role-create-form'); await role.getByLabel('Role ID').fill('reviewer'); await role.getByLabel('Role name').fill('Reviewer'); await role.getByRole('button', { name: 'Create role' }).click();

@@ -3,12 +3,6 @@ set -Eeuo pipefail
 umask 077
 [[ $EUID -eq 0 ]] || { echo 'root required' >&2; exit 1; }
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=transaction-lib.sh
-source "$SCRIPT_DIR/transaction-lib.sh"
-# Rollback waits for the same boundary used by apply. A timer firing during apply
-# remains queued instead of silently losing the automatic recovery attempt.
-viq15_lock wait 8
-
 CANDIDATE=__FINAL_COMMIT__
 OLD_RELEASE=/opt/viqueue/releases/a0d80f15441b5b9b1e3d2c8a45ffa6460b7a5f3b
 OLD_WORKER_COMMIT=1398284ed89a6cf9395f129483f709e63c009286
@@ -21,10 +15,39 @@ EXPECTED_SCHEMA=d56e8da3e4ee72a2fa438156a1b967ba3cdf60ff13c6d0ee2f7d8048ce6ed1ae
 EXPECTED_ROUTE=a9b93638e2aa7b08d0caed2b4c3e8d1110ef6824052f833fe5abaa839dda3937
 STAGE=$STATE/viqueue-v0.4.1-rc
 RESTORE_HELPER=$STATE/sqlite-family-restore.sh
-[[ -d $STATE && -x $STAGE/sqlite-backup.js && -x $RESTORE_HELPER && -x $STATE/rollback-viq-worker.sh && -f $STATE/viqueue.service.before && -f $STATE/viqueue-phone-gateway.service.before ]] || { echo 'sealed rollback state missing' >&2; exit 1; }
+MANIFEST=$STATE/rollback-manifest.sha256
+
+# A reviewed external copy is only a launcher. All rollback execution is routed
+# through the captured copy whose bytes are covered by the transaction manifest.
+if [[ $(readlink -f "$SCRIPT_DIR") != $(readlink -f "$STATE") ]]; then
+  [[ -x $STATE/rollback.sh ]] || { echo 'captured rollback executable missing' >&2; exit 1; }
+  exec /bin/bash "$STATE/rollback.sh" "$@"
+fi
+# Bootstrap authentication before sourcing a captured helper or creating the
+# transaction lock. STATE is root-owned mode 0700 and the manifest is root-owned
+# mode 0600: that directory is the trusted local root. A hostile root is outside
+# this threat model; accidental or non-root row/file tampering is detected.
+[[ -d $STATE && ! -L $STATE &&
+   $(stat -c %u:%a "$STATE") == 0:700 && -f $MANIFEST && ! -L $MANIFEST &&
+   $(stat -c %u:%a "$MANIFEST") == 0:600 ]] || { echo 'trusted rollback root invalid' >&2; exit 1; }
+awk 'NF!=2 || $1!~/^[0-9a-f]{64}$/ || $2~/^\// || $2~/(^|\/)\.\.(\/|$)/ {exit 1} END {if(NR==0)exit 1}' "$MANIFEST" || { echo 'rollback manifest format invalid' >&2; exit 1; }
+for required in rollback.sh transaction-lib.sh sqlite-family-restore.sh install-viq-worker.sh rollback-viq-worker.sh viq15-reconcile.js tailscale-serve.before.json viqueue.service.before viqueue-phone-gateway.service.before old-release old-worker-commit viqueue-v0.4.1-rc/sqlite-backup.js; do
+  awk -v required="$required" '$2==required{found=1} END{exit !found}' "$MANIFEST" || { echo "rollback manifest member missing: $required" >&2; exit 1; }
+done
+(cd "$STATE" && sha256sum --check --strict --quiet rollback-manifest.sha256) || { echo 'rollback artifact authentication failed' >&2; exit 1; }
+# shellcheck source=transaction-lib.sh
+source "$SCRIPT_DIR/transaction-lib.sh"
+viq15_manifest_verify "$STATE" || exit 1
+# Rollback waits for the same boundary used by apply. A timer firing during apply
+# remains queued instead of silently losing the automatic recovery attempt.
+viq15_lock wait 8
+[[ -x $STAGE/sqlite-backup.js && -x $RESTORE_HELPER && -x $STATE/rollback-viq-worker.sh && -f $STATE/viqueue.service.before && -f $STATE/viqueue-phone-gateway.service.before ]] || { echo 'sealed rollback state missing' >&2; exit 1; }
 route_hash(){ tailscale serve status --json | sha256sum | cut -d' ' -f1; }
 check_route_target(){ tailscale serve status --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s),w=j.Web??{},h=Object.values(w)[0]?.Handlers??{};if(Object.keys(j.TCP??{}).length!==1||j.TCP?.['443']?.HTTPS!==true||Object.keys(w).length!==1||Object.keys(h).length!==1||h['/']?.Proxy!=='http://127.0.0.1:'+process.argv[1])process.exit(1)})" "$1"; }
-check_auth_db(){ node --input-type=module - "$OLD_AUTH_DB" "$STATE/old-auth.sqlite" <<'NODE'
+check_auth_db(){
+  local sealed=''
+  viq15_manifest_has "$STATE" old-auth.sqlite && sealed=$STATE/old-auth.sqlite
+  node --input-type=module - "$OLD_AUTH_DB" "$sealed" <<'NODE'
 import{DatabaseSync}from'node:sqlite';import{existsSync}from'node:fs';const inspect=(f)=>{const d=new DatabaseSync(f,{readOnly:true});if(d.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')process.exit(1);const schema=d.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all(),counts={};for(const row of schema){const q='"'+row.name.replaceAll('"','""')+'"';counts[row.name]=Number(d.prepare(`SELECT COUNT(*) n FROM ${q}`).get().n)}d.close();return JSON.stringify({schema,counts})};const current=inspect(process.argv[2]);if(existsSync(process.argv[3])&&inspect(process.argv[3])!==current)process.exit(1);
 NODE
 }
@@ -61,14 +84,15 @@ if [[ -f $NEW_DB && ! -e $STATE/postcandidate.sqlite ]]; then
 fi
 [[ $had_new_db == 0 || -f $NEW_DB ]] || { echo 'candidate DB preservation path vanished' >&2; exit 1; }
 
-# Restore exact old units and immutable release pointer lineage.
-cp -a "$STATE/viqueue.service.before" /etc/systemd/system/viqueue.service
-cp -a "$STATE/viqueue-phone-gateway.service.before" /etc/systemd/system/viqueue-phone-gateway.service
+# Restore exact old units and immutable release pointer lineage. Unit replacement
+# is same-directory, same-device, fsynced and atomic.
+viq15_atomic_install_file "$STATE/viqueue.service.before" /etc/systemd/system/viqueue.service 0644 || { echo 'core unit atomic restore failed' >&2; exit 1; }
+viq15_atomic_install_file "$STATE/viqueue-phone-gateway.service.before" /etc/systemd/system/viqueue-phone-gateway.service 0644 || { echo 'gateway unit atomic restore failed' >&2; exit 1; }
 ln -sfn "$OLD_RELEASE" /opt/viqueue/current.rollback
 mv -Tf /opt/viqueue/current.rollback /opt/viqueue/current
 worker_current=$(readlink -f "$WORKER_ROOT/current")
 if [[ $worker_current == "$WORKER_ROOT/releases/$CANDIDATE" ]]; then
-  VIQ_WORKER_ROOT="$WORKER_ROOT" bash "$STATE/rollback-viq-worker.sh" "$CANDIDATE" "$OLD_WORKER_COMMIT" > "$STATE/worker-rollback.status"
+  VIQ_WORKER_ROOT="$WORKER_ROOT" VIQ_WORKER_PREVIOUS_SEAL="$STATE/old-worker-commit" bash "$STATE/rollback-viq-worker.sh" "$CANDIDATE" "$OLD_WORKER_COMMIT" > "$STATE/worker-rollback.status"
 elif [[ $worker_current != "$WORKER_ROOT/releases/$OLD_WORKER_COMMIT" ]]; then
   echo 'worker rollback pointer CAS failed' >&2; exit 1
 fi
@@ -78,7 +102,7 @@ systemctl daemon-reload
 # Restore from the sealed backup even when the unexpected old family is corrupt.
 # Each family rename has a fixed restart-safe destination; preservation is best-effort.
 if ! check_old_db; then
-  [[ -f $STATE/precutover.sqlite ]] || { echo 'old database drifted before sealed backup existed' >&2; exit 1; }
+  viq15_manifest_has "$STATE" precutover.sqlite && [[ -f $STATE/precutover.sqlite ]] || { echo 'old database drifted before authenticated backup existed' >&2; exit 1; }
   "$RESTORE_HELPER" "$STATE/precutover.sqlite" "$OLD_DB" "viq15-unexpected-$CANDIDATE"
   chown viqueue:viqueue "$OLD_DB"; chmod 640 "$OLD_DB"
 fi
