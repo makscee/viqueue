@@ -1,4 +1,6 @@
-# VIQ-15 final — minimal forward-only dogfood cutover
+# VIQ-15 final — minimal forward-only dogfood cutover (historical; superseded)
+
+> **Superseded:** This records failed root-lane lineage only. It is not an accepted install, operations, or rollback guide. The pairing PoC candidate and `PAIRING-POC-RESULT.md` replace its active recommendations without rewriting history.
 
 Date: 2026-08-20 UTC
 Owner: tower-pi

@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "viq": "bin/viq.js",
+    "viq-bootstrap": "bin/viq-bootstrap.js",
     "viq-mcp": "src/mcp-server.js",
     "viqueue-mcp": "src/mcp-server.js",
     "viq-import": "bin/viq-import.js",
@@ -26,6 +27,9 @@
     "node": ">=22"
   },
   "license": "Apache-2.0",
+  "pi": {
+    "extensions": ["./extensions/viq-worker/index.ts"]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/makscee/viqueue.git"
@@ -44,7 +48,8 @@
     "CONTRIBUTING.md",
     "SECURITY.md",
     "docs",
-    "release-notes"
+    "release-notes",
+    "extensions"
   ],
   "devDependencies": {
     "playwright": "^1.62.1"

@@ -15,6 +15,9 @@ async function fixture({ now } = {}) {
   await store.createActor({ id: 'maks', name: 'Maks', kind: 'human' });
   await store.createActor({ id: 'eva', name: 'Eva', kind: 'human' });
   await store.createActor({ id: 'worker', name: 'Worker', kind: 'agent' });
+  await store.bootstrapCoordinator({ id: 'maks', name: 'Maks' });
+  const pairing = await store.createPairingCode('maks', { intended_kind: 'worker' });
+  await store.pairDevice({ code: pairing.code, id: 'worker', name: 'Worker' });
   return { store, file };
 }
 
@@ -22,9 +25,9 @@ const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: cla
 
 test('direct history edit is human-only while agent progress remains claim-authorized', async () => {
   const { store } = await fixture();
-  const ticket = await store.createTicket({ project: 'ABC', title: 'Authority' });
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Authority', actor: 'maks', assignee: { type: 'device', id: 'worker' } });
   const claim = await store.claim(ticket.id, { actor: 'worker' });
-  await assert.rejects(store.editTicket(ticket.id, { actor: 'worker', title: 'Machine edit' }), (error) => error.code === 'human_required');
+  await assert.rejects(store.editTicket(ticket.id, { actor: 'worker', title: 'Machine edit' }), (error) => error.code === 'coordinator_required');
   const progress = await store.postEvent(ticket.id, { ...identity(claim), message: 'Claim-authorized progress' });
   assert.equal(progress.event.actor, 'worker');
   assert.equal((await store.getTicket(ticket.id)).title, 'Authority');
@@ -57,7 +60,7 @@ test('archived ticket is immutable and absent from inbox until explicit restore'
     () => store.claim(ticket.id, { actor: 'worker' }),
     () => store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true })
   ];
-  for (const mutation of mutations) await assert.rejects(mutation(), (error) => ['ticket_archived', 'ticket_unavailable'].includes(error.code));
+  for (const mutation of mutations) await assert.rejects(mutation(), (error) => ['ticket_archived', 'ticket_ineligible'].includes(error.code));
   await store.restoreTicket(ticket.id, { actor: 'maks' });
   assert.deepEqual((await store.actorInbox('eva')).questions.map((item) => item.id), [question.id]);
   await store.editTicket(ticket.id, { actor: 'maks', title: 'Restored edit' });

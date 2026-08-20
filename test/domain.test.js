@@ -13,13 +13,15 @@ async function fixture() {
   const store = new Store(file, { now: () => now });
   await store.init();
   for (const id of ['worker-a','worker-b','maks']) await store.createActor({id,name:id,kind:id==='maks'?'human':'agent'});
-  return { store, file, advance: (ms) => { now += ms; } };
+  const coordinator = await store.bootstrapCoordinator({ id: 'maks', name: 'maks' });
+  for (const id of ['worker-a','worker-b']) { const pairing = await store.createPairingCode('maks', { intended_kind: 'worker' }); await store.pairDevice({ code: pairing.code, id, name: id }); }
+  return { store, file, coordinator, advance: (ms) => { now += ms; } };
 }
 
 async function seeded() {
   const f = await fixture();
   await f.store.createProject('ABC');
-  const ticket = await f.store.createTicket({ project: 'ABC', title: 'Trace claim fencing', body: 'details' });
+  const ticket = await f.store.createTicket({ project: 'ABC', title: 'Trace claim fencing', body: 'details', actor: 'maks', assignee: { type: 'device', id: 'worker-a' } });
   return { ...f, ticket };
 }
 
@@ -33,11 +35,11 @@ const identity = (claim) => ({
 test('SQLite ticket fields, numbering, and event history survive store restart', async () => {
   const { store, file } = await fixture();
   assert.deepEqual(await store.createProject('abc'), { key: 'ABC', next_number: 1, created_at: 1_700_000_000_000 });
-  const first = await store.createTicket({ project: 'ABC', title: ' first ', body: 'body', assigned_to: 'maks' });
+  const first = await store.createTicket({ project: 'ABC', title: ' first ', body: 'body', assigned_to: 'worker-a', actor: 'maks' });
   assert.equal(first.id, 'ABC-1');
   assert.equal(first.state, 'open');
   assert.equal(first.body, 'body');
-  assert.equal(first.assigned_to, 'maks');
+  assert.equal(first.assigned_to, 'worker-a');
   await store.close();
 
   const reopened = new Store(file, { now: () => 1_700_000_001_000 });
@@ -45,7 +47,7 @@ test('SQLite ticket fields, numbering, and event history survive store restart',
   const second = await reopened.createTicket({ project: 'ABC', title: 'second' });
   assert.equal(second.id, 'ABC-2');
   assert.equal((await reopened.getTicket('ABC-1')).title, 'first');
-  assert.deepEqual((await reopened.listEvents({ ticket: 'ABC-1' })).events.map((event) => event.type), ['ticket_created']);
+  assert.deepEqual((await reopened.listEvents({ ticket: 'ABC-1' })).events.map((event) => event.type), ['ticket_created', 'assigned']);
   await reopened.close();
 });
 
@@ -61,7 +63,7 @@ test('durable claim survives arbitrary elapsed time and restart without liveness
   const reopened = new Store(file, { now: () => 2_100_000_000_000 });
   await reopened.init();
   assert.equal((await reopened.getTicket(ticket.id)).claim.claim_id, claim.ticket.claim.claim_id);
-  assert.equal(await reopened.next({ project: 'ABC' }), null);
+  assert.equal(await reopened.next({ project: 'ABC', device: 'worker-a' }), null);
   await reopened.verify(ticket.id, identity(claim));
   await reopened.close();
 });
@@ -71,7 +73,7 @@ test('explicit release removes authority and makes open ticket ready', async () 
   const claim = await store.claim(ticket.id, { actor: 'worker-a' });
   const released = await store.release(ticket.id, identity(claim));
   assert.equal(released.claim, null);
-  assert.equal((await store.next({ project: 'ABC' })).id, ticket.id);
+  assert.equal((await store.next({ project: 'ABC', device: 'worker-a' })).id, ticket.id);
   await assert.rejects(store.verify(ticket.id, identity(claim)), (error) => error.code === 'stale_claim');
 });
 
@@ -88,49 +90,36 @@ test('submit review, accept done, and reopen open are explicit state transitions
   assert.equal(reopened.claim, null);
 });
 
-test('trusted human assignment atomically authorizes one exact-assignee claimNext', async () => {
-  const { store, file } = await fixture();
-  await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' }, { trustedAssignment: true });
-  await store.createTicket({ project: 'ABC', title: 'Ordinary assignment', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' });
-  const mine = await store.createTicket({ project: 'ABC', title: 'Trusted assignment', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' }, { trustedAssignment: true });
-  assert.equal((await store.getTicket('ABC-2')).execution_authority, null);
-  assert.equal(mine.execution_authority.assignee.id, 'worker-a');
-  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-b' }), null);
+test('coordinator assignment is launch authorization and atomic claimNext honors exact device', async () => {
+  const { store, file } = await fixture(); await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' });
+  await store.createTicket({ project: 'ABC', title: 'Assigned', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
+  assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-b' }), null);
   const other = new Store(file); await other.init();
-  const outcomes = await Promise.all([store.claimNext({ project: 'ABC', actor: 'worker-a' }), other.claimNext({ project: 'ABC', actor: 'worker-a' })]);
-  assert.equal(outcomes.filter(Boolean).length, 1);
-  assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3');
-  assert.equal(outcomes.find(Boolean).ticket.execution_authority, null);
-  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
-  await other.close();
+  const outcomes = await Promise.all([store.claimNext({ project: 'ABC', device: 'worker-a' }), other.claimNext({ project: 'ABC', device: 'worker-a' })]);
+  assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-2'); await other.close();
 });
 
-test('untrusted assignment revokes authority while trusted same-assignment save can relaunch', async () => {
+test('coordinator reassignment immediately changes worker eligibility without authority rows', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Launch', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' }, { trustedAssignment: true });
-  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } });
-  assert.equal((await store.getTicket('ABC-1')).execution_authority, null);
-  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } }, { trustedAssignment: true });
-  assert.equal((await store.getTicket('ABC-1')).execution_authority.assignee.id, 'worker-b');
-  const claim = await store.claimNext({ project: 'ABC', actor: 'worker-b' });
-  await store.release('ABC-1', identity(claim));
-  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-b' }), null);
-  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } }, { trustedAssignment: true });
-  assert.ok(await store.claimNext({ project: 'ABC', actor: 'worker-b' }));
+  await store.createTicket({ project: 'ABC', title: 'Launch', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
+  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'device', id: 'worker-b' } });
+  assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-a' }), null);
+  const claim = await store.claimNext({ project: 'ABC', device: 'worker-b' }); await store.release('ABC-1', identity(claim));
+  assert.ok(await store.claimNext({ project: 'ABC', device: 'worker-b' }));
+  assert.equal('execution_authority' in await store.getTicket('ABC-1'), false);
 });
 
 test('structured blockers prevent relaunch until a human resolves them', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Blocked', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' }, { trustedAssignment: true });
-  const claim = await store.claimNext({ project: 'ABC', actor: 'worker-a' });
+  await store.createTicket({ project: 'ABC', title: 'Blocked', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
+  const claim = await store.claimNext({ project: 'ABC', device: 'worker-a' });
   const blocked = await store.blockTicket('ABC-1', { ...identity(claim), reason: 'Need review' });
   assert.equal(blocked.ticket.unresolved_blockers, 1);
   await store.release('ABC-1', identity(claim));
-  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-a' } }, { trustedAssignment: true });
-  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
+  assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-a' }), null);
   await store.resolveBlock('ABC-1', blocked.block.id, { actor: 'maks' });
-  assert.ok(await store.claimNext({ project: 'ABC', actor: 'worker-a' }));
+  assert.ok(await store.claimNext({ project: 'ABC', device: 'worker-a' }));
 });
 
 test('competing claims are atomic across independent SQLite connections', async () => {
@@ -138,23 +127,17 @@ test('competing claims are atomic across independent SQLite connections', async 
   const other = new Store(file);
   await other.init();
   const outcomes = await Promise.allSettled([
-    store.claim(ticket.id, { actor: 'worker-a' }),
-    other.claim(ticket.id, { actor: 'worker-b' })
+    store.claim(ticket.id, { device: 'worker-a' }),
+    other.claim(ticket.id, { device: 'worker-a' })
   ]);
   assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 1);
-  assert.equal(outcomes.find((outcome) => outcome.status === 'rejected').reason.code, 'ticket_unavailable');
+  assert.equal(outcomes.find((outcome) => outcome.status === 'rejected').reason.code, 'ticket_ineligible');
   await other.close();
 });
 
-test('explicit takeover increments generation and old owner is fenced', async () => {
-  const { store, ticket } = await seeded();
-  const old = await store.claim(ticket.id, { actor: 'worker-a' });
-  const current = await store.takeover(ticket.id, { actor: 'worker-b' });
-  assert.equal(current.ticket.claim.generation, 2);
-  assert.notEqual(current.ticket.claim.claim_id, old.ticket.claim.claim_id);
-  await assert.rejects(store.postEvent(ticket.id, { ...identity(old), message: 'late progress' }),
-    (error) => error instanceof DomainError && error.status === 409 && error.code === 'stale_claim');
-  assert.equal((await store.verify(ticket.id, identity(current))).claim.claim_id, current.ticket.claim.claim_id);
+test('takeover surface is absent; only explicit release permits another claim', async () => {
+  const { store } = await seeded();
+  assert.equal(store.takeover, undefined);
 });
 
 test('event cursor is global monotonic and polling after cursor filters project or ticket', async () => {
@@ -183,12 +166,12 @@ test('human edits every ticket field while assignment remains distinct from the 
   assert.equal(edited.project, 'XYZ');
   assert.equal(edited.title, 'Moved');
   assert.equal(edited.body, '**new** body');
-  assert.deepEqual(edited.assignee, { type: 'actor', id: 'worker-b' });
+  assert.deepEqual(edited.assignee, { type: 'device', id: 'worker-b' });
   assert.equal(edited.claim.claim_id, claim.ticket.claim.claim_id);
   assert.equal(edited.claim.actor, 'worker-a');
   const events = (await store.listEvents({ ticket: ticket.id })).events.slice(2);
-  assert.deepEqual(events.map((event) => event.type), ['ticket_edited', 'ticket_moved', 'assigned']);
-  assert.ok(events.every((event) => event.actor === 'maks'));
+  assert.deepEqual(events.map((event) => event.type), ['claimed', 'ticket_edited', 'ticket_moved', 'assigned']);
+  assert.ok(events.filter((event) => event.type !== 'claimed').every((event) => event.actor === 'maks'));
 });
 
 test('human direct state changes fence claims and progress stays in the ticket event chronology', async () => {
@@ -217,7 +200,7 @@ test('direct state override resolves a pending approval instead of leaving a sta
 test('archive is reversible while confirmed delete tombstones without erasing history', async () => {
   const { store, ticket } = await seeded(); const claim = await store.claim(ticket.id, { actor: 'worker-a' });
   const archived = await store.archiveTicket(ticket.id, { actor: 'maks' }); assert.ok(archived.archived_at); assert.equal(archived.claim, null); await assert.rejects(store.verify(ticket.id, identity(claim)), (error) => error.code === 'stale_claim');
-  assert.deepEqual(await store.listTickets('ABC'), []); assert.equal(await store.next({ project: 'ABC' }), null); await assert.rejects(store.claim(ticket.id, { actor: 'worker-a' }), (error) => error.code === 'ticket_unavailable');
+  assert.deepEqual(await store.listTickets('ABC'), []); assert.equal(await store.next({ project: 'ABC', device: 'worker-a' }), null); await assert.rejects(store.claim(ticket.id, { actor: 'worker-a' }), (error) => error.code === 'ticket_ineligible');
   assert.deepEqual((await store.listTickets('ABC', { includeArchived: true })).map((item) => item.id), [ticket.id]);
   const restored = await store.restoreTicket(ticket.id, { actor: 'maks' }); assert.equal(restored.archived_at, null);
   for (const confirmed of [undefined, false, null, 0, 1, 'true', [], {}]) {
@@ -275,7 +258,7 @@ test('deleted tombstones reject subsequent human mutations', async () => {
     () => store.accept(ticket.id, { actor: 'maks' }),
     () => store.reopen(ticket.id, { actor: 'maks' })
   ]) await assert.rejects(operation(), (error) => error.code === 'ticket_deleted');
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'deleted']);
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'assigned', 'deleted']);
 });
 
 test('ticket edit and assignment retain the minimal canonical fields and record events', async () => {
@@ -284,5 +267,5 @@ test('ticket edit and assignment retain the minimal canonical fields and record 
   assert.equal(edited.title, 'Updated');
   assert.equal(edited.body, 'new body');
   assert.equal(edited.assigned_to, null);
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'ticket_edited']);
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'assigned', 'ticket_edited', 'assigned']);
 });

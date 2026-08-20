@@ -15,20 +15,21 @@ const claimIdentity = (claim) => ({
 
 test('accepted private-alpha trust boundary is explicit and mapped to enforced implementation seams', async () => {
   const [adr, security, server, gateway, authStore, app] = await Promise.all([
-    readFile('docs/adr-0011-private-alpha-trust-boundaries.md', 'utf8'),
+    readFile('docs/adr-0012-pairing-poc.md', 'utf8'),
     readFile('SECURITY.md', 'utf8'),
     readFile('src/server.js', 'utf8'),
     readFile('src/phone-gateway.js', 'utf8'),
     readFile('src/phone-auth-store.js', 'utf8'),
     readFile('web/app.js', 'utf8')
   ]);
-  assert.match(adr, /Status: accepted for private alpha/);
-  for (const boundary of [/single active paired browser device[\s\S]*access boundary/i, /actor selector[\s\S]*workflow identity/i, /core listener defaults to loopback/i, /Agent mutations are authorized by the current claim/i, /no IAM layer/i]) assert.match(adr, boundary);
-  assert.match(security, /accepted private-alpha boundaries, not IAM/);
-  assert.match(server, /host = '127\.0\.0\.1'/);
+  assert.match(adr, /Status: accepted for private PoC/);
+  for (const boundary of [/one-time device pairing/i, /fixed `coordinator` or `worker`/i, /Roles grant no API permissions/i, /Every claim ingress uses the same predicate/i, /No generic IAM graph/i]) assert.match(adr, boundary);
+  assert.match(security, /Pairing PoC boundary/);
+  assert.match(server, /authenticateDevice\(bearer\(request\)\)/);
+  assert.match(server, /requireKind\(device, 'coordinator'\)/);
   assert.match(gateway, /s\.listen\(port,'127\.0\.0\.1'/);
   assert.match(authStore, /one_active_device ON devices\(active\) WHERE active=1/);
-  assert.match(app, /localStorage\.setItem\('viq\.actor'/);
+  assert.match(app, /localStorage\.getItem\('viq\.deviceCredential'/);
 });
 
 test('agent progress fails closed without the complete current claim identity', async () => {
@@ -37,7 +38,11 @@ test('agent progress fails closed without the complete current claim identity', 
   await store.init();
   await store.createProject('ABC');
   await store.createActor({ id: 'worker', name: 'Worker', kind: 'agent' });
-  const ticket = await store.createTicket({ project: 'ABC', title: 'Claim boundary' });
+  await store.createActor({ id: 'coord', name: 'Coordinator', kind: 'human' });
+  await store.bootstrapCoordinator({ id: 'coord', name: 'Coordinator' });
+  const pairing = await store.createPairingCode('coord', { intended_kind: 'worker' });
+  await store.pairDevice({ code: pairing.code, id: 'worker', name: 'Worker' });
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Claim boundary', actor: 'coord', assignee: { type: 'device', id: 'worker' } });
   const claim = await store.claim(ticket.id, { actor: 'worker' });
   await assert.rejects(store.postEvent(ticket.id, { actor: 'worker', message: 'unfenced' }), (error) => error.code === 'stale_claim');
   await assert.rejects(store.postEvent(ticket.id, { ...claimIdentity(claim), claim_token: 'wrong', message: 'wrong token' }), (error) => error.code === 'stale_claim');

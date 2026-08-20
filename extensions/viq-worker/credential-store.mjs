@@ -1,0 +1,7 @@
+import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+export function defaultCredentialPath(){const state=process.env.XDG_STATE_HOME??path.join(os.homedir(),'.local','state');return path.join(state,'viq-worker','device-credential')}
+function assertOwnedRegular(file){const s=lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==process.getuid()||(s.mode&0o077)!==0||s.nlink!==1)throw new Error('unsafe_device_credential_file')}
+export function loadCredential(file=defaultCredentialPath()){assertOwnedRegular(file);const value=readFileSync(file,'utf8').trim();if(value.length<32||/\s/.test(value))throw new Error('invalid_device_credential_file');return value}
+export function saveCredential(value,file=defaultCredentialPath()){if(typeof value!=='string'||value.length<32||/\s/.test(value))throw new Error('invalid_device_credential');const dir=path.dirname(file);mkdirSync(dir,{recursive:true,mode:0o700});const ds=lstatSync(dir);if(!ds.isDirectory()||ds.isSymbolicLink()||ds.uid!==process.getuid()||(ds.mode&0o077)!==0)throw new Error('unsafe_device_credential_directory');const tmp=path.join(dir,`.credential.${process.pid}.${Date.now()}`);let fd;try{fd=openSync(tmp,'wx',0o600);writeFileSync(fd,`${value}\n`);fsyncSync(fd);closeSync(fd);fd=undefined;renameSync(tmp,file);assertOwnedRegular(file)}finally{if(fd!==undefined)closeSync(fd);try{unlinkSync(tmp)}catch{}}return file}

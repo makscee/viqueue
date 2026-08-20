@@ -1,6 +1,8 @@
-# VIQ-15 bounded repair pass
+# VIQ-15 bounded repair pass (historical; superseded)
 
-Date: 2026-08-20 UTC  
+> **Superseded:** This records the blocked execution-authority/Pi canary repair lineage. The accepted pairing PoC design explicitly removes that authority model from the active path. Use `PAIRING-POC-RESULT.md` for the candidate handoff.
+
+Date: 2026-08-20 UTC
 Owner: `viq15-dogfood-cutover` / `tower-pi`
 
 ## Decision

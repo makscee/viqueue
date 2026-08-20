@@ -12,7 +12,8 @@ const modal = createModalController($('#modal'), { requestClose: restoreModal })
 $('#modal').addEventListener('close', () => { modalStack.length = 0; });
 
 async function request(path, options = {}) {
-  const response = await fetch(path, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
+  const credential = localStorage.getItem('viq.deviceCredential');
+  const response = await fetch(path, { headers: { 'content-type': 'application/json', ...(credential ? { authorization: `Bearer ${credential}` } : {}), ...(options.headers || {}) }, ...options });
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
   if (!response.ok) throw new Error(body?.error?.message || `Request failed (${response.status})`);
@@ -21,9 +22,9 @@ async function request(path, options = {}) {
 const actorId = () => $('#actor-select').value;
 const actorName = (id) => state.actors.find((actor) => actor.id === id)?.name || id;
 const roleName = (id) => state.roles.find((role) => role.id === id)?.name || 'Assigned group';
-const assigneeName = (assignee) => assignee?.type === 'actor' ? actorName(assignee.id) : assignee?.type === 'role' ? roleName(assignee.id) : 'Unassigned';
-const projection = (ticket) => ticket.archived_at !== null ? 'archived' : ticket.state === 'open' ? (ticket.claim ? 'working' : ticket.execution_authority && ticket.unresolved_blockers === 0 ? 'ready' : 'waiting') : ticket.state;
-const stateName = (ticket) => ({ waiting: 'Waiting — assignment not authorized to launch', ready: 'Ready for agent', working: 'Working', review: 'Awaiting review', done: 'Done', archived: 'Archived' })[projection(ticket)];
+const assigneeName = (assignee) => assignee?.type === 'device' ? actorName(assignee.id) : assignee?.type === 'role' ? roleName(assignee.id) : 'Unassigned';
+const projection = (ticket) => ticket.archived_at !== null ? 'archived' : ticket.state === 'open' ? (ticket.claim ? 'working' : ticket.assignee && ticket.unresolved_blockers === 0 ? 'ready' : 'waiting') : ticket.state;
+const stateName = (ticket) => ({ waiting: 'Waiting — assign a paired worker or resolve blockers', ready: 'Ready for agent', working: 'Working', review: 'Awaiting review', done: 'Done', archived: 'Archived' })[projection(ticket)];
 function report(error) { $('#status').textContent = `Something went wrong: ${error.message}`; }
 function safely(handler) { return async (event) => { try { await handler(event); } catch (error) { report(error); } }; }
 function markdownElement(tag, text, className = '') { const element = document.createElement(tag); element.className = className; element.innerHTML = renderMarkdown(text); return element; }
@@ -79,7 +80,7 @@ function renderBoard() {
 }
 
 function openAnswer(question, trigger) {
-  if (!actorId()) throw new Error('Choose your name before answering');
+  if (!actorId()) throw new Error('Choose your coordinator device before answering');
   const form = document.createElement('form'); form.className = 'modal-form answer-form'; form.dataset.ticket = question.ticket_id; form.dataset.question = question.id;
   form.append(markdownElement('div', question.text, 'markdown question-markdown'));
   if (question.kind === 'text') form.insertAdjacentHTML('beforeend', '<label>Your answer (Markdown)<textarea name="answer" required rows="5"></textarea></label><button>Send answer</button>');
@@ -104,7 +105,7 @@ function answerCard(question) {
 }
 
 async function refreshInbox() {
-  const actor = actorId(); state.inbox = actor ? (await request(`/v1/actors/${encodeURIComponent(actor)}/inbox?after=0`)).questions : [];
+  const actor = actorId(); state.inbox = actor ? (await request(`/v1/devices/${encodeURIComponent(actor)}/inbox?after=0`)).questions : [];
   const list = $('#inbox-list');
   if (!actor) { $('#inbox-count').textContent = ''; list.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Choose your name to see questions waiting for you.' })); }
   else if (!state.inbox.length) { $('#inbox-count').textContent = 'All clear'; list.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Nothing needs your answer. New questions will appear here.' })); }
@@ -112,10 +113,10 @@ async function refreshInbox() {
 }
 
 async function refresh(preferred = null) {
-  [state.actors, state.roles, state.projects] = await Promise.all([request('/v1/actors?active=true').then((body) => body.actors), request('/v1/roles').then((body) => body.roles), request('/v1/projects').then((body) => body.projects)]);
+  [state.actors, state.roles, state.projects] = await Promise.all([request('/v1/devices').then((body) => body.devices.map((device) => ({ ...device, active: device.status === 'active' }))), request('/v1/roles').then((body) => body.roles), request('/v1/projects').then((body) => body.projects)]);
   const identity = actorId() || localStorage.getItem('viq.actor') || '';
-  $('#actor-select').replaceChildren(new Option('Choose your name', ''), ...state.actors.filter((actor) => actor.kind === 'human').map((actor) => new Option(actor.name, actor.id)));
-  $('#actor-select').value = state.actors.some((actor) => actor.id === identity && actor.kind === 'human') ? identity : '';
+  $('#actor-select').replaceChildren(new Option('Choose your name', ''), ...state.actors.filter((actor) => actor.kind === 'coordinator').map((actor) => new Option(actor.name, actor.id)));
+  $('#actor-select').value = state.actors.some((actor) => actor.id === identity && actor.kind === 'coordinator') ? identity : '';
   const keys = state.projects.map((project) => project.key);
   state.selectedProjects = reconcileProjectSelection(keys, state.selectedProjects, state.allProjects);
   if (preferred && !state.allProjects) state.selectedProjects = new Set([preferred]);
@@ -128,7 +129,7 @@ async function changeState(id, nextState) { await request(`/v1/tickets/${id}/sta
 async function ticketAction(id, action) { await request(`/v1/tickets/${id}/${action}`, { method: 'POST', body: JSON.stringify({ actor: requireHuman() }) }); modal.dismiss(); await refresh(); $('#status').textContent = action === 'archive' ? 'Ticket archived' : 'Ticket restored'; }
 function assignmentOptions(select, selected) {
   select.append(new Option('Unassigned', ''));
-  const actors = document.createElement('optgroup'); actors.label = 'Actors / workers'; for (const actor of state.actors) actors.append(new Option(`Actor — ${actor.name}`, `actor:${actor.id}`)); select.append(actors);
+  const actors = document.createElement('optgroup'); actors.label = 'Worker devices'; for (const actor of state.actors.filter((item) => item.kind === 'worker' && item.active)) actors.append(new Option(`Device — ${actor.name}`, `device:${actor.id}`)); select.append(actors);
   const roles = document.createElement('optgroup'); roles.label = 'Roles'; for (const role of state.roles) roles.append(new Option(`Role — ${role.name}`, `role:${role.id}`)); select.append(roles);
   select.value = selected ? `${selected.type}:${selected.id}` : '';
 }
@@ -161,7 +162,7 @@ async function showDetail(id, trigger) {
   content.append(markdownElement('div', ticket.body || 'No additional context.', 'detail-body markdown'));
   const facts = document.createElement('dl'); facts.className = 'ticket-facts';
   const fact = (term, value) => { const box = document.createElement('div'); const dt = document.createElement('dt'); const dd = document.createElement('dd'); dt.textContent = term; dd.textContent = value; box.append(dt, dd); return box; };
-  facts.append(fact('Project', ticket.project)); if (ticket.assignee) facts.append(fact(ticket.assignee.type === 'role' ? 'Eligible group' : 'Assigned person', assigneeName(ticket.assignee))); if (ticket.execution_authority) facts.append(fact('Launch authority', `Trusted assignment by ${actorName(ticket.execution_authority.granted_by)}`)); if (ticket.unresolved_blockers) facts.append(fact('Open blockers', String(ticket.unresolved_blockers))); if (ticket.claim) facts.append(fact('Worker', actorName(ticket.claim.actor))); facts.append(fact('Status', stateName(ticket))); content.append(facts);
+  facts.append(fact('Project', ticket.project)); if (ticket.assignee) facts.append(fact(ticket.assignee.type === 'role' ? 'Eligible group' : 'Assigned person', assigneeName(ticket.assignee))); if (ticket.unresolved_blockers) facts.append(fact('Open blockers', String(ticket.unresolved_blockers))); if (ticket.claim) facts.append(fact('Worker', actorName(ticket.claim.actor))); facts.append(fact('Status', stateName(ticket))); content.append(facts);
   const controls = document.createElement('div'); controls.className = 'detail-actions';
   if (ticket.archived_at === null) {
     const edit = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Edit ticket' }); edit.addEventListener('click', () => openEditTicket(ticket, edit));
@@ -173,7 +174,7 @@ async function showDetail(id, trigger) {
   } else { const restore = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Restore' }); restore.addEventListener('click', safely(async () => ticketAction(ticket.id, 'restore'))); controls.append(restore); }
   content.append(controls);
   const timeline = document.createElement('section'); timeline.innerHTML = '<h3>History</h3>'; const list = document.createElement('ol'); list.className = 'event-timeline';
-  const questionById = new Map(questions.map((question) => [question.id, question])); const labels = { ticket_created: 'Ticket created', ticket_edited: 'Ticket edited', ticket_moved: 'Project changed', assigned: 'Assignment changed', execution_authority_granted: 'Trusted assignment authorized execution', execution_authority_revoked: 'Execution authority revoked', execution_authority_consumed: 'Execution authority consumed', blocked: 'Blocked', block_resolved: 'Block resolved', claimed: 'Work claimed', released: 'Claim released', progress: 'Progress', question_asked: 'Question asked', question_answered: 'Question answered', submitted: 'Submitted', accepted: 'Approved', changes_requested: 'Changes requested', reopened: 'Reopened', state_changed: 'State changed', archived: 'Archived', restored: 'Restored', deleted: 'Deleted' };
+  const questionById = new Map(questions.map((question) => [question.id, question])); const labels = { ticket_created: 'Ticket created', ticket_edited: 'Ticket edited', ticket_moved: 'Project changed', assigned: 'Assignment changed', blocked: 'Blocked', block_resolved: 'Block resolved', claimed: 'Work claimed', released: 'Claim released', progress: 'Progress', question_asked: 'Question asked', question_answered: 'Question answered', submitted: 'Submitted', accepted: 'Approved', changes_requested: 'Changes requested', reopened: 'Reopened', state_changed: 'State changed', archived: 'Archived', restored: 'Restored', deleted: 'Deleted' };
   for (const event of events) {
     const item = document.createElement('li'); item.className = `event event-${event.type}`; const question = questionById.get(event.metadata?.question_id); if (event.type === 'question_asked') item.classList.add('ticket-question');
     const header = document.createElement('div'); header.className = 'event-head'; const name = document.createElement('strong'); name.textContent = labels[event.type] || event.type.replaceAll('_', ' '); const byline = document.createElement('span'); const author = event.actor ? actorName(event.actor) : 'System'; const time = document.createElement('time'); time.dateTime = new Date(event.created_at).toISOString(); time.textContent = new Date(event.created_at).toLocaleString(); byline.textContent = `${author} · `; byline.append(time); header.append(name, byline); item.append(header);
