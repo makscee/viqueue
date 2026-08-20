@@ -53,6 +53,14 @@ test('multi-project relation lists once per project and free-pool claims prefer 
   await f.store.close();
 });
 
+test('project-scoped next and claimNext use canonical multi-project membership', async () => {
+  const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
+  const ticket = await f.store.createTicket({ projects: ['ONE','TWO'], project: 'ONE', title: 'secondary membership', actor: 'mair' });
+  assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
+  assert.equal((await f.store.claimNext({ project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
+  await f.store.close();
+});
+
 test('compact board contract is four columns, OR project filters, deduplicated tickets and popup surfaces', async () => {
   assert.deepEqual(boardColumns.map((column) => column[1]), ['To do','Working','Review','Done']);
   assert.equal(boardProjection({ state: 'open', claim: null }), 'todo'); assert.equal(boardProjection({ state: 'open', claim: {} }), 'working');
