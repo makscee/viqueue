@@ -25,7 +25,7 @@ test('accepted private-alpha trust boundary is explicit and mapped to enforced i
   for (const boundary of [/one-time device pairing/i, /fixed `coordinator` or `worker`/i, /Roles grant no API permissions/i, /Every claim ingress uses the same predicate/i, /No generic IAM graph/i]) assert.match(adr, boundary);
   assert.match(security, /Pairing PoC boundary/);
   assert.match(server, /authenticateDevice\(bearer\(request\)\)/);
-  assert.match(server, /requireKind\(device, 'coordinator'\)/);
+  assert.match(server, /requireAdmin\(device\)/);
   assert.doesNotMatch(mcp, /claim_token|ticket_claim|claim_verify|claim_release/);
   await assert.rejects(access('src/phone-gateway.js'));
   await assert.rejects(access('src/phone-auth-store.js'));

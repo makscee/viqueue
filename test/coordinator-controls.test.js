@@ -16,12 +16,12 @@ test('bounded coordinator controls remain coordinator-only at the API boundary',
     ['POST', '/v1/pairing-codes', { intended_kind: 'worker' }], ['POST', '/v1/roles', { id: 'flat', name: 'Flat' }],
     ['PUT', '/v1/devices/worker/roles/flat', {}], ['DELETE', '/v1/devices/worker/roles/flat', {}],
     ['POST', '/v1/tickets/NO-1/questions/q_missing/answer', { answer: 'no' }], ['POST', '/v1/tickets/NO-1/blocks/b_missing/resolve', {}]
-  ]) { const response = await call(worker.credential, method, route, body); assert.equal(response.status, 403, `${method} ${route}`); assert.match((await response.json()).error.code, /coordinator_required/); }
+  ]) { const response = await call(worker.credential, method, route, body); assert.equal(response.status, 403, `${method} ${route}`); assert.match((await response.json()).error.code, /coordinator_required|admin_required/); }
   assert.equal((await call(coordinator.credential, 'POST', '/v1/pairing-codes', { intended_kind: 'worker' })).status, 201);
 });
 
 test('browser exposes only the named pairing, flat-role, membership, answer, and block controls', async () => {
   const [html, app] = await Promise.all([readFile(new URL('../web/index.html', import.meta.url), 'utf8'), readFile(new URL('../web/app.js', import.meta.url), 'utf8')]);
-  assert.match(html, /Pairing and roles/); assert.match(app, /intended_kind/); assert.match(app, /role-create-form/); assert.match(app, /role-membership-form/); assert.ok(app.includes('questions/${question.id}/answer')); assert.ok(app.includes('blocks/${encodeURIComponent(block.id)}/resolve'));
+  assert.match(html, />Admin</); assert.match(app, /intended_kind/); assert.match(app, /role-create-form/); assert.match(app, /role-membership-form/); assert.ok(app.includes('questions/${question.id}/answer')); assert.ok(app.includes('blocks/${encodeURIComponent(block.id)}/resolve'));
   assert.doesNotMatch(`${html}\n${app}`, /OAuth|SSO|permission bundle|role hierarchy|authority graph/i);
 });

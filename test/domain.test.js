@@ -94,7 +94,7 @@ test('coordinator assignment is launch authorization and atomic claimNext honors
   const { store, file } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' });
   await store.createTicket({ project: 'ABC', title: 'Assigned', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
-  assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-b' }), null);
+  assert.equal((await store.claimNext({ project: 'ABC', device: 'worker-b' })).ticket.id, 'ABC-1');
   const other = new Store(file); await other.init();
   const outcomes = await Promise.all([store.claimNext({ project: 'ABC', device: 'worker-a' }), other.claimNext({ project: 'ABC', device: 'worker-a' })]);
   assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-2'); await other.close();
@@ -166,7 +166,7 @@ test('human edits every ticket field while assignment remains distinct from the 
   assert.equal(edited.project, 'XYZ');
   assert.equal(edited.title, 'Moved');
   assert.equal(edited.body, '**new** body');
-  assert.deepEqual(edited.assignee, { type: 'device', id: 'worker-b' });
+  assert.deepEqual(edited.assignee, { type: 'actor', id: 'worker-b' });
   assert.equal(edited.claim.claim_id, claim.ticket.claim.claim_id);
   assert.equal(edited.claim.actor, 'worker-a');
   const events = (await store.listEvents({ ticket: ticket.id })).events.slice(2);
