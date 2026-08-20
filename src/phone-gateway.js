@@ -76,7 +76,7 @@ function proxyRequest({mode,target,testHooks},options,onResponse){
  const agent=remoteAgent(target,testHooks);const request=https.request({...options,hostname:target.hostname,port:443,servername:target.hostname,agent},onResponse);request.once('close',()=>agent.destroy());return request;
 }
 
-export async function createPhoneGateway({authDb,origin,upstream,upstreamAddressPolicy,cert,key,tlsTerminated=false,testMode=false,testHooks,now}={}){
+export async function createPhoneGateway({authDb,origin,upstream,upstreamAddressPolicy,internalToken,cert,key,tlsTerminated=false,testMode=false,testHooks,now}={}){
  if(Boolean(cert)!==Boolean(key))throw new Error('complete HTTPS certificate and key required');
  if(!cert&&!tlsTerminated&&!testMode)throw new Error('HTTPS certificate/key or explicit external TLS termination required');
  if(testHooks&&!testMode)throw new Error('test hooks require test mode');
@@ -94,7 +94,7 @@ export async function createPhoneGateway({authDb,origin,upstream,upstreamAddress
   if(pathOnly.startsWith('/__phone/'))throw Object.assign(new Error(),{status:404});
   const isApi=pathOnly.startsWith('/v1/');if(!isApi&&!PUBLIC.has(rawTarget))throw Object.assign(new Error(),{status:404});
   const raw=await body(req,1048576);if(isApi){if(sourceLimited(req))throw Object.assign(new Error(),{status:429});const d=req.headers['x-viq-device'];if(typeof d==='string'&&deviceLimited(d))throw Object.assign(new Error(),{status:429});const id=req.headers['x-viq-challenge'],sig=req.headers['x-viq-signature'];if([d,id,sig].some(x=>typeof x!=='string'||x.length>512))throw new Error();store.authorize({id,device_id:d,signature:sig,method:req.method,target:rawTarget,body:raw})}
-  const headers={},connectionTokens=new Set(String(req.headers.connection||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean));for(const [k,v]of Object.entries(req.headers)){if(!blocked.has(k)&&!connectionTokens.has(k)&&!k.startsWith('x-viq-')&&!k.startsWith('x-forwarded-')&&v!==undefined)headers[k]=v}headers['content-length']=String(raw.length);
+  const headers={},connectionTokens=new Set(String(req.headers.connection||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean));for(const [k,v]of Object.entries(req.headers)){if(!blocked.has(k)&&!connectionTokens.has(k)&&!k.startsWith('x-viq-')&&!k.startsWith('x-forwarded-')&&v!==undefined)headers[k]=v}if(isApi&&internalToken)headers['x-viq-internal-auth']=`Bearer ${internalToken}`;headers['content-length']=String(raw.length);
   let timer;const proxy=proxyRequest({...route,testHooks:testHooks??{}},{path:rawTarget,method:req.method,headers},up=>{res.statusCode=up.statusCode;const responseTokens=new Set(String(up.headers.connection||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean));for(const[k,v]of Object.entries(up.headers))if(!responseBlocked.has(k)&&!responseTokens.has(k)&&!k.startsWith('x-forwarded-')&&v!==undefined)res.setHeader(k,v);secure(res);up.on('error',()=>res.destroy());up.on('end',()=>clearTimeout(timer));up.pipe(res)});timer=setTimeout(()=>proxy.destroy(new Error('upstream request timeout')),testHooks?.requestTimeoutMs??REQUEST_TIMEOUT_MS);proxy.on('error',()=>{clearTimeout(timer);json(res,502,{error:{code:'upstream_unavailable',message:'upstream unavailable'}})});proxy.end(raw);
  }catch(e){const status=e.status||403,message=status===413?`request body exceeds ${e.limit===8192?'8KiB':'1MiB'}`:'authorization failed';json(res,status,{error:{code:status===413?'body_too_large':'authorization_failed',message}})}};
  const server=cert&&key?https.createServer({cert,key},handler):http.createServer(handler);server.authStore=store;server.rateLimitBuckets=buckets;server.on('close',()=>store.close());return server;
@@ -104,5 +104,5 @@ const gatewayHelp=`Usage: viqueue-phone-gateway --auth-db=PATH --origin=https://
 if(process.argv[1]&&fileURLToPath(import.meta.url)===realpathSync(process.argv[1])){
  if(process.argv.slice(2).includes('--help')){process.stdout.write(gatewayHelp);process.exit(0)}
  const a=Object.fromEntries(process.argv.slice(2).map(x=>{const[k,...v]=x.replace(/^--/,'').split('=');return[k.replaceAll('-','_'),v.join('=')]}));
- await runPhoneGateway({authDb:a.auth_db,origin:a.origin,upstream:a.upstream,upstreamAddressPolicy:a.upstream_address_policy,cert:a.cert?await readFile(a.cert):null,key:a.key?await readFile(a.key):null,port:a.port,tlsTerminated:a.tls_terminated==='true'});
+ await runPhoneGateway({authDb:a.auth_db,origin:a.origin,upstream:a.upstream,upstreamAddressPolicy:a.upstream_address_policy,internalToken:a.internal_token??process.env.VIQ_INGRESS_TOKEN,cert:a.cert?await readFile(a.cert):null,key:a.key?await readFile(a.key):null,port:a.port,tlsTerminated:a.tls_terminated==='true'});
 }

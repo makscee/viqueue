@@ -8,14 +8,14 @@ import { createApp } from '../src/server.js';
 
 async function fixture() {
   const dir = await mkdtemp(path.join(tmpdir(), 'viq-http-'));
-  const app = await createApp({ storage: path.join(dir, 'data.sqlite'), operatorToken: 'secret' });
+  const app = await createApp({ storage: path.join(dir, 'data.sqlite'), operatorToken: 'secret', ingressToken: 'ingress-secret' });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   return { app, base: `http://127.0.0.1:${app.address().port}` };
 }
 
-async function request(base, method, route, body, auth = false) {
+async function request(base, method, route, body, auth = false, trusted = false) {
   const response = await fetch(`${base}${route}`, {
-    method, headers: { 'content-type': 'application/json', ...(auth ? { authorization: 'Bearer secret' } : {}) },
+    method, headers: { 'content-type': 'application/json', ...(auth ? { authorization: 'Bearer secret' } : {}), ...(trusted ? { 'x-viq-internal-auth': 'Bearer ingress-secret' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const text = await response.text();
@@ -45,17 +45,21 @@ test('HTTP exposes the complete canonical lifecycle and event polling', async (t
   assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/reopen', { actor: 'maks' }, true)).body.ticket.state, 'open');
 });
 
-test('HTTP atomically claims the next eligible assigned ticket', async (t) => {
+test('HTTP trusted assignment launches while ordinary assignment cannot', async (t) => {
   const { app, base } = await fixture(); t.after(() => app.close());
   await request(base, 'POST', '/v1/projects', { key: 'ABC' });
-  for (const id of ['worker-a', 'worker-b']) await request(base, 'POST', '/v1/actors', { id, name: id, kind: 'agent' }, true);
-  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Other', assignee: { type: 'actor', id: 'worker-b' } });
-  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Mine', assignee: { type: 'actor', id: 'worker-a' } });
+  for (const [id,kind] of [['worker-a','agent'],['worker-b','agent'],['maks','human']]) await request(base, 'POST', '/v1/actors', { id, name: id, kind }, true);
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Unassigned', actor: 'maks' }, false, true);
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Ordinary', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' });
+  assert.equal((await request(base, 'POST', '/v1/tickets/claim-next', { project: 'ABC', actor: 'worker-a' })).status, 204);
+  const trusted = await request(base, 'PATCH', '/v1/tickets/ABC-2', { actor: 'maks', assignee: { type: 'actor', id: 'worker-a' } }, false, true);
+  assert.equal(trusted.body.ticket.execution_authority.assignee.id, 'worker-a');
+  assert.equal((await request(base, 'POST', '/v1/tickets/claim-next', { project: 'ABC', actor: 'worker-b' })).status, 204);
   const claim = await request(base, 'POST', '/v1/tickets/claim-next', { project: 'ABC', actor: 'worker-a' });
   assert.equal(claim.status, 200);
   assert.equal(claim.body.ticket.id, 'ABC-2');
+  assert.equal(claim.body.ticket.execution_authority, null);
   assert.equal(typeof claim.body.claim_token, 'string');
-  assert.equal((await request(base, 'POST', '/v1/tickets/claim-next', { project: 'ABC', actor: 'worker-a' })).status, 204);
 });
 
 test('HTTP release and authorized takeover preserve fencing', async (t) => {

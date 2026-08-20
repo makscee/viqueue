@@ -88,19 +88,36 @@ test('submit review, accept done, and reopen open are explicit state transitions
   assert.equal(reopened.claim, null);
 });
 
-test('claimNext selects and claims assigned work in one transaction', async () => {
+test('trusted human assignment atomically authorizes one exact-assignee claimNext', async () => {
   const { store, file } = await fixture();
   await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Other worker', assignee: { type: 'actor', id: 'worker-b' } });
-  await store.createTicket({ project: 'ABC', title: 'Mine', assignee: { type: 'actor', id: 'worker-a' } });
-  const other = new Store(file);
-  await other.init();
+  await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' }, { trustedAssignment: true });
+  await store.createTicket({ project: 'ABC', title: 'Ordinary assignment', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' });
+  const mine = await store.createTicket({ project: 'ABC', title: 'Trusted assignment', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' }, { trustedAssignment: true });
+  assert.equal((await store.getTicket('ABC-2')).execution_authority, null);
+  assert.equal(mine.execution_authority.assignee.id, 'worker-a');
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-b' }), null);
+  const other = new Store(file); await other.init();
   const outcomes = await Promise.all([store.claimNext({ project: 'ABC', actor: 'worker-a' }), other.claimNext({ project: 'ABC', actor: 'worker-a' })]);
   assert.equal(outcomes.filter(Boolean).length, 1);
-  assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-2');
-  assert.equal((await store.getTicket('ABC-1')).claim, null);
+  assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3');
+  assert.equal(outcomes.find(Boolean).ticket.execution_authority, null);
   assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
   await other.close();
+});
+
+test('untrusted assignment revokes authority while trusted same-assignment save can relaunch', async () => {
+  const { store } = await fixture(); await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Launch', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' }, { trustedAssignment: true });
+  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } });
+  assert.equal((await store.getTicket('ABC-1')).execution_authority, null);
+  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } }, { trustedAssignment: true });
+  assert.equal((await store.getTicket('ABC-1')).execution_authority.assignee.id, 'worker-b');
+  const claim = await store.claimNext({ project: 'ABC', actor: 'worker-b' });
+  await store.release('ABC-1', identity(claim));
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-b' }), null);
+  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } }, { trustedAssignment: true });
+  assert.ok(await store.claimNext({ project: 'ABC', actor: 'worker-b' }));
 });
 
 test('competing claims are atomic across independent SQLite connections', async () => {
