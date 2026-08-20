@@ -45,6 +45,19 @@ test('HTTP exposes the complete canonical lifecycle and event polling', async (t
   assert.equal((await request(base, 'POST', '/v1/tickets/ABC-1/reopen', { actor: 'maks' }, true)).body.ticket.state, 'open');
 });
 
+test('HTTP atomically claims the next eligible assigned ticket', async (t) => {
+  const { app, base } = await fixture(); t.after(() => app.close());
+  await request(base, 'POST', '/v1/projects', { key: 'ABC' });
+  for (const id of ['worker-a', 'worker-b']) await request(base, 'POST', '/v1/actors', { id, name: id, kind: 'agent' }, true);
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Other', assignee: { type: 'actor', id: 'worker-b' } });
+  await request(base, 'POST', '/v1/tickets', { project: 'ABC', title: 'Mine', assignee: { type: 'actor', id: 'worker-a' } });
+  const claim = await request(base, 'POST', '/v1/tickets/claim-next', { project: 'ABC', actor: 'worker-a' });
+  assert.equal(claim.status, 200);
+  assert.equal(claim.body.ticket.id, 'ABC-2');
+  assert.equal(typeof claim.body.claim_token, 'string');
+  assert.equal((await request(base, 'POST', '/v1/tickets/claim-next', { project: 'ABC', actor: 'worker-a' })).status, 204);
+});
+
 test('HTTP release and authorized takeover preserve fencing', async (t) => {
   const { app, base } = await fixture(); t.after(() => app.close());
   await request(base, 'POST', '/v1/projects', { key: 'ABC' });

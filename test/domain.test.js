@@ -88,6 +88,21 @@ test('submit review, accept done, and reopen open are explicit state transitions
   assert.equal(reopened.claim, null);
 });
 
+test('claimNext selects and claims assigned work in one transaction', async () => {
+  const { store, file } = await fixture();
+  await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Other worker', assignee: { type: 'actor', id: 'worker-b' } });
+  await store.createTicket({ project: 'ABC', title: 'Mine', assignee: { type: 'actor', id: 'worker-a' } });
+  const other = new Store(file);
+  await other.init();
+  const outcomes = await Promise.all([store.claimNext({ project: 'ABC', actor: 'worker-a' }), other.claimNext({ project: 'ABC', actor: 'worker-a' })]);
+  assert.equal(outcomes.filter(Boolean).length, 1);
+  assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-2');
+  assert.equal((await store.getTicket('ABC-1')).claim, null);
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
+  await other.close();
+});
+
 test('competing claims are atomic across independent SQLite connections', async () => {
   const { store, file, ticket } = await seeded();
   const other = new Store(file);
