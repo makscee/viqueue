@@ -9,8 +9,10 @@ source "$SCRIPT_DIR/transaction-lib.sh"
 # remains queued instead of silently losing the automatic recovery attempt.
 viq15_lock wait 8
 
-CANDIDATE=1fd4c9cc701ddf9225da631ee04242cefa20e1f4
+CANDIDATE=__FINAL_COMMIT__
 OLD_RELEASE=/opt/viqueue/releases/a0d80f15441b5b9b1e3d2c8a45ffa6460b7a5f3b
+OLD_WORKER_COMMIT=1398284ed89a6cf9395f129483f709e63c009286
+WORKER_ROOT=/opt/viq-worker
 OLD_DB=/var/lib/viqueue/viqueue.sqlite
 OLD_AUTH_DB=/var/lib/viqueue-phone-auth/phone-auth.sqlite
 NEW_DB=/var/lib/viqueue-paired/viqueue.sqlite
@@ -19,7 +21,7 @@ EXPECTED_SCHEMA=d56e8da3e4ee72a2fa438156a1b967ba3cdf60ff13c6d0ee2f7d8048ce6ed1ae
 EXPECTED_ROUTE=a9b93638e2aa7b08d0caed2b4c3e8d1110ef6824052f833fe5abaa839dda3937
 STAGE=$STATE/viqueue-v0.4.1-rc
 RESTORE_HELPER=$STATE/sqlite-family-restore.sh
-[[ -d $STATE && -x $STAGE/sqlite-backup.js && -x $RESTORE_HELPER && -f $STATE/viqueue.service.before && -f $STATE/viqueue-phone-gateway.service.before ]] || { echo 'sealed rollback state missing' >&2; exit 1; }
+[[ -d $STATE && -x $STAGE/sqlite-backup.js && -x $RESTORE_HELPER && -x $STATE/rollback-viq-worker.sh && -f $STATE/viqueue.service.before && -f $STATE/viqueue-phone-gateway.service.before ]] || { echo 'sealed rollback state missing' >&2; exit 1; }
 route_hash(){ tailscale serve status --json | sha256sum | cut -d' ' -f1; }
 check_route_target(){ tailscale serve status --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s),w=j.Web??{},h=Object.values(w)[0]?.Handlers??{};if(Object.keys(j.TCP??{}).length!==1||j.TCP?.['443']?.HTTPS!==true||Object.keys(w).length!==1||Object.keys(h).length!==1||h['/']?.Proxy!=='http://127.0.0.1:'+process.argv[1])process.exit(1)})" "$1"; }
 check_auth_db(){ node --input-type=module - "$OLD_AUTH_DB" "$STATE/old-auth.sqlite" <<'NODE'
@@ -64,6 +66,13 @@ cp -a "$STATE/viqueue.service.before" /etc/systemd/system/viqueue.service
 cp -a "$STATE/viqueue-phone-gateway.service.before" /etc/systemd/system/viqueue-phone-gateway.service
 ln -sfn "$OLD_RELEASE" /opt/viqueue/current.rollback
 mv -Tf /opt/viqueue/current.rollback /opt/viqueue/current
+worker_current=$(readlink -f "$WORKER_ROOT/current")
+if [[ $worker_current == "$WORKER_ROOT/releases/$CANDIDATE" ]]; then
+  VIQ_WORKER_ROOT="$WORKER_ROOT" bash "$STATE/rollback-viq-worker.sh" "$CANDIDATE" "$OLD_WORKER_COMMIT" > "$STATE/worker-rollback.status"
+elif [[ $worker_current != "$WORKER_ROOT/releases/$OLD_WORKER_COMMIT" ]]; then
+  echo 'worker rollback pointer CAS failed' >&2; exit 1
+fi
+[[ $(readlink -f "$WORKER_ROOT/current") == "$WORKER_ROOT/releases/$OLD_WORKER_COMMIT" ]] || { echo 'worker rollback failed' >&2; exit 1; }
 systemctl daemon-reload
 
 # Restore from the sealed backup even when the unexpected old family is corrupt.
@@ -85,6 +94,7 @@ ss -ltnH | grep -q '127.0.0.1:7443' || { echo 'old gateway listener failed' >&2;
 check_route_target 7443 || { echo 'final route shape failed' >&2; exit 1; }
 [[ $(route_hash) == "$CAPTURED_ROUTE" ]] || { echo 'final route CAS failed' >&2; exit 1; }
 [[ $(readlink -f /opt/viqueue/current) == "$OLD_RELEASE" ]] || { echo 'release rollback CAS failed' >&2; exit 1; }
+[[ $(readlink -f "$WORKER_ROOT/current") == "$WORKER_ROOT/releases/$OLD_WORKER_COMMIT" ]] || { echo 'worker release rollback CAS failed' >&2; exit 1; }
 systemctl disable --now viq15-auto-rollback.timer >/dev/null 2>&1 || true
 printf '%s\n' rolled-back > "$STATE/phase"
 echo 'ROLLBACK_COMPLETE'

@@ -7,11 +7,16 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/transaction-lib.sh"
 viq15_lock exclusive 9
 
-CANDIDATE=1fd4c9cc701ddf9225da631ee04242cefa20e1f4
-TREE=c868c045b81d3908e465c6b79851bc6ac7a27d17
-BUNDLE_SHA=3309363b7af4cc7243351df2d86d7bba3b8a536ccf9609f1ec7ea9b338aa16c9
-BUNDLE=/root/worktrees/viq15-minimal-cutover/release/viqueue-v0.4.1-rc.tar.gz
+# These four markers are replaced only when the immutable review bundle is sealed.
+CANDIDATE=__FINAL_COMMIT__
+TREE=__FINAL_TREE__
+BUNDLE_SHA=__FINAL_BUNDLE_SHA256__
+WORKER_BUNDLE_SHA=__FINAL_WORKER_BUNDLE_SHA256__
+BUNDLE=/root/work/viq15-cutover-final-repair-output/viqueue-final.tar.gz
+WORKER_BUNDLE=/root/work/viq15-cutover-final-repair-output/viq-worker-final.tar.gz
 OLD_RELEASE=/opt/viqueue/releases/a0d80f15441b5b9b1e3d2c8a45ffa6460b7a5f3b
+OLD_WORKER_COMMIT=1398284ed89a6cf9395f129483f709e63c009286
+WORKER_ROOT=/opt/viq-worker
 OLD_DB=/var/lib/viqueue/viqueue.sqlite
 OLD_AUTH_DB=/var/lib/viqueue-phone-auth/phone-auth.sqlite
 NEW_PREFIX=/opt/viqueue-paired
@@ -41,7 +46,10 @@ trap rollback_on_error ERR
 
 # Exact read-only preflight CAS.
 [[ $(sha "$BUNDLE") == "$BUNDLE_SHA" ]] || fail 'bundle hash drift'
+[[ $(sha "$WORKER_BUNDLE") == "$WORKER_BUNDLE_SHA" ]] || fail 'worker bundle hash drift'
 [[ $(readlink -f /opt/viqueue/current) == "$OLD_RELEASE" ]] || fail 'release pointer drift'
+[[ $(readlink -f "$WORKER_ROOT/current") == "$WORKER_ROOT/releases/$OLD_WORKER_COMMIT" ]] || fail 'worker release pointer drift'
+[[ $(cat "$WORKER_ROOT/current/SOURCE_COMMIT") == "$OLD_WORKER_COMMIT" ]] || fail 'worker source identity drift'
 [[ $(sha /etc/systemd/system/viqueue.service) == "$EXPECTED_CORE_UNIT" ]] || fail 'core unit drift'
 [[ $(sha /etc/systemd/system/viqueue-phone-gateway.service) == "$EXPECTED_GATEWAY_UNIT" ]] || fail 'gateway unit drift'
 [[ $(systemctl is-active viqueue.service) == active && $(systemctl is-enabled viqueue.service) == enabled ]] || fail 'core state drift'
@@ -52,6 +60,7 @@ listeners=$(ss -ltnH | awk '$4 ~ /:(7373|7443|17373)$/ {print $4}' | sort)
 [[ $(route_hash) == "$EXPECTED_ROUTE" ]] || fail 'Tailscale Serve drift'
 check_route_target 7443 || fail 'Tailscale Serve shape drift'
 check_db_cas "$OLD_DB" || fail 'database integrity/schema/count drift'
+node "$SCRIPT_DIR/viq15-reconcile.js" inspect "$OLD_DB" > /dev/null || fail 'exact unsettled-state reconciliation drift'
 [[ -f $OLD_AUTH_DB && ! -L $OLD_AUTH_DB ]] || fail 'old auth DB missing or unsafe'
 [[ $(df -B1 --output=avail /opt | tail -1) -ge 2147483648 && $(df -B1 --output=avail /var/lib | tail -1) -ge 2147483648 ]] || fail 'insufficient disk headroom'
 [[ ! -e $STATE && ! -e $NEW_PREFIX && ! -e $NEW_STATE && ! -e $NEW_UNIT && ! -e /etc/systemd/system/viq15-auto-rollback.service && ! -e /etc/systemd/system/viq15-auto-rollback.timer ]] || fail 'new deployment/rollback path already exists'
@@ -60,7 +69,10 @@ install -d -m 700 "$STATE"
 cp "$SCRIPT_DIR/rollback.sh" "$STATE/rollback.sh"
 cp "$SCRIPT_DIR/transaction-lib.sh" "$STATE/transaction-lib.sh"
 cp "$SCRIPT_DIR/sqlite-family-restore.sh" "$STATE/sqlite-family-restore.sh"
-chmod 700 "$STATE/rollback.sh" "$STATE/transaction-lib.sh" "$STATE/sqlite-family-restore.sh"
+cp "$SCRIPT_DIR/install-viq-worker.sh" "$STATE/install-viq-worker.sh"
+cp "$SCRIPT_DIR/rollback-viq-worker.sh" "$STATE/rollback-viq-worker.sh"
+cp "$SCRIPT_DIR/viq15-reconcile.js" "$STATE/viq15-reconcile.js"
+chmod 700 "$STATE/rollback.sh" "$STATE/transaction-lib.sh" "$STATE/sqlite-family-restore.sh" "$STATE/install-viq-worker.sh" "$STATE/rollback-viq-worker.sh" "$STATE/viq15-reconcile.js"
 tailscale serve status --json > "$STATE/tailscale-serve.before.json"; chmod 600 "$STATE/tailscale-serve.before.json"
 cp -a /etc/systemd/system/viqueue.service "$STATE/viqueue.service.before"
 cp -a /etc/systemd/system/viqueue-phone-gateway.service "$STATE/viqueue-phone-gateway.service.before"
@@ -94,6 +106,16 @@ mv "$NEW_DB.staged" "$NEW_DB"; chown viqueue:viqueue "$NEW_DB"; chmod 640 "$NEW_
 # Exact candidate install under a new prefix; /opt/viqueue is untouched.
 VIQ_PREFIX="$NEW_PREFIX" VIQ_STORAGE="$NEW_DB" VIQ_SNAPSHOT_CONFIRMED_OFFLINE=1 bash "$STAGE/install-local.sh" >/dev/null
 [[ $(cat "$NEW_PREFIX/lib/viqueue/current/SOURCE_COMMIT") == "$CANDIDATE" ]] || fail 'installed source mismatch'
+
+# Reconcile only the stopped sealed candidate copy. The authoritative old DB is forbidden by the helper.
+VIQ15_RECONCILE_CONFIRM=SEALED-CANDIDATE-COPY node "$STATE/viq15-reconcile.js" apply "$NEW_DB" > "$STATE/reconciliation-applied.json"
+chmod 600 "$STATE/reconciliation-applied.json"
+
+# Install the exact compatible Pi worker package with an atomic pointer switch.
+VIQ_WORKER_ROOT="$WORKER_ROOT" bash "$STATE/install-viq-worker.sh" "$WORKER_BUNDLE" "$CANDIDATE" "$OLD_WORKER_COMMIT" > "$STATE/worker-install.status"
+chmod 600 "$STATE/worker-install.status"
+[[ $(readlink -f "$WORKER_ROOT/current") == "$WORKER_ROOT/releases/$CANDIDATE" ]] || fail 'worker pointer switch failed'
+[[ $(cat "$WORKER_ROOT/current/SOURCE_COMMIT") == "$CANDIDATE" ]] || fail 'installed worker source mismatch'
 
 # Bootstrap credential moves only through a pipe into a root-owned file; never stdout or argv.
 install -d -m 700 "$STATE/credentials"

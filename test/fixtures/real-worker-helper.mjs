@@ -4,6 +4,8 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+assert.equal(process.getuid?.(), 994, 'worker rehearsal must run as the real viq-worker uid');
+assert.equal(process.getgid?.(), 986, 'worker rehearsal must run as the real viq-worker gid');
 const release = process.argv[2];
 const manifest = JSON.parse(await import('node:fs/promises').then((fs) => fs.readFile(path.join(release, 'package.json'), 'utf8')));
 assert.deepEqual(manifest.pi.extensions, ['./extensions/viq-worker/index.ts']);
