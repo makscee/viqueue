@@ -12,6 +12,10 @@ const bearer = (request) => { const value = request.headers.authorization; retur
 const requireKind = (device, kind) => { if (device.kind !== kind) throw new DomainError(403, `${kind}_required`, `${kind} device is required`); };
 const requireAdmin = (device) => { if (!device.admin) throw new DomainError(403, 'admin_required', 'active admin actor is required'); };
 const claimIdentity = (body, device) => ({ ...body, actor: device.actor_id, device: device.id });
+const boundPairingRequest = (body) => {
+  if (!body || typeof body.actor_id !== 'string' || !body.actor_id.trim() || !['coordinator', 'worker'].includes(body.intended_kind) || typeof body.device_id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(body.device_id) || typeof body.device_name !== 'string' || !body.device_name.trim() || body.device_name.length > 200) throw new DomainError(400, 'invalid_pairing_request', 'actor_id, intended_kind, device_id, and device_name are required');
+  return body;
+};
 
 export async function createApp({ storage, now } = {}) {
   const store = new Store(storage ?? './viqueue.sqlite', { now }); await store.init();
@@ -29,7 +33,7 @@ export async function createApp({ storage, now } = {}) {
       if (request.method === 'POST' && url.pathname === '/v1/actors') { requireAdmin(device); return send(response, 201, { actor: await store.createActor(await json(request), device.id) }); }
       if ((match = url.pathname.match(/^\/v1\/actors\/([^/]+)$/)) && request.method === 'PATCH') { requireAdmin(device); return send(response, 200, { actor: await store.updateActor(decodeURIComponent(match[1]), await json(request), device.id) }); }
       if ((match = url.pathname.match(/^\/v1\/devices\/([^/]+)$/)) && request.method === 'PATCH') { requireAdmin(device); return send(response, 200, { device: await store.updateDevice(decodeURIComponent(match[1]), await json(request), device.id) }); }
-      if (request.method === 'POST' && url.pathname === '/v1/pairing-codes') { requireAdmin(device); return send(response, 201, await store.createPairingCode(device.id, await json(request))); }
+      if (request.method === 'POST' && url.pathname === '/v1/pairing-codes') { requireAdmin(device); return send(response, 201, await store.createPairingCode(device.id, boundPairingRequest(await json(request)))); }
       if ((match = url.pathname.match(/^\/v1\/devices\/([^/]+)\/revoke$/)) && request.method === 'POST') { requireAdmin(device); return send(response, 200, { device: await store.revokeDevice(decodeURIComponent(match[1]), device.id) }); }
       if ((match = url.pathname.match(/^\/v1\/devices\/([^/]+)\/roles$/)) && request.method === 'GET') { const id = decodeURIComponent(match[1]); if (device.kind !== 'coordinator' && device.id !== id) throw new DomainError(403, 'device_forbidden', 'worker may read only its own roles'); return send(response, 200, await store.listDeviceRoles(id)); }
       if ((match = url.pathname.match(/^\/v1\/devices\/([^/]+)\/roles\/([^/]+)$/)) && request.method === 'PUT') { requireAdmin(device); return send(response, 200, { membership: await store.grantDeviceRole(decodeURIComponent(match[1]), decodeURIComponent(match[2]), device.id) }); }

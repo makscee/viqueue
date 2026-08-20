@@ -12,7 +12,7 @@ The HTTP JSON core is the only state machine. Authorization is intentionally sma
 
 A coordinator may create/edit/archive tickets, assign to a worker device or role, answer/review submissions, issue/revoke pairing, and manage roles. A worker may read assigned work, claim it atomically, post claim-fenced progress/questions/blockers/submissions, or release its claim. Roles grant no API permissions.
 
-Assignment is launch authorization. Every HTTP, CLI, and `/viq-worker` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Unassigned pickup and takeover are absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
+Assignment is launch authorization. Every HTTP, CLI, and `/viq` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Unassigned pickup and takeover are absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
 
 Claims remain durable generation-fenced locks until explicit release or submission. Claim and device credentials are returned only at creation/pairing, stored by hash in SQLite, and never included in ticket/model context.
 
@@ -38,17 +38,19 @@ viq ticket create ABC "Fix parser" --assignee-role tower-pi --device-token COORD
 viq ticket claim-next --project ABC --device-token WORKER_CREDENTIAL
 ```
 
-The browser board shows a pairing form when no valid local pairing exists. Enter a coordinator-issued one-time code plus a device ID/name; the board verifies `/v1/devices/me` and stores only the returned credential in `localStorage['viq.deviceCredential']`. Invalid/revoked credentials are cleared automatically, and **Disconnect this device** clears only browser-local state without revoking the server-side device.
+The browser board shows a pairing form when no valid local pairing exists. New coordinator-issued codes bind actor, kind, device ID, and device name, so code-only clients need only the one-time code; the browser retains ID/name inputs for legacy nullable codes. The board verifies `/v1/devices/me` and stores only the returned credential in `localStorage['viq.deviceCredential']`. Invalid/revoked credentials are cleared automatically, and **Disconnect this device** clears only browser-local state without revoking the server-side device.
 
-MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. The bundled Pi extension provides:
+MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. Install the existing package in a user's Pi profile with `pi install <Viq package>`. Subsequent Pi sessions for that Unix user discover:
 
 ```text
-/viq-worker pair CODE [--id ID] [--name NAME]
-/viq-worker start [--project KEY]
-/viq-worker status|pause|resume|stop
+/viq
+/viq pair CODE
+/viq status
+/viq poll [--project KEY]
+/viq pause|resume|stop
 ```
 
-It writes the device credential outside the workspace at `${XDG_STATE_HOME:-~/.local/state}/viq-worker/device-credential`, owner-only mode 0600, keeps it out of prompts/status/tool results, refuses root, and exposes only claim-fenced Viq progress/question/block/submit/release tools.
+`/viq start` remains an alias for `poll`; `/viq-worker` is a deprecated alias to the same handler. Pairing writes JSON outside repositories at `${XDG_CONFIG_HOME:-~/.config}/viq/credential.json`, with directory mode 0700 and file mode 0600. Sessions for the same Unix user reuse it; other users do not. Ordinary root Pi is supported and receives a root-only file. Polling is session-scoped with no daemon. Explicit `VIQ_WORKER_LOCKDOWN=1` preserves the historical isolated-workspace/root refusal contour. Credentials stay out of prompts, status, tool results, argv, environment, and request bodies; the trusted Pi process necessarily can read its own Unix user's file.
 
 An exact worker-only archive is built from clean committed `HEAD` with `npm run bundle:worker -- OUTPUT_DIR`. It includes `SOURCE_COMMIT`, `SOURCE_TREE`, the configured `package.json` discovery path, and only the worker extension/runtime. `scripts/install-viq-worker.sh` requires an explicit `VIQ_WORKER_ROOT`, exact candidate commit, and exact current predecessor before it creates a read-only release and atomically renames the `current` symlink. `scripts/rollback-viq-worker.sh` accepts only that installed candidate and the sealed predecessor; the VIQ-15 predecessor is `1398284ed89a6cf9395f129483f709e63c009286`. Tests and rehearsals must use an isolated root, never `/opt/viq-worker`.
 

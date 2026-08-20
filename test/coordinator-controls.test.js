@@ -17,7 +17,7 @@ test('bounded coordinator controls remain coordinator-only at the API boundary',
     ['PUT', '/v1/devices/worker/roles/flat', {}], ['DELETE', '/v1/devices/worker/roles/flat', {}],
     ['POST', '/v1/tickets/NO-1/questions/q_missing/answer', { answer: 'no' }], ['POST', '/v1/tickets/NO-1/blocks/b_missing/resolve', {}]
   ]) { const response = await call(worker.credential, method, route, body); assert.equal(response.status, 403, `${method} ${route}`); assert.match((await response.json()).error.code, /coordinator_required|admin_required/); }
-  assert.equal((await call(coordinator.credential, 'POST', '/v1/pairing-codes', { intended_kind: 'worker' })).status, 201);
+  assert.equal((await call(coordinator.credential, 'POST', '/v1/pairing-codes', { intended_kind: 'worker', actor_id: 'coord', device_id: 'issued-worker', device_name: 'Issued Worker' })).status, 201);
 });
 
 test('browser exposes only the named pairing, flat-role, membership, answer, and block controls', async () => {
