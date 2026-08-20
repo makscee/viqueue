@@ -11,13 +11,16 @@ import { Store } from '../src/store.js';
 
 const work = await mkdtemp(path.join(tmpdir(), 'viq-coordinator-worker-'));
 const install = await mkdtemp('/var/tmp/viq-worker-browser-');
-const release = path.join(install, 'current');
+const release = process.env.VIQ_WORKER_RELEASE ? path.resolve(process.env.VIQ_WORKER_RELEASE) : path.join(install, 'current');
+const helper = path.join(install, 'real-worker-helper.mjs');
 const stateHome = path.join(install, 'state');
-await mkdir(path.join(release, 'extensions'), { recursive: true });
-await cp('extensions/viq-worker', path.join(release, 'extensions/viq-worker'), { recursive: true });
-const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-await writeFile(path.join(release, 'package.json'), `${JSON.stringify({ name: pkg.name, pi: pkg.pi })}\n`);
-await cp('test/fixtures/real-worker-helper.mjs', path.join(release, 'real-worker-helper.mjs'));
+if (!process.env.VIQ_WORKER_RELEASE) {
+  await mkdir(path.join(release, 'extensions'), { recursive: true });
+  await cp('extensions/viq-worker', path.join(release, 'extensions/viq-worker'), { recursive: true });
+  const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+  await writeFile(path.join(release, 'package.json'), `${JSON.stringify({ name: pkg.name, pi: pkg.pi })}\n`);
+}
+await cp('test/fixtures/real-worker-helper.mjs', helper);
 await mkdir(stateHome, { mode: 0o700 });
 async function giveToWorker(target) { const entries = await import('node:fs/promises').then((fs) => fs.readdir(target, { withFileTypes: true })); await chown(target, 994, 986); await chmod(target, entries.some((e) => e.isDirectory()) ? 0o755 : 0o700); for (const entry of entries) if (entry.isDirectory()) await giveToWorker(path.join(target, entry.name)); }
 await giveToWorker(install); await chmod(stateHome, 0o700);
@@ -41,7 +44,7 @@ try {
   await page.getByRole('button', { name: 'Pairing and roles' }).click();
   const pairing = page.locator('.pairing-code-form'); await pairing.getByLabel('Device kind').selectOption('worker'); await pairing.getByRole('button', { name: 'Issue code' }).click();
   const workerCode = await pairing.locator('.one-time-code').textContent(); assert.ok(workerCode);
-  worker = spawn('runuser', ['-u', 'viq-worker', '--', process.execPath, path.join(release, 'real-worker-helper.mjs'), release], { env: { ...process.env, VIQ_URL: base, XDG_STATE_HOME: stateHome }, stdio: ['pipe', 'pipe', 'pipe'] });
+  worker = spawn('runuser', ['-u', 'viq-worker', '--', process.execPath, helper, release], { env: { ...process.env, VIQ_URL: base, XDG_STATE_HOME: stateHome }, stdio: ['pipe', 'pipe', 'pipe'] });
   const lines = createInterface({ input: worker.stdout }); const queue = []; const waiters = []; lines.on('line', (line) => { const waiter = waiters.shift(); if (waiter) waiter(line); else queue.push(line); });
   const nextLine = () => queue.length ? Promise.resolve(queue.shift()) : new Promise((resolve) => waiters.push(resolve));
   worker.stdin.write(`${workerCode}\n`); assert.equal(await nextLine(), 'PAIRED');
