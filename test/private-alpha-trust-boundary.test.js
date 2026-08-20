@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -14,12 +14,11 @@ const claimIdentity = (claim) => ({
 });
 
 test('accepted private-alpha trust boundary is explicit and mapped to enforced implementation seams', async () => {
-  const [adr, security, server, gateway, authStore, app] = await Promise.all([
+  const [adr, security, server, mcp, app] = await Promise.all([
     readFile('docs/adr-0012-pairing-poc.md', 'utf8'),
     readFile('SECURITY.md', 'utf8'),
     readFile('src/server.js', 'utf8'),
-    readFile('src/phone-gateway.js', 'utf8'),
-    readFile('src/phone-auth-store.js', 'utf8'),
+    readFile('src/mcp-server.js', 'utf8'),
     readFile('web/app.js', 'utf8')
   ]);
   assert.match(adr, /Status: accepted for private PoC/);
@@ -27,8 +26,9 @@ test('accepted private-alpha trust boundary is explicit and mapped to enforced i
   assert.match(security, /Pairing PoC boundary/);
   assert.match(server, /authenticateDevice\(bearer\(request\)\)/);
   assert.match(server, /requireKind\(device, 'coordinator'\)/);
-  assert.match(gateway, /s\.listen\(port,'127\.0\.0\.1'/);
-  assert.match(authStore, /one_active_device ON devices\(active\) WHERE active=1/);
+  assert.doesNotMatch(mcp, /claim_token|ticket_claim|claim_verify|claim_release/);
+  await assert.rejects(access('src/phone-gateway.js'));
+  await assert.rejects(access('src/phone-auth-store.js'));
   assert.match(app, /localStorage\.getItem\('viq\.deviceCredential'/);
 });
 

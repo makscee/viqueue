@@ -4,7 +4,7 @@ Thank you for helping improve viqueue.
 
 ## Before changing code
 
-- Keep the pull model and fencing semantics intact: claims persist without liveness inference, and only explicit release, submission, or takeover removes current authority.
+- Keep the pull model and fencing semantics intact: claims persist without liveness inference, unassigned work is not claimable, and there is no takeover path.
 - Keep HTTP as the application contract. `viq`, MCP, and the board must not implement separate state machines.
 - Keep scope small and avoid worker launching, production auth claims, or unrelated frameworks.
 - For a larger change, describe the problem, compatible contract impact, and validation approach before implementation.

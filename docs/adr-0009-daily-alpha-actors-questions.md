@@ -1,6 +1,6 @@
 # ADR 0009: Daily Alpha actors, roles, assignment, and questions
 
-Status: accepted for private alpha
+Status: superseded historical ADR; ADR 0012 removes unassigned pickup/takeover and limits roles to paired-worker assignment.
 
 The HTTP API remains the sole state machine. Stable actors have a human/agent kind, optional machine placement metadata, active flag, and many roles. Machine is descriptive, never liveness. Unassigned work is claimable by any active agent; actor assignment requires that active actor; role assignment and question/review targeting require at least one active role holder. Claim authority, generation fencing, and explicit release/takeover remain unchanged.
 

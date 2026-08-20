@@ -8,10 +8,7 @@
     "viq-bootstrap": "bin/viq-bootstrap.js",
     "viq-mcp": "src/mcp-server.js",
     "viqueue-mcp": "src/mcp-server.js",
-    "viq-import": "bin/viq-import.js",
-    "viq-phone-auth": "bin/viq-phone-auth.js",
-    "viq-trace-tailscale-upstream": "bin/viq-trace-tailscale-upstream.js",
-    "viqueue-phone-gateway": "src/phone-gateway.js"
+    "viq-import": "bin/viq-import.js"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
@@ -19,9 +16,7 @@
     "bundle": "npm run build && node scripts/bundle.js",
     "scan:secrets": "node scripts/scan-secrets.js",
     "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
-    "e2e:mcp": "bash test/mcp-e2e.sh",
-    "e2e:browser": "node test/browser-e2e.js",
-    "e2e:phone": "node test/phone-auth-e2e.js"
+    "e2e:browser": "node test/browser-e2e.js"
   },
   "engines": {
     "node": ">=22"

@@ -19,7 +19,7 @@ export async function createApp({ storage, now } = {}) {
       const url = new URL(request.url, 'http://localhost'); let match;
       if (request.method === 'GET' && assets[url.pathname]) { const [file, contentType] = assets[url.pathname]; response.statusCode = 200; response.setHeader('content-type', contentType); response.setHeader('cache-control', 'no-store'); response.end(await readFile(path.join(webRoot, file))); return; }
       if (request.method === 'GET' && url.pathname === '/health') return send(response, 200, { ok: true });
-      if (request.method === 'POST' && url.pathname === '/v1/devices/pair') { const presented = bearer(request); if (presented) requireKind(await store.authenticateDevice(presented), 'coordinator'); return send(response, 201, await store.pairDevice(await json(request))); }
+      if (request.method === 'POST' && url.pathname === '/v1/devices/pair') return send(response, 201, await store.pairDevice(await json(request)));
 
       const device = await store.authenticateDevice(bearer(request));
       if (request.method === 'GET' && url.pathname === '/v1/devices/me') return send(response, 200, { device: await store.getDevice(device.id) });

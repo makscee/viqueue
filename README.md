@@ -12,7 +12,7 @@ The HTTP JSON core is the only state machine. Authorization is intentionally sma
 
 A coordinator may create/edit/archive tickets, assign to a worker device or role, answer/review submissions, issue/revoke pairing, and manage roles. A worker may read assigned work, claim it atomically, post claim-fenced progress/questions/blockers/submissions, or release its claim. Roles grant no API permissions.
 
-Assignment is launch authorization. Every HTTP, CLI, MCP, and `/viq-worker` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Unassigned pickup and takeover are absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
+Assignment is launch authorization. Every HTTP, CLI, and `/viq-worker` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Unassigned pickup and takeover are absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
 
 Claims remain durable generation-fenced locks until explicit release or submission. Claim and device credentials are returned only at creation/pairing, stored by hash in SQLite, and never included in ticket/model context.
 
@@ -38,7 +38,7 @@ viq ticket create ABC "Fix parser" --assignee-role tower-pi --device-token COORD
 viq ticket claim-next --project ABC --device-token WORKER_CREDENTIAL
 ```
 
-MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN`. The bundled Pi extension provides:
+MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. The bundled Pi extension provides:
 
 ```text
 /viq-worker pair CODE [--id ID] [--name NAME]
@@ -52,6 +52,6 @@ It writes the device credential outside the workspace at `${XDG_STATE_HOME:-~/.l
 
 The forward migration creates `devices`, `pairing_codes`, and `device_roles`. The old `execution_authorities` table is retained only so rollback to the earlier build remains possible; candidate code neither joins, writes, consumes, nor exposes it. Install requires a local coordinator bootstrap before switching clients. Rollback restores the prior binary and database snapshot together; old binaries can still read their retained table.
 
-The v0.2 importer remains explicit and never overwrites an existing target. `npm run bundle` refuses a dirty tree, records exact commit/tree identity, and creates a deterministic local archive. The installer writes an immutable release directory and atomically switches `current`, preserving `previous`; `rollback-local.sh` switches it back. When `VIQ_STORAGE` already exists, install requires an explicit offline confirmation and snapshots the database. Optional rollback restoration likewise requires `VIQ_RESTORE_STORAGE=1`, `VIQ_STORAGE`, and offline confirmation. Uninstall removes launchers/pointers but preserves release and backup evidence. Nothing here publishes, deploys, or mutates live state.
+The v0.2 importer remains explicit and never overwrites an existing target. `npm run bundle` refuses a dirty tree, records exact commit/tree identity, and creates a deterministic local archive. The installer writes an immutable release directory and atomically switches `current`, preserving `previous`; `rollback-local.sh` switches it back. When `VIQ_STORAGE` already exists, install requires an explicit offline confirmation and uses SQLite's backup API to capture and validate committed main/WAL state before any pointer change. Optional rollback restoration first creates and validates a SQLite-consistent post-candidate preservation copy, then prepares and validates the prior snapshot before replacing the database and removing stale sidecars; it likewise requires `VIQ_RESTORE_STORAGE=1`, `VIQ_STORAGE`, and offline confirmation. Uninstall removes launchers/pointers but preserves release and backup evidence. Nothing here publishes, deploys, or mutates live state.
 
 viqueue is licensed under the [Apache License 2.0](LICENSE). See [SECURITY.md](SECURITY.md) for the bounded private-PoC threat model.

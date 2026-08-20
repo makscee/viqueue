@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const signatures = [
   ['private_key', /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g],
@@ -12,6 +12,7 @@ const signatures = [
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 const findings = [];
 for (const file of files) {
+  if (!existsSync(file)) continue;
   const content = readFileSync(file);
   if (content.includes(0)) continue;
   const text = content.toString('utf8');
