@@ -5,3 +5,4 @@ mkdir -p "$VIQ_EVIDENCE_DIR"
 export VIQ_EVIDENCE_DIR
 bash test/e2e.sh
 node test/browser-e2e.js
+node test/coordinator-worker-browser-e2e.js

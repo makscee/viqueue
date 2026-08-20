@@ -14,10 +14,12 @@
     "test": "node --test test/*.test.js",
     "build": "node scripts/build.js",
     "bundle": "npm run build && node scripts/bundle.js",
+    "bundle:worker": "node scripts/package-viq-worker.js",
     "scan:secrets": "node scripts/scan-secrets.js",
     "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
     "e2e:browser": "node test/browser-e2e.js",
-    "e2e:browser-pairing": "node test/browser-pairing-e2e.js"
+    "e2e:browser-pairing": "node test/browser-pairing-e2e.js",
+    "e2e:coordinator-worker": "node test/coordinator-worker-browser-e2e.js"
   },
   "engines": {
     "node": ">=22"

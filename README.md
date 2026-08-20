@@ -50,6 +50,8 @@ MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/stat
 
 It writes the device credential outside the workspace at `${XDG_STATE_HOME:-~/.local/state}/viq-worker/device-credential`, owner-only mode 0600, keeps it out of prompts/status/tool results, refuses root, and exposes only claim-fenced Viq progress/question/block/submit/release tools.
 
+An exact worker-only archive is built from clean committed `HEAD` with `npm run bundle:worker -- OUTPUT_DIR`. It includes `SOURCE_COMMIT`, `SOURCE_TREE`, the configured `package.json` discovery path, and only the worker extension/runtime. `scripts/install-viq-worker.sh` requires an explicit `VIQ_WORKER_ROOT`, exact candidate commit, and exact current predecessor before it creates a read-only release and atomically renames the `current` symlink. `scripts/rollback-viq-worker.sh` accepts only that installed candidate and the sealed predecessor; the VIQ-15 predecessor is `1398284ed89a6cf9395f129483f709e63c009286`. Tests and rehearsals must use an isolated root, never `/opt/viq-worker`.
+
 ## Migration and rollback
 
 The forward migration creates `devices`, `pairing_codes`, and `device_roles`. The old `execution_authorities` table is retained only so rollback to the earlier build remains possible; candidate code neither joins, writes, consumes, nor exposes it. Install requires a local coordinator bootstrap before switching clients. Rollback restores the prior binary and database snapshot together; old binaries can still read their retained table.

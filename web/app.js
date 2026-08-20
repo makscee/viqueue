@@ -168,7 +168,7 @@ function openDelete(ticket, trigger) {
 }
 
 async function showDetail(id, trigger) {
-  const [{ ticket }, { questions }, { events }] = await Promise.all([request(`/v1/tickets/${id}`), request(`/v1/tickets/${id}/questions`), request(`/v1/events?ticket=${id}`)]);
+  const [{ ticket }, { questions }, { blocks }, { events }] = await Promise.all([request(`/v1/tickets/${id}`), request(`/v1/tickets/${id}/questions`), request(`/v1/tickets/${id}/blocks`), request(`/v1/events?ticket=${id}`)]);
   const content = document.createElement('div'); content.className = 'ticket-detail';
   content.append(markdownElement('div', ticket.body || 'No additional context.', 'detail-body markdown'));
   const facts = document.createElement('dl'); facts.className = 'ticket-facts';
@@ -181,6 +181,7 @@ async function showDetail(id, trigger) {
     const question = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Ask question' }); question.className = 'secondary'; question.addEventListener('click', () => openQuestion(ticket, question));
     const archive = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Archive' }); archive.className = 'secondary'; archive.addEventListener('click', safely(async () => ticketAction(ticket.id, 'archive')));
     const remove = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Delete ticket' }); remove.className = 'danger'; remove.addEventListener('click', () => openDelete(ticket, remove)); controls.append(edit, progress, question, archive, remove);
+    for (const block of blocks.filter((item) => item.status === 'open')) { const resolve = Object.assign(document.createElement('button'), { type: 'button', textContent: `Resolve block: ${block.reason}` }); resolve.className = 'secondary resolve-block'; resolve.addEventListener('click', safely(async () => { await request(`/v1/tickets/${ticket.id}/blocks/${encodeURIComponent(block.id)}/resolve`, { method: 'POST', body: '{}' }); modal.dismiss(); await refresh(); $('#status').textContent = 'Block resolved'; })); controls.append(resolve); }
     const stateLabel = document.createElement('label'); stateLabel.textContent = 'State'; const stateSelect = document.createElement('select'); for (const [value, label] of [['open', 'Open'], ['review', 'Review'], ['done', 'Done']]) stateSelect.append(new Option(label, value)); stateSelect.value = ticket.state; stateSelect.addEventListener('change', safely(async () => { await changeState(ticket.id, stateSelect.value); modal.dismiss(); })); stateLabel.append(stateSelect); controls.append(stateLabel);
   } else { const restore = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Restore' }); restore.addEventListener('click', safely(async () => ticketAction(ticket.id, 'restore'))); controls.append(restore); }
   content.append(controls);
@@ -195,6 +196,18 @@ async function showDetail(id, trigger) {
     list.append(item);
   }
   timeline.append(list); content.append(timeline); openModal({ title: ticket.title, eyebrow: ticket.id, content, trigger });
+}
+
+function openDeviceManagement(trigger) {
+  const panel = document.createElement('div'); panel.className = 'device-management';
+  const pairing = document.createElement('form'); pairing.className = 'modal-form pairing-code-form'; pairing.innerHTML = '<h3>Issue one-time pairing code</h3><label>Device kind<select name="kind"><option value="coordinator">Coordinator</option><option value="worker">Worker</option></select></label><button>Issue code</button><div class="pairing-code-result" aria-live="polite"></div>';
+  pairing.addEventListener('submit', safely(async (event) => { event.preventDefault(); const result = pairing.querySelector('.pairing-code-result'); result.replaceChildren(); const issued = await request('/v1/pairing-codes', { method: 'POST', body: JSON.stringify({ intended_kind: pairing.elements.kind.value }) }); const code = document.createElement('output'); code.className = 'one-time-code'; code.textContent = issued.code; const clear = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Clear code' }); clear.className = 'secondary'; clear.addEventListener('click', () => result.replaceChildren()); result.append(code, clear); }));
+  const role = document.createElement('form'); role.className = 'modal-form role-create-form'; role.innerHTML = '<h3>Create assignment role</h3><label>Role ID<input name="id" required></label><label>Role name<input name="name" required></label><button>Create role</button>';
+  role.addEventListener('submit', safely(async (event) => { event.preventDefault(); await request('/v1/roles', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(role))) }); role.reset(); modal.dismiss(); await refresh(); openDeviceManagement(trigger); $('#status').textContent = 'Role created'; }));
+  const membership = document.createElement('form'); membership.className = 'modal-form role-membership-form'; membership.innerHTML = '<h3>Grant or revoke assignment role</h3><label>Paired device<select name="device" required></select></label><label>Role<select name="role" required></select></label><div class="form-actions"><button name="action" value="grant">Grant role</button><button name="action" value="revoke" class="secondary">Revoke role</button></div>';
+  membership.elements.device.replaceChildren(new Option('Choose a device', ''), ...state.actors.filter((item) => item.status === 'active').map((item) => new Option(`${item.name} — ${item.kind}`, item.id))); membership.elements.role.replaceChildren(new Option('Choose a role', ''), ...state.roles.map((item) => new Option(item.name, item.id)));
+  membership.addEventListener('submit', safely(async (event) => { event.preventDefault(); const action = event.submitter?.value; if (!['grant', 'revoke'].includes(action)) return; await request(`/v1/devices/${encodeURIComponent(membership.elements.device.value)}/roles/${encodeURIComponent(membership.elements.role.value)}`, { method: action === 'grant' ? 'PUT' : 'DELETE', body: '{}' }); modal.dismiss(); await refresh(); openDeviceManagement(trigger); $('#status').textContent = action === 'grant' ? 'Role granted' : 'Role revoked'; }));
+  panel.append(pairing, role, membership); openModal({ title: 'Pairing and roles', content: panel, trigger, initialFocus: pairing.elements.kind });
 }
 
 function openProjectCreate(trigger) {
@@ -230,6 +243,7 @@ $('#refresh').addEventListener('click', safely(async () => refresh()));
 $('#actor-select').addEventListener('change', safely(async (event) => { localStorage.setItem('viq.actor', event.target.value); await refreshInbox(); }));
 $('#reset-filters').addEventListener('click', resetFilters);
 $('#state-tabs').addEventListener('click', (event) => { const tab = event.target.closest('[data-tab]'); if (!tab) return; state.active = tab.dataset.tab; document.querySelectorAll('[role=tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); renderBoard(); });
+$('#open-device-management').addEventListener('click', (event) => openDeviceManagement(event.currentTarget));
 $('#open-project-create').addEventListener('click', (event) => openProjectCreate(event.currentTarget));
 $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
 (async () => {
