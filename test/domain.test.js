@@ -120,6 +120,19 @@ test('untrusted assignment revokes authority while trusted same-assignment save 
   assert.ok(await store.claimNext({ project: 'ABC', actor: 'worker-b' }));
 });
 
+test('structured blockers prevent relaunch until a human resolves them', async () => {
+  const { store } = await fixture(); await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Blocked', assignee: { type: 'actor', id: 'worker-a' }, actor: 'maks' }, { trustedAssignment: true });
+  const claim = await store.claimNext({ project: 'ABC', actor: 'worker-a' });
+  const blocked = await store.blockTicket('ABC-1', { ...identity(claim), reason: 'Need review' });
+  assert.equal(blocked.ticket.unresolved_blockers, 1);
+  await store.release('ABC-1', identity(claim));
+  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-a' } }, { trustedAssignment: true });
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
+  await store.resolveBlock('ABC-1', blocked.block.id, { actor: 'maks' });
+  assert.ok(await store.claimNext({ project: 'ABC', actor: 'worker-a' }));
+});
+
 test('competing claims are atomic across independent SQLite connections', async () => {
   const { store, file, ticket } = await seeded();
   const other = new Store(file);

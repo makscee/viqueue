@@ -42,11 +42,13 @@ export async function createApp({ storage, operatorToken, ingressToken, now } = 
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/state$/)) && request.method === 'POST') return send(response, 200, { ticket: await store.setTicketState(decodeURIComponent(match[1]), await json(request)) });
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/notes$/)) && request.method === 'POST') return send(response, 201, await store.appendTicketEvent(decodeURIComponent(match[1]), await json(request)));
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/(archive|restore|delete)$/)) && request.method === 'POST') { const body = await json(request); const id = decodeURIComponent(match[1]); const ticket = match[2] === 'archive' ? await store.archiveTicket(id, body) : match[2] === 'restore' ? await store.restoreTicket(id, body) : await store.deleteTicket(id, body); return send(response, 200, { ticket }); }
+      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/blocks$/)) && request.method === 'GET') return send(response, 200, await store.listBlocks(decodeURIComponent(match[1]), { status: url.searchParams.get('status') ?? undefined }));
+      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/blocks\/([^/]+)\/resolve$/)) && request.method === 'POST') return send(response, 200, await store.resolveBlock(decodeURIComponent(match[1]), decodeURIComponent(match[2]), await json(request)));
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/questions$/)) && request.method === 'GET') return send(response, 200, await store.listQuestions(decodeURIComponent(match[1]), { status: url.searchParams.get('status') ?? undefined }));
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/human-questions$/)) && request.method === 'POST') return send(response, 201, await store.askHumanQuestion(decodeURIComponent(match[1]), await json(request)));
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/questions$/)) && request.method === 'POST') return send(response, 201, await store.askQuestion(decodeURIComponent(match[1]), await json(request)));
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/questions\/([^/]+)\/answer$/)) && request.method === 'POST') return send(response, 200, await store.answerQuestion(decodeURIComponent(match[1]), decodeURIComponent(match[2]), await json(request)));
-      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/(claim|verify|release|takeover|events|submit|accept|reopen)$/)) && request.method === 'POST') {
+      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/(claim|verify|release|takeover|events|block|submit|accept|reopen)$/)) && request.method === 'POST') {
         const id = decodeURIComponent(match[1]); const action = match[2]; const body = await json(request);
         if (['takeover', 'reopen'].includes(action)) authorize(request, localToken);
         if (action === 'claim') return send(response, 200, await store.claim(id, body));
@@ -54,6 +56,7 @@ export async function createApp({ storage, operatorToken, ingressToken, now } = 
         if (action === 'release') return send(response, 200, { ticket: await store.release(id, body) });
         if (action === 'takeover') return send(response, 200, await store.takeover(id, body));
         if (action === 'events') return send(response, 201, await store.postEvent(id, body));
+        if (action === 'block') return send(response, 201, await store.blockTicket(id, body));
         if (action === 'submit') return send(response, 200, await store.submit(id, body));
         if (action === 'accept') return send(response, 200, { ticket: await store.accept(id, body) });
         if (action === 'reopen') return send(response, 200, { ticket: await store.reopen(id, body) });
