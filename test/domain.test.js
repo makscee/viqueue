@@ -88,19 +88,42 @@ test('submit review, accept done, and reopen open are explicit state transitions
   assert.equal(reopened.claim, null);
 });
 
-test('claimNext selects and claims assigned work in one transaction', async () => {
+test('claimNext requires exact actor assignment and a consumed single-use human Start', async () => {
   const { store, file } = await fixture();
   await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Unassigned' });
   await store.createTicket({ project: 'ABC', title: 'Other worker', assignee: { type: 'actor', id: 'worker-b' } });
   await store.createTicket({ project: 'ABC', title: 'Mine', assignee: { type: 'actor', id: 'worker-a' } });
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
+  await assert.rejects(store.startExecution('ABC-3', { actor: 'worker-a' }), (error) => error.code === 'human_required');
+  const started = await store.startExecution('ABC-3', { actor: 'maks' });
+  assert.equal(started.execution_start.target_actor, 'worker-a');
   const other = new Store(file);
   await other.init();
   const outcomes = await Promise.all([store.claimNext({ project: 'ABC', actor: 'worker-a' }), other.claimNext({ project: 'ABC', actor: 'worker-a' })]);
   assert.equal(outcomes.filter(Boolean).length, 1);
-  assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-2');
+  assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3');
+  assert.equal(outcomes.find(Boolean).ticket.execution_start, null);
   assert.equal((await store.getTicket('ABC-1')).claim, null);
+  assert.equal((await store.getTicket('ABC-2')).claim, null);
   assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
   await other.close();
+});
+
+test('execution Start is revocable and fenced by assignment changes', async () => {
+  const { store } = await fixture();
+  await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Started', assignee: { type: 'actor', id: 'worker-a' } });
+  await store.startExecution('ABC-1', { actor: 'maks' });
+  assert.ok((await store.getTicket('ABC-1')).execution_start);
+  await store.revokeExecutionStart('ABC-1', { actor: 'maks' });
+  assert.equal((await store.getTicket('ABC-1')).execution_start, null);
+  await store.startExecution('ABC-1', { actor: 'maks' });
+  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'actor', id: 'worker-b' } });
+  assert.equal((await store.getTicket('ABC-1')).execution_start, null);
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-a' }), null);
+  assert.equal(await store.claimNext({ project: 'ABC', actor: 'worker-b' }), null);
+  assert.deepEqual((await store.listEvents({ ticket: 'ABC-1' })).events.map((event) => event.type), ['ticket_created','execution_started','execution_start_revoked','execution_started','execution_start_revoked','assigned']);
 });
 
 test('competing claims are atomic across independent SQLite connections', async () => {
