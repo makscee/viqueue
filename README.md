@@ -12,7 +12,7 @@ The HTTP JSON core is the only state machine. Authorization is intentionally sma
 
 A coordinator may create/edit/archive tickets, assign to a worker device or role, answer/review submissions, issue/revoke pairing, and manage roles. A worker may read assigned work, claim it atomically, post claim-fenced progress/questions/blockers/submissions, or release its claim. Roles grant no API permissions.
 
-Assignment is launch authorization. Every HTTP, CLI, and `/viq` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Unassigned pickup and takeover are absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
+Assignment is launch authorization. Every HTTP, CLI, and `/viq` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Exact device/role assignments are preferred; eligible unassigned free-pool tickets may also be claimed atomically within project, role, and membership boundaries. Takeover is absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
 
 Claims remain durable generation-fenced locks until explicit release or submission. Claim and device credentials are returned only at creation/pairing, stored by hash in SQLite, and never included in ticket/model context.
 

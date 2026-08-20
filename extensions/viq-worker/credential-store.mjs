@@ -1,7 +1,7 @@
 import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-export function defaultCredentialPath(){const config=process.env.XDG_CONFIG_HOME??path.join(os.homedir(),'.config');return path.join(config,'viq','credential.json')}
+export function defaultCredentialPath(){const configured=process.env.XDG_CONFIG_HOME;const config=configured===undefined?path.join(os.homedir(),'.config'):configured;if(typeof config!=='string'||!config.trim()||config.includes('\0')||!path.isAbsolute(config))throw new Error('invalid_config_root');return path.join(config,'viq','credential.json')}
 function assertNoSymlinkAncestor(target){const absolute=path.resolve(target),root=path.parse(absolute).root;let current=root;for(const part of absolute.slice(root.length).split(path.sep).filter(Boolean)){current=path.join(current,part);if(!existsSync(current))break;const s=lstatSync(current);if(s.isSymbolicLink())throw new Error('unsafe_device_credential_directory')}let existing=absolute;while(!existsSync(existing)){const parent=path.dirname(existing);if(parent===existing)break;existing=parent}if(realpathSync(existing)!==path.resolve(existing))throw new Error('unsafe_device_credential_directory')}
 function assertOwnedRegular(file){assertNoSymlinkAncestor(file);const s=lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==process.getuid()||(s.mode&0o077)!==0||s.nlink!==1)throw new Error('unsafe_device_credential_file')}
 const valid=value=>typeof value==='string'&&value.length>=32&&!/\s/.test(value);
