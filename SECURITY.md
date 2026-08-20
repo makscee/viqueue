@@ -15,6 +15,7 @@ This candidate is a private, single-operator PoC, not a generic IAM or public mu
 - Device credentials are random, returned once, hashed at rest, and invalid after device revocation.
 - Worker claims require the same active-device, assignment, state, blocker, and active-claim predicate through HTTP, CLI, and `/viq-worker`; MCP is read-only.
 - Claim mutations additionally require the current claim ID, generation, and token and are intentionally absent from MCP.
+- The browser board pairs directly with a one-time code, stores only its returned credential in browser local storage, verifies it through `/v1/devices/me`, clears it on `401` or local disconnect, and never revokes a device as part of disconnect.
 - The Pi worker stores its device credential outside the ticket workspace in an owner-only regular file. It excludes device and claim credentials from prompts, status, and normal tool results, rejects workspace symlink escape, denies shell while active, and refuses root.
 - Keep the core on loopback or an explicitly private network. Never use Funnel/public ingress for this PoC.
 

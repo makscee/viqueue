@@ -38,6 +38,8 @@ viq ticket create ABC "Fix parser" --assignee-role tower-pi --device-token COORD
 viq ticket claim-next --project ABC --device-token WORKER_CREDENTIAL
 ```
 
+The browser board shows a pairing form when no valid local pairing exists. Enter a coordinator-issued one-time code plus a device ID/name; the board verifies `/v1/devices/me` and stores only the returned credential in `localStorage['viq.deviceCredential']`. Invalid/revoked credentials are cleared automatically, and **Disconnect this device** clears only browser-local state without revoking the server-side device.
+
 MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. The bundled Pi extension provides:
 
 ```text

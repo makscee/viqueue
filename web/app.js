@@ -11,12 +11,23 @@ function restoreModal() {
 const modal = createModalController($('#modal'), { requestClose: restoreModal });
 $('#modal').addEventListener('close', () => { modalStack.length = 0; });
 
+const credentialKey = 'viq.deviceCredential';
+function showPairing(message = '') {
+  if ($('#modal').open) modal.dismiss();
+  $('#app-shell').hidden = true; $('#refresh').hidden = true; $('#disconnect-device').hidden = true; $('#pairing').hidden = false;
+  $('#pairing-form').reset(); $('#pairing-status').textContent = message; $('#pairing-form').elements.code.focus();
+}
+function showBoard() { $('#pairing').hidden = true; $('#app-shell').hidden = false; $('#refresh').hidden = false; $('#disconnect-device').hidden = false; }
+function authenticationError(message) { localStorage.removeItem(credentialKey); showPairing(message); const error = new Error(message); error.authentication = true; return error; }
 async function request(path, options = {}) {
-  const credential = localStorage.getItem('viq.deviceCredential');
+  const credential = localStorage.getItem(credentialKey);
   const response = await fetch(path, { headers: { 'content-type': 'application/json', ...(credential ? { authorization: `Bearer ${credential}` } : {}), ...(options.headers || {}) }, ...options });
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
-  if (!response.ok) throw new Error(body?.error?.message || `Request failed (${response.status})`);
+  if (!response.ok) {
+    if (response.status === 401) throw authenticationError('This device pairing is no longer valid. Pair this browser again.');
+    const error = new Error(body?.error?.message || `Request failed (${response.status})`); error.status = response.status; throw error;
+  }
   return body;
 }
 const actorId = () => $('#actor-select').value;
@@ -25,7 +36,7 @@ const roleName = (id) => state.roles.find((role) => role.id === id)?.name || 'As
 const assigneeName = (assignee) => assignee?.type === 'device' ? actorName(assignee.id) : assignee?.type === 'role' ? roleName(assignee.id) : 'Unassigned';
 const projection = (ticket) => ticket.archived_at !== null ? 'archived' : ticket.state === 'open' ? (ticket.claim ? 'working' : ticket.assignee && ticket.unresolved_blockers === 0 ? 'ready' : 'waiting') : ticket.state;
 const stateName = (ticket) => ({ waiting: 'Waiting — assign a paired worker or resolve blockers', ready: 'Ready for agent', working: 'Working', review: 'Awaiting review', done: 'Done', archived: 'Archived' })[projection(ticket)];
-function report(error) { $('#status').textContent = `Something went wrong: ${error.message}`; }
+function report(error) { if (!error.authentication) $('#status').textContent = `Something went wrong: ${error.message}`; }
 function safely(handler) { return async (event) => { try { await handler(event); } catch (error) { report(error); } }; }
 function markdownElement(tag, text, className = '') { const element = document.createElement(tag); element.className = className; element.innerHTML = renderMarkdown(text); return element; }
 function openModal({ title, eyebrow = '', content, trigger, initialFocus }) {
@@ -198,6 +209,22 @@ function openTicketCreate(trigger) {
   openModal({ title: 'Create ticket', content: form, trigger, initialFocus: exclusive.length === 1 ? form.elements.title : form.elements.project });
 }
 
+$('#pairing-form').addEventListener('submit', async (event) => {
+  event.preventDefault(); const form = event.currentTarget; $('#pairing-status').textContent = 'Pairing…';
+  try {
+    const response = await fetch('/v1/devices/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    const text = await response.text(); const body = text ? JSON.parse(text) : null;
+    if (!response.ok) throw new Error(body?.error?.message || `Pairing failed (${response.status})`);
+    if (typeof body?.credential !== 'string') throw new Error('Pairing response was incomplete.');
+    localStorage.setItem(credentialKey, body.credential); form.reset();
+    const { device } = await request('/v1/devices/me');
+    if (device.kind !== 'coordinator') throw new Error('The board requires a coordinator pairing code.');
+    showBoard(); await refresh();
+  } catch (error) {
+    if (!error.authentication) { localStorage.removeItem(credentialKey); showPairing(error.message); }
+  }
+});
+$('#disconnect-device').addEventListener('click', () => { localStorage.removeItem(credentialKey); showPairing('This browser is disconnected. The server-side device was not revoked.'); });
 $('#close-modal').addEventListener('click', () => modal.close());
 $('#refresh').addEventListener('click', safely(async () => refresh()));
 $('#actor-select').addEventListener('change', safely(async (event) => { localStorage.setItem('viq.actor', event.target.value); await refreshInbox(); }));
@@ -205,4 +232,11 @@ $('#reset-filters').addEventListener('click', resetFilters);
 $('#state-tabs').addEventListener('click', (event) => { const tab = event.target.closest('[data-tab]'); if (!tab) return; state.active = tab.dataset.tab; document.querySelectorAll('[role=tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); renderBoard(); });
 $('#open-project-create').addEventListener('click', (event) => openProjectCreate(event.currentTarget));
 $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
-refresh().catch(report);
+(async () => {
+  if (!localStorage.getItem(credentialKey)) return showPairing();
+  try {
+    const { device } = await request('/v1/devices/me');
+    if (device.kind !== 'coordinator') throw authenticationError('The board requires a coordinator pairing code.');
+    showBoard(); await refresh();
+  } catch (error) { if (!error.authentication) report(error); }
+})();

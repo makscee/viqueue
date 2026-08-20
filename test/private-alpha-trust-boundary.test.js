@@ -29,7 +29,7 @@ test('accepted private-alpha trust boundary is explicit and mapped to enforced i
   assert.doesNotMatch(mcp, /claim_token|ticket_claim|claim_verify|claim_release/);
   await assert.rejects(access('src/phone-gateway.js'));
   await assert.rejects(access('src/phone-auth-store.js'));
-  assert.match(app, /localStorage\.getItem\('viq\.deviceCredential'/);
+  assert.match(app, /const credentialKey = 'viq\.deviceCredential'/); assert.match(app, /localStorage\.getItem\(credentialKey\)/);
 });
 
 test('agent progress fails closed without the complete current claim identity', async () => {
