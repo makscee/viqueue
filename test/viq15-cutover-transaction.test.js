@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -13,8 +14,7 @@ const lib = join(root, 'scripts/viq15-cutover/transaction-lib.sh');
 const restore = join(root, 'scripts/viq15-cutover/sqlite-family-restore.sh');
 const applyScript = join(root, 'scripts/viq15-cutover/apply.sh');
 const rollbackScript = join(root, 'scripts/viq15-cutover/rollback.sh');
-const tmpRoot = process.env.TMPDIR;
-if (!tmpRoot) throw new Error('TMPDIR is required for isolated cutover fixtures');
+const tmpRoot = tmpdir();
 
 function run(command, args = [], options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options });

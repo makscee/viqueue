@@ -24,8 +24,8 @@ if [[ -e $releases/$candidate ]]; then
   [[ $(cat "$releases/$candidate/SOURCE_COMMIT") == "$candidate" ]] || { echo 'existing candidate identity mismatch' >&2; exit 1; }
 else
   mkdir -p "$releases"
-  chmod -R a-w "$stage"
   mv "$stage" "$releases/$candidate"
+  chmod -R a-w "$releases/$candidate"
 fi
 ln -s "$releases/$candidate" "$root/.current.$$"
 mv -Tf "$root/.current.$$" "$current"
