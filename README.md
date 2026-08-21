@@ -43,14 +43,14 @@ The browser board shows a pairing form when no valid local pairing exists. New c
 MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. Install the existing package in a user's Pi profile with `pi install <Viq package>`. Subsequent Pi sessions for that Unix user discover:
 
 ```text
-/viq
-/viq pair CODE
+/viq PAIRING_CODE [--project KEY]
 /viq status
-/viq poll [--project KEY]
 /viq pause|resume|stop
 ```
 
-`/viq start` remains an alias for `poll`; `/viq-worker` is a deprecated alias to the same handler. Pairing writes JSON outside repositories at `${XDG_CONFIG_HOME:-~/.config}/viq/credential.json`, with directory mode 0700 and file mode 0600. Sessions for the same Unix user reuse it; other users do not. Ordinary root Pi is supported and receives a root-only file. Polling is session-scoped with no daemon. Explicit `VIQ_WORKER_LOCKDOWN=1` preserves the historical isolated-workspace/root refusal contour. Credentials stay out of prompts, status, tool results, argv, environment, and request bodies; the trusted Pi process necessarily can read its own Unix user's file.
+`/viq PAIRING_CODE` pairs and starts the worker in the current visible Pi session; there is no separate worker command or launch ritual. Before every claim attempt it visibly runs `tools/vault-sync/vault-sync sync` in the current Vault and claims only after status proves a clean `CURRENT/EQUAL` canonical commit. The VIQ server remains the sole eligibility and atomic claim authority, and the complete returned ticket contract is injected unchanged with sanitized history. `viq_submit` visibly syncs again and submits the operator evidence plus the exact published commit only after publication succeeds; conflict, guard, or offline failure retains the fenced claim for retry.
+
+Pairing writes JSON outside repositories at `${XDG_CONFIG_HOME:-~/.config}/viq/credential.json`, with directory mode 0700 and file mode 0600. Sessions for the same Unix user reuse it; other users do not. Ordinary root Pi is supported and receives a root-only file. Polling is a timer owned by that Pi session, stopped on session shutdown, with no daemon or duplicate lifecycle store. Explicit `VIQ_WORKER_LOCKDOWN=1` preserves the historical isolated-workspace/root refusal contour. Credentials stay out of prompts, status, tool results, argv, environment, and request bodies; the trusted Pi process necessarily can read its own Unix user's file.
 
 An exact worker-only archive is built from clean committed `HEAD` with `npm run bundle:worker -- OUTPUT_DIR`. It includes `SOURCE_COMMIT`, `SOURCE_TREE`, the configured `package.json` discovery path, and only the worker extension/runtime. `scripts/install-viq-worker.sh` requires an explicit `VIQ_WORKER_ROOT`, exact candidate commit, and exact current predecessor before it creates a read-only release and atomically renames the `current` symlink. `scripts/rollback-viq-worker.sh` accepts only that installed candidate and the sealed predecessor; the VIQ-15 predecessor is `1398284ed89a6cf9395f129483f709e63c009286`. Tests and rehearsals must use an isolated root, never `/opt/viq-worker`.
 
