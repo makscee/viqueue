@@ -12,20 +12,18 @@ const work = await mkdtemp(path.join(tmpdir(), 'viq-browser-pairing-'));
 const storage = path.join(work, 'viqueue.sqlite');
 let store = new Store(storage, { now: () => 1 });
 await store.init();
-await store.bootstrapCoordinator({ id: 'bootstrap', name: 'Bootstrap' });
+const bootstrap = await store.bootstrapCoordinator({ id: 'bootstrap', name: 'Bootstrap' });
 const expired = await store.createPairingCode('bootstrap', { intended_kind: 'coordinator', ttl_ms: 1000 });
 await store.close();
 store = new Store(storage); await store.init();
-const adminCode = await store.createPairingCode('bootstrap', { intended_kind: 'coordinator' });
-const admin = await store.pairDevice({ code: adminCode.code, id: 'review-admin', name: 'Review Admin' });
-const firstCode = await store.createPairingCode('bootstrap', { intended_kind: 'coordinator' });
-const secondCode = await store.createPairingCode('bootstrap', { intended_kind: 'coordinator' });
+const firstCode = await store.createPairingCode('bootstrap', { actor_id: 'bootstrap', intended_kind: 'coordinator', device_id: 'browser-one', device_name: 'Browser One' });
+const secondCode = await store.createPairingCode('bootstrap', { actor_id: 'bootstrap', intended_kind: 'coordinator', device_id: 'browser-two', device_name: 'Browser Two' });
 await store.createProject('DOG'); await store.close();
 const socket = net.createServer(); await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise((resolve) => socket.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, ['src/server.js', `--port=${port}`, `--storage=${storage}`], { stdio: 'ignore' });
 for (let i = 0; i < 100; i += 1) { try { if ((await fetch(`${base}/health`)).ok) break; } catch {} await new Promise((resolve) => setTimeout(resolve, 20)); }
-const api = async (method, route, body) => { const response = await fetch(`${base}${route}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${admin.credential}` }, body: body === undefined ? undefined : JSON.stringify(body) }); const result = await response.json(); assert.ok(response.ok, `${method} ${route}: ${JSON.stringify(result)}`); return result; };
+const api = async (method, route, body) => { const response = await fetch(`${base}${route}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${bootstrap.credential}` }, body: body === undefined ? undefined : JSON.stringify(body) }); const result = await response.json(); assert.ok(response.ok, `${method} ${route}: ${JSON.stringify(result)}`); return result; };
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -44,13 +42,15 @@ try {
   assert.equal(await page.evaluate(() => localStorage.getItem('viq.deviceCredential')), null);
 
   await pair(firstCode.code, 'browser-one', 'Browser One');
-  await page.getByText('0 tickets shown').waitFor();
+  await page.locator('#app-shell').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'DOG', exact: true }).waitFor();
+  assert.equal(await page.locator('#status').textContent(), '0 tickets shown');
   assert.equal(await page.locator('#pairing').isHidden(), true);
   assert.equal(await page.getByRole('button', { name: 'Disconnect this device' }).isVisible(), true);
   assert.equal(await page.evaluate(() => { const secret = localStorage.getItem('viq.deviceCredential'); return Boolean(secret) && !document.body.innerText.includes(secret) && !location.href.includes(secret); }), true);
   assert.equal(page.url(), `${base}/`);
-  await page.getByLabel('Your name').selectOption('browser-one');
-  await page.getByRole('button', { name: 'Create ticket' }).click();
+  assert.equal(await page.locator('#actor-select').inputValue(), 'bootstrap');
+  await page.getByRole('button', { name: '+ Ticket', exact: true }).click();
   await page.locator('#modal-content select[name="project"]').selectOption('DOG');
   await page.getByLabel('Ticket title').fill('Browser-paired coordinator ticket');
   await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();

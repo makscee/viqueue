@@ -39,7 +39,7 @@ await giveToWorker(install); await chmod(stateHome, 0o700); await chmod(workspac
 const storage = path.join(work, 'viqueue.sqlite');
 let store = new Store(storage); await store.init();
 const bootstrap = await store.bootstrapCoordinator({ id: 'bootstrap', name: 'Bootstrap' });
-const browserCode = await store.createPairingCode('bootstrap', { intended_kind: 'coordinator' });
+const browserCode = await store.createPairingCode('bootstrap', { actor_id: 'bootstrap', intended_kind: 'coordinator', device_id: 'browser-coordinator', device_name: 'Browser Coordinator' });
 await store.close();
 const socket = net.createServer(); await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise((resolve) => socket.close(resolve));
 const base = `http://127.0.0.1:${port}`;
@@ -52,13 +52,16 @@ try {
   const consoleMessages = []; page.on('console', (message) => consoleMessages.push(message.text()));
   await page.goto(base);
   await page.getByLabel('One-time code').fill(browserCode.code); await page.getByLabel('Device ID').fill('browser-coordinator'); await page.getByLabel('Device name').fill('Browser Coordinator'); await page.getByRole('button', { name: 'Pair device' }).click();
-  await page.getByText('0 tickets shown').waitFor(); await page.getByLabel('Your name').selectOption('browser-coordinator');
-  await page.getByRole('button', { name: 'Pairing and roles' }).click();
-  const pairing = page.locator('.pairing-code-form'); await pairing.getByLabel('Device kind').selectOption('worker'); await pairing.getByRole('button', { name: 'Issue code' }).click();
+  await page.locator('#app-shell').waitFor({ state: 'visible' }); assert.equal(await page.locator('#actor-select').inputValue(), 'bootstrap');
+  await page.getByRole('button', { name: 'Admin' }).click();
+  let actorCreate = page.locator('.actor-create-form'); await actorCreate.getByLabel('ID').fill('real-worker'); await actorCreate.getByLabel('Name').fill('Real Worker'); await actorCreate.getByRole('button', { name: 'Create actor' }).click();
+  const pairing = page.locator('.pairing-code-form'); await pairing.getByLabel('Actor').selectOption('real-worker'); await pairing.getByLabel('Device ID').fill('real-worker'); await pairing.getByLabel('Device name').fill('Real Worker'); await pairing.getByLabel('Device kind').selectOption('worker'); await pairing.getByRole('button', { name: 'Issue code' }).click();
   const workerCode = await pairing.locator('.one-time-code').textContent(); assert.ok(workerCode);
   const workerEnv = { ...process.env, VIQ_URL: base, XDG_STATE_HOME: stateHome, PI_CODING_AGENT_DIR: piAgentDir, VIQ_WORKER_ROOT: jobsRoot, VIQ_WORKER_UID: String(workerUid), VIQ_WORKER_GID: String(workerGid) };
+  const workerCommand = (script) => workerUid === process.getuid() ? [process.execPath, [script, release]] : ['runuser', ['-u', workerUser, '--', process.execPath, script, release]];
   if (process.env.VIQ_PI_WORKER_PROOF === '1') {
-    const discovery = spawn('runuser', ['-u', workerUser, '--', process.execPath, discoveryHelper, release], { cwd: workspace, env: workerEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+    const [discoveryCommand, discoveryArgs] = workerCommand(discoveryHelper);
+    const discovery = spawn(discoveryCommand, discoveryArgs, { cwd: workspace, env: workerEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let discoveryOut = ''; let discoveryErr = '';
     discovery.stdout.on('data', (chunk) => { discoveryOut += String(chunk); });
     discovery.stderr.on('data', (chunk) => { if (discoveryErr.length < 4096) discoveryErr += String(chunk); });
@@ -66,7 +69,8 @@ try {
     assert.equal(discoveryStatus, 0, discoveryErr || 'Pi discovery failed');
     assert.match(discoveryOut, /PI_WORKER_COMMAND_DISCOVERED/);
   }
-  worker = spawn('runuser', ['-u', workerUser, '--', process.execPath, helper, release], { cwd: workspace, env: workerEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+  const [workerExecutable, workerArgs] = workerCommand(helper);
+  worker = spawn(workerExecutable, workerArgs, { cwd: workspace, env: workerEnv, stdio: ['pipe', 'pipe', 'pipe'] });
   let workerError = ''; worker.stderr.on('data', (chunk) => { if (workerError.length < 4096) workerError += String(chunk); });
   const lines = createInterface({ input: worker.stdout }); const queue = []; const waiters = []; lines.on('line', (line) => { const waiter = waiters.shift(); if (waiter) waiter(line); else queue.push(line); });
   const nextLine = () => queue.length ? Promise.resolve(queue.shift()) : Promise.race([new Promise((resolve) => waiters.push(resolve)), new Promise((_, reject) => setTimeout(() => reject(new Error(`worker response timeout: ${workerError.slice(-2000)}`)), 15000))]);
@@ -79,18 +83,18 @@ try {
   await page.getByText('Role granted').waitFor();
   await page.locator('.role-membership-form').getByLabel('Paired device').selectOption('real-worker'); await page.locator('.role-membership-form').getByLabel('Role').selectOption('reviewer'); await page.locator('.role-membership-form').getByRole('button', { name: 'Grant role' }).click();
   await page.getByText('Role granted').waitFor(); await page.getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('button', { name: 'Create project' }).click(); await page.getByLabel('Project key').fill('DOG'); await page.locator('#modal-content').getByRole('button', { name: 'Create project' }).click();
-  await page.getByRole('button', { name: 'Create ticket' }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Real lifecycle'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
+  await page.getByRole('button', { name: '+ Project', exact: true }).click(); await page.getByLabel('Project key').fill('DOG'); await page.locator('#modal-content').getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Real lifecycle'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
   await page.locator('.ticket-card[data-id="DOG-1"] .ticket-open').click(); await page.getByRole('button', { name: 'Edit ticket' }).click(); await page.locator('.edit-ticket-form select[name="assignee"]').selectOption('role:reviewer'); await page.locator('.edit-ticket-form').getByRole('button', { name: 'Save ticket' }).click();
-  await page.getByRole('button', { name: 'Create ticket' }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Must remain unassigned'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
+  await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Must remain unassigned'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
   worker.stdin.write('start\n'); assert.equal(await nextLine(), 'CLAIMED'); assert.equal(await nextLine(), 'BLOCKED');
-  await page.getByRole('button', { name: 'Refresh' }).click(); await page.locator('.question-card').getByText('May I continue?').click(); await page.getByLabel('Your answer (Markdown)').fill('Continue.'); await page.getByRole('button', { name: 'Send answer' }).click();
+  await page.getByRole('button', { name: /Questions/ }).click(); await page.locator('.questions-popup').getByText('May I continue?').click(); await page.getByLabel('Your answer (Markdown)').fill('Continue.'); await page.getByRole('button', { name: 'Send answer' }).click();
   await page.locator('.ticket-card[data-id="DOG-1"] .ticket-open').click(); await page.getByRole('button', { name: 'Resolve block: Needs coordinator resolution' }).click();
   worker.stdin.write('resume\n'); assert.equal(await nextLine(), 'SUBMITTED');
-  await page.getByRole('button', { name: 'Refresh' }).click(); await page.locator('.question-card').getByText('Review requested').click(); await page.getByRole('button', { name: 'Accept work' }).click(); await page.getByText('Work accepted').waitFor();
+  await page.getByRole('button', { name: /Questions/ }).click(); await page.locator('.questions-popup').getByText('Review requested').click(); await page.getByRole('button', { name: 'Accept work' }).click(); await page.getByText('Work accepted').waitFor();
   await page.locator('[data-tab="done"]').evaluate((element) => element.click()); await page.locator('[data-column="done"] .ticket-card[data-id="DOG-1"]').waitFor();
   store = new Store(storage); await store.init(); const unassigned = await store.getTicket('DOG-2'); await store.close(); assert.equal(unassigned.assignee, null); assert.equal(unassigned.claim, null);
-  await page.getByRole('button', { name: 'Pairing and roles' }).click(); await page.locator('.role-membership-form').getByLabel('Paired device').selectOption('real-worker'); await page.locator('.role-membership-form').getByLabel('Role').selectOption('reviewer'); await page.locator('.role-membership-form').getByRole('button', { name: 'Revoke role' }).click(); await page.getByText('Role revoked').waitFor();
+  await page.getByRole('button', { name: 'Admin' }).click(); await page.locator('.role-membership-form').getByLabel('Paired device').selectOption('real-worker'); await page.locator('.role-membership-form').getByLabel('Role').selectOption('reviewer'); await page.locator('.role-membership-form').getByRole('button', { name: 'Revoke role' }).click(); await page.getByText('Role revoked').waitFor();
   assert.equal(consoleMessages.some((message) => message.includes(workerCode) || message.includes(browserCode.code) || message.includes(bootstrap.credential)), false);
   assert.equal(await page.evaluate(() => { const secret = localStorage.getItem('viq.deviceCredential'); return Boolean(secret) && !document.body.innerText.includes(secret) && !location.href.includes(secret); }), true);
   console.log('COORDINATOR_WORKER_BROWSER_E2E_OK');

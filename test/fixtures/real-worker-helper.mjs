@@ -16,7 +16,7 @@ const iterator = lines[Symbol.asyncIterator]();
 const code = (await iterator.next()).value;
 let credential;
 let prompt = '';
-const runtime = new ViqWorkerRuntime({ baseUrl: process.env.VIQ_URL, pollMs: 60000, deliver: async (value) => { prompt = value; } });
+const runtime = new ViqWorkerRuntime({ baseUrl: process.env.VIQ_URL, pollMs: 60000, deliver: async (value) => { prompt = value; }, syncVault: async () => ({ commit: 'd'.repeat(40) }) });
 const paired = await runtime.pair({ code, id: 'real-worker', name: 'Real Worker' });
 credential = paired.credential;
 saveCredential(credential);
@@ -31,7 +31,7 @@ for (const [method, route, body] of [
 ]) {
   const response = await fetch(`${process.env.VIQ_URL}${route}`, { method, headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal(response.status, 403, `${method} ${route}`);
-  assert.match((await response.json()).error.code, /coordinator_required/);
+  assert.match((await response.json()).error.code, /admin_required/);
 }
 process.stdout.write('PAIRED_AND_DENIED\n');
 assert.equal((await iterator.next()).value, 'start');
