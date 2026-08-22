@@ -32,32 +32,23 @@ test('actor-bound pairing, admin capability, role lifecycle, shared identity and
   await f.store.close();
 });
 
-test('multi-project relation lists once per project and free-pool claims prefer explicit assignment', async () => {
+test('one-project tickets reject legacy memberships and preserve claim authority across paired devices', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
-  const assigned = await f.store.createTicket({ projects: ['ONE','TWO','ONE'], project: 'ONE', title: 'assigned', assignee: { type: 'actor', id: 'worker' }, actor: 'mair' });
-  const free = await f.store.createTicket({ projects: ['ONE'], title: 'free', actor: 'mair' });
-  await f.store.createTicket({ projects: ['ONE'], title: 'other', assignee: { type: 'actor', id: 'other' }, actor: 'mair' });
-  assert.deepEqual(assigned.projects, ['ONE','TWO']);
-  assert.deepEqual((await f.store.listTickets('TWO')).map((t) => t.id), [assigned.id]);
-  await f.store.editTicket(assigned.id, { actor: 'mair', projects: ['TWO'], project: 'TWO' });
-  assert.equal((await f.store.listTickets('ONE')).some((t) => t.id === assigned.id), false);
-  await f.store.editTicket(assigned.id, { actor: 'mair', projects: ['ONE','TWO'], project: 'ONE' });
-  const first = await f.store.claimNext({ device: 'worker-one' }); assert.equal(first.ticket.id, assigned.id);
-  await f.store.release(assigned.id, { ...identity(first), device: 'worker-two' });
-  await f.store.editTicket(assigned.id, { actor: 'mair', assignee: { type: 'actor', id: 'other' } });
-  const second = await f.store.claimNext({ device: 'worker-one' }); assert.equal(second.ticket.id, free.id);
-  await assert.rejects(f.store.claim(assigned.id, { device: 'worker-one' }), (e) => e.code === 'ticket_ineligible');
-  const continued = await f.store.verify(free.id, { ...identity(second), device: 'worker-two' }); assert.equal(continued.claim.actor, 'worker');
-  await f.store.postEvent(free.id, { ...identity(second), device: 'worker-two', message: 'continued' });
-  const events = (await f.store.listEvents({ ticket: free.id })).events; const progress = events.find((e) => e.message === 'continued'); assert.deepEqual([progress.actor, progress.device_id], ['worker','worker-two']);
+  await assert.rejects(f.store.createTicket({ projects: ['ONE','TWO'], project: 'ONE', title: 'legacy' }), (e) => e.code === 'invalid_ticket_fields');
+  const ticket = await f.store.createTicket({ project: 'ONE', title: 'agent work', assignment: 'Agent', actor: 'mair' });
+  assert.deepEqual((await f.store.listTickets('ONE')).map((t) => t.id), [ticket.id]); assert.deepEqual(await f.store.listTickets('TWO'), []);
+  const claim = await f.store.claimNext({ project: 'ONE', device: 'worker-one' });
+  const continued = await f.store.verify(ticket.id, { ...identity(claim), device: 'worker-two' }); assert.equal(continued.claim.actor, 'worker');
+  await f.store.postEvent(ticket.id, { ...identity(claim), device: 'worker-two', message: 'continued' });
+  const progress = (await f.store.listEvents({ ticket: ticket.id })).events.find((e) => e.message === 'continued'); assert.deepEqual([progress.actor, progress.device_id], ['worker','worker-two']);
   await f.store.close();
 });
 
-test('project-scoped next and claimNext use canonical multi-project membership', async () => {
+test('project-scoped next and claimNext use the immutable canonical project', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
-  const ticket = await f.store.createTicket({ projects: ['ONE','TWO'], project: 'ONE', title: 'secondary membership', actor: 'mair' });
-  assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
-  assert.equal((await f.store.claimNext({ project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
+  const ticket = await f.store.createTicket({ project: 'ONE', title: 'canonical membership', assignment: 'Agent', actor: 'mair' });
+  assert.equal(await f.store.next({ project: 'TWO', device: 'worker-one' }), null);
+  assert.equal((await f.store.claimNext({ project: 'ONE', device: 'worker-one' })).ticket.id, ticket.id);
   await f.store.close();
 });
 

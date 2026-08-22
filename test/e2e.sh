@@ -18,18 +18,15 @@ base="http://127.0.0.1:$port"; for _ in $(seq 1 100); do curl -sf "$base/health"
 coordinator="$(node -pe "JSON.parse(require('fs').readFileSync(process.argv[1])).coordinator" "$work/credentials.json")"
 worker="$(node -pe "JSON.parse(require('fs').readFileSync(process.argv[1])).worker" "$work/credentials.json")"
 viq=(node dist/bin/viq.js); evidence="${VIQ_EVIDENCE_DIR:-$work/evidence}"; mkdir -p "$evidence"; out="$evidence/e2e-output.txt"; : >"$out"
+trap 'status=$?; cat "$out"; exit "$status"' ERR
 run(){ local credential=$1; shift; printf '$ viq'; local redact=0 arg; for arg in "$@"; do if ((redact)); then printf ' %q' '[REDACTED]'; redact=0; else printf ' %q' "$arg"; [[ "$arg" == --claim-token ]] && redact=1; fi; done; printf '\n'; VIQ_DEVICE_TOKEN="$credential" "${viq[@]}" "$@" --server "$base"; }
 {
   run "$coordinator" project create ABC
-  run "$coordinator" role create workers --name Workers
-  run "$coordinator" role create reviewer --name Reviewer
-  run "$coordinator" role grant worker-a workers
-  run "$coordinator" role grant maks reviewer
-  run "$coordinator" ticket create ABC tracer --assignee-role workers
+  run "$coordinator" ticket create ABC tracer --assignment Agent
   claim="$(VIQ_DEVICE_TOKEN="$worker" "${viq[@]}" ticket claim-next --project ABC --server "$base")"
   jq 'del(.claim_token)' <<<"$claim"
   cid="$(jq -r .ticket.claim.claim_id<<<"$claim")"; token="$(jq -r .claim_token<<<"$claim")"
-  run "$worker" ticket submit ABC-1 --claim-id "$cid" --claim-token "$token" --generation 1 --reviewer-role reviewer --message complete
+  run "$worker" ticket submit ABC-1 --claim-id "$cid" --claim-token "$token" --generation 1 --reviewer maks --message complete
   run "$coordinator" ticket accept ABC-1 --message accepted
   echo E2E_OK
 } >"$out" 2>&1

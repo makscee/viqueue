@@ -25,13 +25,13 @@ const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: cla
 
 test('direct history edit is human-only while agent progress remains claim-authorized', async () => {
   const { store } = await fixture();
-  const ticket = await store.createTicket({ project: 'ABC', title: 'Authority', actor: 'maks', assignee: { type: 'device', id: 'worker' } });
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Authority', actor: 'maks', assignment:'Agent' });
   const claim = await store.claim(ticket.id, { actor: 'worker' });
   await assert.rejects(store.editTicket(ticket.id, { actor: 'worker', title: 'Machine edit' }), (error) => error.code === 'coordinator_required');
   const progress = await store.postEvent(ticket.id, { ...identity(claim), message: 'Claim-authorized progress' });
   assert.equal(progress.event.actor, 'worker');
   assert.equal((await store.getTicket(ticket.id)).title, 'Authority');
-  const direct = await store.createTicket({ project: 'ABC', title: 'Direct lifecycle', actor: 'maks' }); await store.setTicketState(direct.id, { actor: 'maks', state: 'done' });
+  const direct = await store.createTicket({ project: 'ABC', title: 'Direct lifecycle', actor: 'maks' }); await store.setTicketState(direct.id, { actor: 'maks', state: 'Done' });
   await assert.rejects(store.reopen(direct.id, { actor: 'worker' }), (error) => error.code === 'human_required');
 });
 
@@ -53,7 +53,7 @@ test('archived ticket is immutable and absent from inbox until explicit restore'
   assert.deepEqual((await store.actorInbox('eva')).questions, []);
   const mutations = [
     () => store.editTicket(ticket.id, { actor: 'maks', title: 'No' }),
-    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'Done' }),
     () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'No' }),
     () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'No?', target_type: 'actor', target_id: 'eva' }),
     () => store.answerQuestion(ticket.id, question.id, { actor: 'eva', answer: 'No' }),

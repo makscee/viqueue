@@ -9,7 +9,7 @@ const previous = '1398284ed89a6cf9395f129483f709e63c009286';
 const candidate = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const run = (file, args, root) => spawnSync('bash', [file, ...args], { cwd: process.cwd(), env: { ...process.env, VIQ_WORKER_ROOT: root }, encoding: 'utf8' });
 
-test('worker install atomically switches an immutable exact release and rolls back to 1398284e', async () => {
+test('worker install atomically switches an immutable exact release and rolls back to 1398284e', { skip: process.platform === 'darwin' ? 'installer contract requires GNU readlink -m on Linux' : false }, async () => {
   const work = await mkdtemp(path.join(tmpdir(), 'viq-worker-install-')); const root = path.join(work, 'root'); const old = path.join(root, 'releases', previous); await mkdir(old, { recursive: true }); await writeFile(path.join(old, 'SOURCE_COMMIT'), `${previous}\n`); await chmod(old, 0o555); await import('node:fs/promises').then((fs) => fs.symlink(old, path.join(root, 'current')));
   const packageRoot = path.join(work, `viq-worker-${candidate}`); await mkdir(path.join(packageRoot, 'extensions', 'viq-worker'), { recursive: true });
   await writeFile(path.join(packageRoot, 'SOURCE_COMMIT'), `${candidate}\n`); await writeFile(path.join(packageRoot, 'SOURCE_TREE'), `${'b'.repeat(40)}\n`); await writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({ pi: { extensions: ['./extensions/viq-worker/index.ts'] } }));

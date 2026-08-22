@@ -210,7 +210,7 @@ test('SQLite-consistent backup retains enforced source/backup schema and count e
   assert.equal((await stat(backup)).mode & 0o777, 0o600);
 });
 
-test('rollback authenticates backup and helper bytes in a deterministic complete manifest before its first mutation', async () => {
+test('rollback authenticates backup and helper bytes in a deterministic complete manifest before its first mutation', { skip: process.platform === 'darwin' ? 'requires Linux GNU coreutils used by cutover scripts' : false }, async () => {
   const source = await readFile(rollbackScript, 'utf8');
   const verify = source.indexOf('sha256sum --check --strict --quiet rollback-manifest.sha256');
   const firstMutation = source.indexOf('systemctl stop viqueue-phone-gateway.service');
@@ -245,7 +245,7 @@ test('rollback authenticates backup and helper bytes in a deterministic complete
   }
 });
 
-test('systemd unit install is same-directory fsynced atomic replacement', async () => {
+test('systemd unit install is same-directory fsynced atomic replacement', { skip: process.platform === 'darwin' ? 'systemd and GNU atomic-install tooling are unavailable on macOS' : false }, async () => {
   const fixture = await mkdtemp(join(tmpRoot, 'viq15-unit-'));
   const source = join(fixture, 'captured.service');
   const targetDirectory = join(fixture, 'systemd');
@@ -259,7 +259,7 @@ test('systemd unit install is same-directory fsynced atomic replacement', async 
   assert.equal((await stat(target)).mode & 0o777, 0o644);
 });
 
-test('deadline is sealed as canonical absolute UTC and timer readback is calendar-persistent', async () => {
+test('deadline is sealed as canonical absolute UTC and timer readback is calendar-persistent', { skip: process.platform === 'darwin' ? 'requires GNU date and systemd calendar semantics' : false }, async () => {
   const fixture = await mkdtemp(join(tmpRoot, 'viq15-deadline-'));
   const timer = join(fixture, 'rollback.timer');
   const env = { ...process.env, VIQ15_NOW_UTC: '2026-08-20 12:34:56 UTC' };

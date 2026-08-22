@@ -1,7 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { copyFile, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 
 export class DomainError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
@@ -20,20 +21,79 @@ const serializeMetadata = (value) => {
   if (typeof value !== 'object' || Array.isArray(value)) throw new DomainError(400, 'invalid_metadata', 'metadata must be a JSON object');
   return JSON.stringify(value);
 };
+const fileSha256 = (file) => new Promise((resolve, reject) => {
+  const digest = createHash('sha256'), stream = createReadStream(file);
+  stream.on('error', reject); stream.on('data', (chunk) => digest.update(chunk)); stream.on('end', () => resolve(digest.digest('hex')));
+});
+const exists = async (file) => stat(file).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
+const syncPath = async (target) => {
+  const handle = await open(target, 'r');
+  try { await handle.sync(); } finally { await handle.close(); }
+};
+const v11Binding = (db) => {
+  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='_viqueue_migration_family'").get()) return null;
+  try {
+    const rows = db.prepare('SELECT migration,family_token FROM _viqueue_migration_family').all();
+    if (rows.length !== 1 || rows[0].migration !== 'VIQ-11' || !/^[a-f0-9]{64}$/.test(rows[0].family_token)) throw new Error('contradictory binding');
+    return rows[0].family_token;
+  } catch { throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 database family binding is invalid'); }
+};
+const bindV11Family = (db, familyToken) => {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec('CREATE TABLE _viqueue_migration_family (migration TEXT PRIMARY KEY,family_token TEXT NOT NULL) STRICT');
+    db.prepare("INSERT INTO _viqueue_migration_family(migration,family_token) VALUES('VIQ-11',?)").run(familyToken);
+    db.exec('COMMIT');
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+};
+const validateV11Snapshot = async (source, snapshot, manifestFile) => {
+  let manifest;
+  try { manifest = JSON.parse(await readFile(manifestFile, 'utf8')); } catch { throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is missing or invalid'); }
+  if (manifest?.format !== 2 || manifest?.migration !== 'VIQ-11' || manifest?.source !== source || !/^[a-f0-9]{64}$/.test(manifest?.sha256) || !/^[a-f0-9]{64}$/.test(manifest?.familyToken)) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is not trusted for this database');
+  if ((await fileSha256(snapshot)) !== manifest.sha256) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot authentication failed');
+  const check = new DatabaseSync(snapshot, { readOnly: true });
+  try {
+    if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || Number(check.prepare('PRAGMA user_version').get().user_version) >= 11) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot is not a valid pre-migration database');
+  } finally { check.close(); }
+  return manifest;
+};
+const unstampedV11Recovery = () => new DomainError(409, 'migration_snapshot_recovery_required', 'VIQ-11 snapshot exists but the live database has no durable family token; operator recovery is required');
 
 export class Store {
-  #file; #now; #db;
+  #file; #now; #db; #v11Plan = null;
   constructor(file, { now = Date.now } = {}) { this.#file = file; this.#now = now; }
+
+  static async rollbackV11(file) {
+    const source = path.resolve(file), snapshot = `${source}.pre-viq11.sqlite`, manifestFile = `${snapshot}.manifest.json`, temporary = `${source}.rollback.${process.pid}`;
+    const manifest = await validateV11Snapshot(source, snapshot, manifestFile);
+    const live = new DatabaseSync(source, { readOnly: true });
+    try {
+      const binding = v11Binding(live);
+      if (!binding) throw unstampedV11Recovery();
+      if (binding !== manifest.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
+    } finally { live.close(); }
+    await rm(temporary, { force: true });
+    await copyFile(snapshot, temporary);
+    await validateV11Snapshot(source, temporary, manifestFile);
+    const preserved = `${source}.post-viq11.${Date.now()}`;
+    await rename(source, preserved);
+    for (const suffix of ['-wal','-shm']) { try { await rename(`${source}${suffix}`, `${preserved}${suffix}`); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+    await rename(temporary, source);
+    return { restored: source, preserved };
+  }
 
   async init() {
     await mkdir(path.dirname(path.resolve(this.#file)), { recursive: true });
     this.#db = new DatabaseSync(this.#file);
-    this.#db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
+    this.#db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
+    await this.#prepareV11Migration();
+    this.#db.exec('PRAGMA journal_mode=WAL;');
     this.#db.exec(`
       CREATE TABLE IF NOT EXISTS projects (key TEXT PRIMARY KEY,next_number INTEGER NOT NULL,created_at INTEGER NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS tickets (
         id TEXT PRIMARY KEY,project TEXT NOT NULL REFERENCES projects(key),number INTEGER NOT NULL,title TEXT NOT NULL,
         body TEXT NOT NULL DEFAULT '',state TEXT NOT NULL CHECK(state IN ('open','review','done')),assigned_to TEXT,
+        assignment TEXT NOT NULL DEFAULT 'Unassigned' CHECK(assignment IN ('Unassigned','Human','Agent')),
         created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(project,number)
       ) STRICT;
       CREATE TABLE IF NOT EXISTS claims (
@@ -49,6 +109,77 @@ export class Store {
       CREATE INDEX IF NOT EXISTS events_ticket_cursor ON events(ticket_id,id);
     `);
     this.#migrate();
+    this.#finishV11Migration();
+  }
+
+  async #prepareV11Migration() {
+    const source = path.resolve(this.#file), destination = `${source}.pre-viq11.sqlite`, manifest = `${destination}.manifest.json`;
+    const [hasSnapshot, hasManifest] = await Promise.all([exists(destination), exists(manifest)]);
+    const binding = v11Binding(this.#db);
+    let sealed = null;
+    if (hasSnapshot || hasManifest) {
+      if (!hasSnapshot || !hasManifest) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot family is incomplete; refusing to overwrite it');
+      sealed = await validateV11Snapshot(source, destination, manifest);
+      if (!binding) throw unstampedV11Recovery();
+      if (binding !== sealed.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
+    } else if (binding) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 bound database is missing its snapshot family');
+    const hasTickets = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='tickets'").get();
+    if (!hasTickets || Number(this.#db.prepare('PRAGMA user_version').get().user_version) >= 11) return;
+    const ticketColumns = this.#columns('tickets');
+    const hasMemberships = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='ticket_projects'").get();
+    const tickets = this.#db.prepare('SELECT * FROM tickets ORDER BY id').all();
+    const plan = [];
+    for (const ticket of tickets) {
+      const memberships = hasMemberships ? this.#db.prepare('SELECT project_key FROM ticket_projects WHERE ticket_id=? ORDER BY project_key').all(ticket.id).map((row) => row.project_key) : [ticket.project];
+      if (memberships.length !== 1 || memberships[0] !== ticket.project) throw new DomainError(409, 'unsafe_project_migration', `ticket ${ticket.id} must have exactly one truthful project`);
+      if (!Number.isSafeInteger(ticket.number) || ticket.number < 1 || ticket.id !== `${ticket.project}-${ticket.number}`) throw new DomainError(409, 'unsafe_ticket_identity_migration', `ticket ${ticket.id} has contradictory identity`);
+      let assignment = ticketColumns.includes('assignment') ? ticket.assignment : null;
+      if (!assignment) {
+        const hasClaims = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='claims'").get();
+        const activeClaim = hasClaims && this.#db.prepare(`SELECT actor,${this.#columns('claims').includes('device_id') ? 'device_id' : 'NULL device_id'} FROM claims WHERE ticket_id=? AND released_at IS NULL`).get(ticket.id);
+        if (activeClaim) {
+          const legacyIdentity = ticket.assignee_id ?? ticket.assigned_to;
+          if (legacyIdentity && ![activeClaim.actor, activeClaim.device_id].includes(legacyIdentity)) throw new DomainError(409, 'unsafe_assignment_migration', `ticket ${ticket.id} claim contradicts assignment`);
+          assignment = 'Agent';
+        } else if (!ticket.assignee_type && !ticket.assignee_id && !ticket.assigned_to) assignment = 'Unassigned';
+        else {
+          const identity = ticket.assignee_id ?? ticket.assigned_to;
+          let kinds = [];
+          const hasActors = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='actors'").get();
+          const hasDevices = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='devices'").get();
+          if (hasActors && ticket.assignee_type === 'role') kinds = this.#db.prepare('SELECT DISTINCT kind FROM actors WHERE role_id=?').all(identity).map((row) => row.kind);
+          else if (hasActors) {
+            const actor = this.#db.prepare('SELECT kind FROM actors WHERE id=?').get(identity) ?? (hasDevices ? this.#db.prepare('SELECT a.kind FROM devices d JOIN actors a ON a.id=d.actor_id WHERE d.id=?').get(identity) : null);
+            if (actor) kinds = [actor.kind];
+          }
+          if (kinds.length !== 1 || !['human', 'agent'].includes(kinds[0])) throw new DomainError(409, 'unsafe_assignment_migration', `ticket ${ticket.id} assignment is ambiguous`);
+          assignment = kinds[0] === 'human' ? 'Human' : 'Agent';
+        }
+      }
+      if (!['Unassigned', 'Human', 'Agent'].includes(assignment)) throw new DomainError(409, 'unsafe_assignment_migration', `ticket ${ticket.id} assignment is invalid`);
+      plan.push({ id: ticket.id, assignment });
+    }
+    if (!sealed) {
+      const temporary = `${destination}.tmp.${process.pid}`, temporaryManifest = `${manifest}.tmp.${process.pid}`;
+      await rm(temporary, { force: true }); await rm(temporaryManifest, { force: true });
+      await backup(this.#db, temporary); await syncPath(temporary);
+      sealed = { format: 2, migration: 'VIQ-11', source, sha256: await fileSha256(temporary), familyToken: randomBytes(32).toString('hex') };
+      await writeFile(temporaryManifest, `${JSON.stringify(sealed)}\n`, { mode: 0o600 }); await syncPath(temporaryManifest);
+      await rename(temporary, destination); await syncPath(path.dirname(destination));
+      await rename(temporaryManifest, manifest); await syncPath(path.dirname(manifest));
+      bindV11Family(this.#db, sealed.familyToken);
+    }
+    this.#v11Plan = plan;
+  }
+
+  #finishV11Migration() {
+    if (Number(this.#db.prepare('PRAGMA user_version').get().user_version) >= 11) return;
+    this.#transaction(() => {
+      if (!this.#columns('tickets').includes('assignment')) this.#db.exec("ALTER TABLE tickets ADD COLUMN assignment TEXT NOT NULL DEFAULT 'Unassigned' CHECK(assignment IN ('Unassigned','Human','Agent'))");
+      for (const row of this.#v11Plan ?? []) this.#db.prepare('UPDATE tickets SET assignment=? WHERE id=?').run(row.assignment, row.id);
+      this.#db.exec('UPDATE projects SET next_number=MAX(next_number,COALESCE((SELECT MAX(number)+1 FROM tickets WHERE tickets.project=projects.key),1)); PRAGMA user_version=11');
+    });
+    this.#v11Plan = null;
   }
 
   #columns(table) { return this.#db.prepare(`PRAGMA table_info(${table})`).all().map((r) => r.name); }
@@ -183,7 +314,7 @@ export class Store {
     return { type, id };
   }
   #row(id) { const row = this.#db.prepare(`SELECT t.*,c.claim_id,c.actor claim_actor,c.device_id claim_device_id,c.generation,c.claimed_at,(SELECT COUNT(*) FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open') unresolved_blockers FROM tickets t LEFT JOIN claims c ON c.ticket_id=t.id AND c.released_at IS NULL WHERE t.id=?`).get(id); if (!row) throw new DomainError(404, 'ticket_not_found', `ticket ${id} not found`); return row; }
-  #publicTicket(row) { const projects = this.#db.prepare('SELECT project_key FROM ticket_projects WHERE ticket_id=? ORDER BY project_key').all(row.id).map((r) => r.project_key); return { id: row.id, project: row.project, projects: projects.length ? projects : [row.project], title: row.title, body: row.body, state: row.state, assigned_to: row.assigned_to ?? (row.assignee_type === 'actor' ? row.assignee_id : null), assignee: row.assignee_type ? { type: row.assignee_type === 'actor' ? 'actor' : row.assignee_type, id: row.assignee_id } : null, archived_at: row.archived_at ?? null, deleted_at: row.deleted_at ?? null, created_at: row.created_at, updated_at: row.updated_at, claim: row.claim_id ? { claim_id: row.claim_id, actor: row.claim_actor, device_id: row.claim_device_id ?? null, generation: row.generation, claimed_at: row.claimed_at } : null, unresolved_blockers: Number(row.unresolved_blockers ?? 0) }; }
+  #publicTicket(row) { const claim = row.claim_id ? { claim_id: row.claim_id, actor: row.claim_actor, device_id: row.claim_device_id ?? null, generation: row.generation, claimed_at: row.claimed_at } : null; const state = row.state === 'done' ? 'Done' : row.state === 'review' ? 'Waiting' : claim ? 'Working' : 'Open'; return { id: row.id, project: row.project, title: row.title, description: row.body, assignment: row.assignment ?? 'Unassigned', state, archived_at: row.archived_at ?? null, deleted_at: row.deleted_at ?? null, created_at: row.created_at, updated_at: row.updated_at, claim, unresolved_blockers: Number(row.unresolved_blockers ?? 0) }; }
   #ticket(id) { return this.#publicTicket(this.#row(id)); }
   #mutableTicket(id) { const ticket = this.#ticket(id); if (ticket.deleted_at !== null) throw new DomainError(409, 'ticket_deleted', 'deleted tickets are immutable tombstones'); if (ticket.archived_at !== null) throw new DomainError(409, 'ticket_archived', 'archived tickets are immutable until restored'); return ticket; }
   #title(value) { if (typeof value !== 'string' || !value.trim()) throw new DomainError(400, 'invalid_title', 'title is required'); return value.trim(); }
@@ -219,55 +350,51 @@ export class Store {
   async revokeRole(actorId, roleId) { return this.#transaction(() => { const actor = this.#actor(actorId, { active: false }); const role = this.#role(roleId); this.#db.prepare('DELETE FROM actor_roles WHERE actor_id=? AND role_id=?').run(actor.id, role.id); this.#event(null, null, 'role_revoked', actor.id, null, { role_id: role.id }); return { actor_id: actor.id, role: role.id }; }); }
   async listActorRoles(actorId) { const actor = this.#actor(actorId, { active: false }); return { roles: this.#db.prepare('SELECT r.id,r.name,r.created_at FROM roles r JOIN actor_roles ar ON ar.role_id=r.id WHERE ar.actor_id=? ORDER BY r.id').all(actor.id) }; }
 
-  async createTicket({ project: rawProject, projects: rawProjects, title, body = '', assignee = null, assignment = undefined, assigned_to = undefined, actor: rawActor = null }) {
-    return this.#transaction(() => { const keys = [...new Set((rawProjects ?? [rawProject]).map((key) => String(key).toUpperCase()))]; if (!keys.length) throw new DomainError(400, 'projects_required', 'at least one project is required'); const memberships = keys.map((key) => this.#project(key)); const project = rawProject ? this.#project(rawProject) : memberships[0]; if (!keys.includes(project.key)) throw new DomainError(400, 'primary_project_required', 'primary project must be in projects'); const creator = rawActor == null ? null : this.#adminDevice(rawActor); const number = project.next_number; const id = `${project.key}-${number}`; const now = this.#now(); let target = assignee ?? assignment ?? null; const legacy = cleanOptional(assigned_to, 'assigned_to'); if (!target && legacy) target = { type: 'device', id: legacy }; if (target) target = this.#target(target, { assignment: true }); this.#db.prepare("INSERT INTO tickets(id,project,number,title,body,state,assigned_to,assignee_type,assignee_id,created_at,updated_at) VALUES(?,?,?,?,?,'open',?,?,?,?,?)").run(id, project.key, number, this.#title(title), cleanOptional(body, 'body') ?? '', null, target?.type ?? null, target?.id ?? null, now, now); this.#db.prepare('UPDATE projects SET next_number=next_number+1 WHERE key=?').run(project.key); for (const member of memberships) this.#db.prepare('INSERT INTO ticket_projects(ticket_id,project_key) VALUES(?,?)').run(id, member.key); this.#event(id, project.key, 'ticket_created', creator?.id ?? null, null, { assignee: target ? { type: target.type === 'actor' ? 'device' : target.type, id: target.id } : null }); if (target) this.#event(id, project.key, 'assigned', creator?.id ?? null, `Assigned to ${target.type === 'actor' ? 'device' : target.type} ${target.id}.`, { assignee: target }); return this.#ticket(id); });
+  async createTicket(input = {}) {
+    if ('projects' in input || 'assignee' in input || 'assigned_to' in input || 'body' in input) throw new DomainError(400, 'invalid_ticket_fields', 'ticket create accepts only project, title, description, and assignment');
+    const { project: rawProject, title, description = '', assignment = 'Unassigned', actor: rawActor = null } = input;
+    return this.#transaction(() => { const project = this.#project(rawProject); const creator = rawActor == null ? null : this.#adminDevice(rawActor); if (!['Unassigned','Human','Agent'].includes(assignment)) throw new DomainError(400, 'invalid_assignment', 'assignment must be Unassigned, Human, or Agent'); const number = project.next_number; const id = `${project.key}-${number}`; const now = this.#now(); this.#db.prepare("INSERT INTO tickets(id,project,number,title,body,state,assigned_to,assignee_type,assignee_id,assignment,created_at,updated_at) VALUES(?,?,?,?,?,'open',NULL,NULL,NULL,?,?,?)").run(id, project.key, number, this.#title(title), cleanOptional(description, 'description') ?? '', assignment, now, now); this.#db.prepare('UPDATE projects SET next_number=next_number+1 WHERE key=?').run(project.key); this.#db.prepare('INSERT INTO ticket_projects(ticket_id,project_key) VALUES(?,?)').run(id, project.key); this.#event(id, project.key, 'ticket_created', creator?.id ?? null, null, { assignment }); return this.#ticket(id); });
   }
-  async listTickets(rawProject, { assigneeType, assigneeId, includeArchived = false } = {}) { const project = this.#project(rawProject); const where = ['EXISTS(SELECT 1 FROM ticket_projects tp WHERE tp.ticket_id=t.id AND tp.project_key=?)', 't.deleted_at IS NULL']; const values = [project.key]; if (!includeArchived) where.push('t.archived_at IS NULL'); if (assigneeType === 'none') where.push('t.assignee_type IS NULL'); else if (assigneeType || assigneeId) { const canonical = assigneeType === 'device' ? 'actor' : assigneeType; if (!['actor', 'role'].includes(canonical) || !assigneeId) throw new DomainError(400, 'invalid_assignee_filter', 'assignee_type device|role and assignee_id are required'); where.push('t.assignee_type=? AND t.assignee_id=?'); values.push(canonical, stableId(assigneeId)); } return this.#db.prepare(`SELECT t.*,c.claim_id,c.actor claim_actor,c.device_id claim_device_id,c.generation,c.claimed_at,(SELECT COUNT(*) FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open') unresolved_blockers FROM tickets t LEFT JOIN claims c ON c.ticket_id=t.id AND c.released_at IS NULL WHERE ${where.join(' AND ')} ORDER BY t.number`).all(...values).map((r) => this.#publicTicket(r)); }
+  async listTickets(rawProject, options = {}) { const project = this.#project(rawProject); if ('assigneeType' in options || 'assigneeId' in options) throw new DomainError(400, 'invalid_ticket_filter', 'role or device assignment filters are not supported'); const where = ['t.project=?', 't.deleted_at IS NULL']; const values = [project.key]; if (!options.includeArchived) where.push('t.archived_at IS NULL'); return this.#db.prepare(`SELECT t.*,c.claim_id,c.actor claim_actor,c.device_id claim_device_id,c.generation,c.claimed_at,(SELECT COUNT(*) FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open') unresolved_blockers FROM tickets t LEFT JOIN claims c ON c.ticket_id=t.id AND c.released_at IS NULL WHERE ${where.join(' AND ')} ORDER BY t.number`).all(...values).map((r) => this.#publicTicket(r)); }
   async getTicket(id) { return this.#ticket(id); }
   async listTicketsForDevice(rawProject, deviceId, options = {}) { const device = this.#device(deviceId); const tickets = await this.listTickets(rawProject, options); return device.kind === 'coordinator' ? tickets : tickets.filter((ticket) => this.#eligible(ticket, device)); }
   async activeClaimsForDevice(deviceId) { const device = this.#device(deviceId); return this.#db.prepare("SELECT t.*,c.claim_id,c.actor claim_actor,c.device_id claim_device_id,c.generation,c.claimed_at,(SELECT COUNT(*) FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open') unresolved_blockers FROM tickets t JOIN claims c ON c.ticket_id=t.id AND c.released_at IS NULL WHERE c.actor=? AND t.deleted_at IS NULL ORDER BY c.claimed_at,t.id").all(device.actor_id).map((row) => this.#publicTicket(row)); }
   async archiveTicket(id, { actor: rawActor }) { return this.#transaction(() => { const ticket = this.#ticket(id); const actor = this.#human(rawActor); if (ticket.deleted_at !== null) throw new DomainError(409, 'ticket_deleted', 'deleted tickets cannot be archived'); if (ticket.archived_at !== null) return ticket; const now = this.#now(); if (ticket.claim) this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(now, ticket.claim.claim_id); this.#db.prepare('UPDATE tickets SET archived_at=?,updated_at=? WHERE id=?').run(now, now, id); this.#event(id, ticket.project, 'archived', actor.id, 'Archived ticket.'); return this.#ticket(id); }); }
   async restoreTicket(id, { actor: rawActor }) { return this.#transaction(() => { const ticket = this.#ticket(id); const actor = this.#human(rawActor); if (ticket.deleted_at !== null) throw new DomainError(409, 'ticket_deleted', 'deleted tickets cannot be restored'); if (ticket.archived_at === null) return ticket; this.#db.prepare('UPDATE tickets SET archived_at=NULL,updated_at=? WHERE id=?').run(this.#now(), id); this.#event(id, ticket.project, 'restored', actor.id, 'Restored ticket from archive.'); return this.#ticket(id); }); }
   async deleteTicket(id, { actor: rawActor, confirmed = false }) { return this.#transaction(() => { if (confirmed !== true) throw new DomainError(409, 'delete_confirmation_required', 'explicit delete confirmation is required'); const existing = this.#ticket(id); const actor = this.#human(rawActor); if (existing.deleted_at !== null) return existing; if (existing.archived_at !== null) throw new DomainError(409, 'ticket_archived', 'archived tickets are immutable until restored'); const now = this.#now(); if (existing.claim) this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(now, existing.claim.claim_id); this.#db.prepare('UPDATE tickets SET deleted_at=?,updated_at=? WHERE id=?').run(now, now, id); this.#event(id, existing.project, 'deleted', actor.id, 'Deleted ticket (history retained as a tombstone).'); return this.#ticket(id); }); }
-  #eligible(ticket, device) { if (device.kind !== 'worker' || device.status !== 'active') return false; if (!ticket.assignee) return true; if (ticket.assignee.type === 'actor') return ticket.assignee.id === device.actor_id; return device.role_id === ticket.assignee.id; }
-  #claimable(ticket, device) { return ticket.state === 'open' && ticket.archived_at === null && ticket.deleted_at === null && !ticket.claim && ticket.unresolved_blockers === 0 && this.#eligible(ticket, device); }
+  #eligible(ticket, device) { return device.kind === 'worker' && device.status === 'active' && ticket.assignment === 'Agent'; }
+  #claimable(ticket, device) { return ticket.state === 'Open' && ticket.archived_at === null && ticket.deleted_at === null && !ticket.claim && ticket.unresolved_blockers === 0 && this.#eligible(ticket, device); }
   #next(rawProject, device) { let query = "SELECT t.*,NULL claim_id,NULL claim_actor,NULL claim_device_id,NULL generation,NULL claimed_at,(SELECT COUNT(*) FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open') unresolved_blockers FROM tickets t WHERE t.state='open' AND t.archived_at IS NULL AND t.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM claims c WHERE c.ticket_id=t.id AND c.released_at IS NULL) AND NOT EXISTS(SELECT 1 FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open')"; const values = []; if (rawProject) { query += ' AND EXISTS(SELECT 1 FROM ticket_projects tp WHERE tp.ticket_id=t.id AND tp.project_key=?)'; values.push(this.#project(rawProject).key); } query += " ORDER BY CASE WHEN t.assignee_type IS NULL THEN 1 ELSE 0 END,t.created_at,t.project,t.number"; const rows = this.#db.prepare(query).all(...values).map((r) => this.#publicTicket(r)); return rows.find((t) => this.#claimable(t, device)) ?? null; }
   #claim(ticket, device) { const generation = Number(this.#db.prepare('SELECT COALESCE(MAX(generation),0)+1 generation FROM claims WHERE ticket_id=?').get(ticket.id).generation); const token = randomBytes(32).toString('base64url'); const claimId = randomUUID(); this.#db.prepare('INSERT INTO claims(claim_id,ticket_id,actor,generation,token_hash,claimed_at,device_id) VALUES(?,?,?,?,?,?,?)').run(claimId, ticket.id, device.actor_id, generation, hash(token), this.#now(), device.id); this.#db.prepare('UPDATE tickets SET updated_at=? WHERE id=?').run(this.#now(), ticket.id); this.#event(ticket.id, ticket.project, 'claimed', device.actor_id, null, null, device.id); return { ticket: this.#ticket(ticket.id), claim_token: token }; }
   async next({ project: rawProject, device: deviceId, actor: legacyId } = {}) { const device = this.#device(deviceId ?? legacyId, { kind: 'worker' }); return this.#next(rawProject, device); }
   async claimNext({ project: rawProject, device: deviceId, actor: legacyId }) { return this.#transaction(() => { const device = this.#device(deviceId ?? legacyId, { kind: 'worker' }); const ticket = this.#next(rawProject, device); return ticket ? this.#claim(ticket, device) : null; }); }
   async editTicket(id, changes = {}) { return this.#transaction(() => {
-    const ticket = this.#mutableTicket(id); const actor = this.#adminDevice(changes.actor); const row = this.#row(id); let title = ticket.title; let body = ticket.body; let assignee = ticket.assignee ? { type: ticket.assignee.type, id: ticket.assignee.id } : null; let project = ticket.project; let projects = ticket.projects; let number = row.number;
-    let edited = false; let assigned = false; let moved = false;
-    if ('title' in changes) { title = this.#title(changes.title); edited ||= title !== ticket.title; }
-    if ('body' in changes) { body = cleanOptional(changes.body, 'body') ?? ''; edited ||= body !== ticket.body; }
-    if ('projects' in changes) { projects = [...new Set((changes.projects ?? []).map((key) => String(key).toUpperCase()))]; if (!projects.length) throw new DomainError(400, 'projects_required', 'at least one project is required'); projects.forEach((key) => this.#project(key)); }
-    if ('project' in changes) { const destination = this.#project(changes.project); moved = destination.key !== ticket.project; if (moved) { if (!('projects' in changes)) projects = [...new Set(projects.map((key) => key === ticket.project ? destination.key : key))]; project = destination.key; number = destination.next_number; this.#db.prepare('UPDATE projects SET next_number=next_number+1 WHERE key=?').run(project); } }
-    if (!projects.includes(project)) throw new DomainError(400, 'primary_project_required', 'primary project must be in projects');
-    if ('assignee' in changes || 'assignment' in changes || 'assigned_to' in changes) { const value = changes.assignee ?? changes.assignment ?? (cleanOptional(changes.assigned_to, 'assigned_to') ? { type: 'device', id: changes.assigned_to } : null); const next = value ? this.#target(value, { assignment: true }) : null; assigned = JSON.stringify(next) !== JSON.stringify(assignee); assignee = next; }
-    const membershipsChanged = JSON.stringify(projects) !== JSON.stringify(ticket.projects);
-    if (!edited && !assigned && !moved && !membershipsChanged) return ticket;
-    this.#db.prepare('UPDATE tickets SET project=?,number=?,title=?,body=?,assigned_to=NULL,assignee_type=?,assignee_id=?,updated_at=? WHERE id=?').run(project, number, title, body, assignee?.type ?? null, assignee?.id ?? null, this.#now(), id);
-    if (membershipsChanged) { this.#db.prepare('DELETE FROM ticket_projects WHERE ticket_id=?').run(id); for (const key of projects) this.#db.prepare('INSERT INTO ticket_projects(ticket_id,project_key) VALUES(?,?)').run(id, key); }
-    if (edited) this.#event(id, project, 'ticket_edited', actor.id, 'Updated ticket title or description.', { previous: { title: ticket.title, body: ticket.body }, current: { title, body } });
-    if (moved) this.#event(id, project, 'ticket_moved', actor.id, `Moved from ${ticket.project} to ${project}.`, { from: ticket.project, to: project });
-    if (assigned) this.#event(id, project, 'assigned', actor.id, assignee ? `Assigned to ${assignee.type === 'actor' ? 'device' : assignee.type} ${assignee.id}.` : 'Assignment cleared.', { previous: ticket.assignee, assignee: assignee ? { type: assignee.type === 'actor' ? 'device' : assignee.type, id: assignee.id } : null });
+    const ticket = this.#mutableTicket(id); const actor = this.#adminDevice(changes.actor);
+    for (const forbidden of ['project','projects','assignee','assigned_to','body']) if (forbidden in changes) throw new DomainError(400, 'immutable_project', 'ticket project is immutable and legacy mutation fields are unsupported');
+    const title = 'title' in changes ? this.#title(changes.title) : ticket.title;
+    const description = 'description' in changes ? cleanOptional(changes.description, 'description') ?? '' : ticket.description;
+    const assignment = 'assignment' in changes ? changes.assignment : ticket.assignment;
+    if (!['Unassigned','Human','Agent'].includes(assignment)) throw new DomainError(400, 'invalid_assignment', 'assignment must be Unassigned, Human, or Agent');
+    this.#db.prepare('UPDATE tickets SET title=?,body=?,assignment=?,updated_at=? WHERE id=?').run(title, description, assignment, this.#now(), id);
+    this.#event(id, ticket.project, 'ticket_edited', actor.id, 'Updated ticket title, description, or assignment.');
     return this.#ticket(id);
   }); }
 
   async setTicketState(id, { state, actor: rawActor }) { return this.#transaction(() => {
     const ticket = this.#mutableTicket(id); const actor = this.#workflowActor(rawActor); if (actor.kind !== 'human') throw new DomainError(403, 'human_required', 'a human actor is required');
-    if (!['open', 'review', 'done'].includes(state)) throw new DomainError(400, 'invalid_state', 'state must be open, review, or done');
+    if (!['Open', 'Working', 'Waiting', 'Done'].includes(state)) throw new DomainError(400, 'invalid_state', 'state must be Open, Working, Waiting, or Done');
     if (ticket.state === state) return ticket;
+    const storedState = state === 'Done' ? 'done' : state === 'Waiting' ? 'review' : 'open';
     const now = this.#now();
-    if (state !== 'open' && ticket.claim) this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(now, ticket.claim.claim_id);
-    if (ticket.state === 'review' && state !== 'review') {
-      const decision = state === 'done' ? 'accept' : 'request_changes'; const note = `State changed directly to ${state}.`;
+    if (state !== 'Working' && ticket.claim) this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(now, ticket.claim.claim_id);
+    if (ticket.state === 'Waiting' && state !== 'Waiting') {
+      const decision = state === 'Done' ? 'accept' : 'request_changes'; const note = `State changed directly to ${state}.`;
       for (const q of this.#db.prepare("SELECT * FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").all(id)) {
         this.#db.prepare("UPDATE questions SET status='answered',answer=?,answered_by=?,answered_at=? WHERE id=?").run(JSON.stringify({ decision, note }), actor.id, now, q.id);
         this.#event(id, ticket.project, 'question_answered', actor.id, decision, { question_id: q.id, question_event_id: q.question_event_id ?? null, kind: 'approval' });
       }
     }
-    this.#db.prepare('UPDATE tickets SET state=?,updated_at=? WHERE id=?').run(state, now, id);
+    this.#db.prepare('UPDATE tickets SET state=?,updated_at=? WHERE id=?').run(storedState, now, id);
     this.#event(id, ticket.project, 'state_changed', actor.id, `Moved from ${ticket.state} to ${state}.`, { from: ticket.state, to: state });
     return this.#ticket(id);
   }); }
@@ -294,11 +421,11 @@ export class Store {
   async askHumanQuestion(id, input) { return this.#transaction(() => { const ticket = this.#mutableTicket(id); const actor = this.#workflowActor(input.actor); if (actor.kind !== 'human') throw new DomainError(403, 'human_required', 'a human actor is required'); const question = this.#insertQuestion(ticket, actor.id, { target_type: input.target_type ?? input.responder?.type, target_id: input.target_id ?? input.responder?.id, kind: 'text', text: input.text }); return { question, ticket: this.#ticket(id) }; }); }
   async listQuestions(id, { status } = {}) { this.#row(id); const where = ['ticket_id=?']; const values = [id]; if (status) { if (!['open', 'answered'].includes(status)) throw new DomainError(400, 'invalid_question_status', 'status must be open or answered'); where.push('status=?'); values.push(status); } return { questions: this.#db.prepare(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY created_at,id`).all(...values).map((q) => this.#publicQuestion(q)) }; }
   #authorized(q, actor) { return q.target_type === 'actor' ? q.target_id === actor.id : actor.role_id === q.target_id; }
-  #answerQuestionTx(id, questionId, input) { const ticket = this.#mutableTicket(id); const q = this.#questionRow(questionId); if (q.ticket_id !== id) throw new DomainError(404, 'question_not_found', `question ${questionId} not found`); if (q.status !== 'open') throw new DomainError(409, 'question_already_answered', 'question was already answered'); const device = this.#adminDevice(input.actor); const actor = this.#actor(device.actor_id); if (!this.#authorized(q, actor)) throw new DomainError(403, 'question_forbidden', 'actor is not an authorized responder'); const { answer, decision, note } = input; let canonical; if (q.kind === 'approval') { if (!['accept', 'request_changes'].includes(decision) || answer != null) throw new DomainError(400, 'invalid_question_answer', 'approval answer must be accept or request_changes'); canonical = JSON.stringify({ decision, note: cleanOptional(note, 'note') }); } else { if (decision != null || !(canonical = cleanOptional(answer, 'answer'))) throw new DomainError(400, 'invalid_question_answer', 'text question requires a non-empty answer'); } const changed = this.#db.prepare("UPDATE questions SET status='answered',answer=?,answered_by=?,answered_at=? WHERE id=? AND status='open'").run(canonical, actor.id, this.#now(), q.id); if (!changed.changes) throw new DomainError(409, 'question_already_answered', 'question was already answered'); this.#event(id, ticket.project, 'question_answered', actor.id, q.kind === 'approval' ? decision : canonical, { question_id: q.id, question_event_id: q.question_event_id ?? null, kind: q.kind }); if (q.kind === 'approval') { if (ticket.state !== 'review') throw new DomainError(409, 'invalid_state', 'approval ticket is no longer in review'); const next = decision === 'accept' ? 'done' : 'open'; this.#db.prepare('UPDATE tickets SET state=?,updated_at=? WHERE id=?').run(next, this.#now(), id); this.#event(id, ticket.project, decision === 'accept' ? 'accepted' : 'changes_requested', actor.id, cleanOptional(note, 'note'), { question_id: q.id }); } return { question: this.#publicQuestion(this.#questionRow(q.id)), ticket: this.#ticket(id) }; }
+  #answerQuestionTx(id, questionId, input) { const ticket = this.#mutableTicket(id); const q = this.#questionRow(questionId); if (q.ticket_id !== id) throw new DomainError(404, 'question_not_found', `question ${questionId} not found`); if (q.status !== 'open') throw new DomainError(409, 'question_already_answered', 'question was already answered'); const device = this.#adminDevice(input.actor); const actor = this.#actor(device.actor_id); if (!this.#authorized(q, actor)) throw new DomainError(403, 'question_forbidden', 'actor is not an authorized responder'); const { answer, decision, note } = input; let canonical; if (q.kind === 'approval') { if (!['accept', 'request_changes'].includes(decision) || answer != null) throw new DomainError(400, 'invalid_question_answer', 'approval answer must be accept or request_changes'); canonical = JSON.stringify({ decision, note: cleanOptional(note, 'note') }); } else { if (decision != null || !(canonical = cleanOptional(answer, 'answer'))) throw new DomainError(400, 'invalid_question_answer', 'text question requires a non-empty answer'); } const changed = this.#db.prepare("UPDATE questions SET status='answered',answer=?,answered_by=?,answered_at=? WHERE id=? AND status='open'").run(canonical, actor.id, this.#now(), q.id); if (!changed.changes) throw new DomainError(409, 'question_already_answered', 'question was already answered'); this.#event(id, ticket.project, 'question_answered', actor.id, q.kind === 'approval' ? decision : canonical, { question_id: q.id, question_event_id: q.question_event_id ?? null, kind: q.kind }); if (q.kind === 'approval') { if (ticket.state !== 'Waiting') throw new DomainError(409, 'invalid_state', 'approval ticket is no longer waiting'); const next = decision === 'accept' ? 'done' : 'open'; this.#db.prepare('UPDATE tickets SET state=?,updated_at=? WHERE id=?').run(next, this.#now(), id); this.#event(id, ticket.project, decision === 'accept' ? 'accepted' : 'changes_requested', actor.id, cleanOptional(note, 'note'), { question_id: q.id }); } return { question: this.#publicQuestion(this.#questionRow(q.id)), ticket: this.#ticket(id) }; }
   async answerQuestion(id, questionId, input) { return this.#transaction(() => this.#answerQuestionTx(id, questionId, input)); }
-  async submit(id, input) { return this.#transaction(() => { const ticket = this.#ticket(id); const claim = this.#authority(id, input); if (ticket.state !== 'open') throw new DomainError(409, 'invalid_state', 'only open tickets can be submitted'); const reviewer = input.reviewer ?? (input.review_target_type ? { type: input.review_target_type, id: input.review_target_id } : null); const target = this.#target(reviewer, { actorActive: true }); if (this.#db.prepare("SELECT 1 FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").get(id)) throw new DomainError(409, 'approval_exists', 'an approval is already open'); const now = this.#now(); this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(now, claim.claim_id); this.#db.prepare("UPDATE tickets SET state='review',updated_at=? WHERE id=?").run(now, id); this.#event(id, ticket.project, 'submitted', claim.actor, cleanOptional(input.message, 'message'), { review_target_type: target.type, review_target_id: target.id }); const question = this.#insertQuestion(ticket, claim.actor, { target_type: target.type, target_id: target.id, kind: 'approval', text: 'Approve submitted work?' }); return { ticket: this.#ticket(id), question }; }); }
-  async accept(id, { actor, message = null } = {}) { return this.#transaction(() => { const ticket = this.#mutableTicket(id); if (ticket.state !== 'review') throw new DomainError(409, 'invalid_state', 'only review tickets can be accepted'); const approvals = this.#db.prepare("SELECT id FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").all(id); if (approvals.length !== 1) throw new DomainError(409, 'approval_not_unique', 'exactly one current approval is required'); return this.#answerQuestionTx(id, approvals[0].id, { actor, decision: 'accept', note: message }).ticket; }); }
-  async reopen(id, { actor: rawActor = null, message = null } = {}) { return this.#transaction(() => { const ticket = this.#mutableTicket(id); const actor = this.#human(rawActor); if (ticket.state === 'review' && this.#db.prepare("SELECT 1 FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").get(id)) throw new DomainError(409, 'approval_pending', 'answer the current approval with request_changes'); if (ticket.state !== 'done' && ticket.state !== 'review') throw new DomainError(409, 'invalid_state', 'only review or done tickets can be reopened'); this.#db.prepare("UPDATE tickets SET state='open',updated_at=? WHERE id=?").run(this.#now(), id); this.#event(id, ticket.project, 'reopened', actor.id, cleanOptional(message, 'message')); return this.#ticket(id); }); }
+  async submit(id, input) { return this.#transaction(() => { const ticket = this.#ticket(id); const claim = this.#authority(id, input); if (!['Open','Working'].includes(ticket.state)) throw new DomainError(409, 'invalid_state', 'only open or working tickets can be submitted'); const reviewer = input.reviewer ?? (input.review_target_type ? { type: input.review_target_type, id: input.review_target_id } : null); const target = this.#target(reviewer, { actorActive: true }); if (this.#db.prepare("SELECT 1 FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").get(id)) throw new DomainError(409, 'approval_exists', 'an approval is already open'); const now = this.#now(); this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(now, claim.claim_id); this.#db.prepare("UPDATE tickets SET state='review',updated_at=? WHERE id=?").run(now, id); this.#event(id, ticket.project, 'submitted', claim.actor, cleanOptional(input.message, 'message'), { review_target_type: target.type, review_target_id: target.id }); const question = this.#insertQuestion(ticket, claim.actor, { target_type: target.type, target_id: target.id, kind: 'approval', text: 'Approve submitted work?' }); return { ticket: this.#ticket(id), question }; }); }
+  async accept(id, { actor, message = null } = {}) { return this.#transaction(() => { const ticket = this.#mutableTicket(id); if (ticket.state !== 'Waiting') throw new DomainError(409, 'invalid_state', 'only waiting tickets can be accepted'); const approvals = this.#db.prepare("SELECT id FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").all(id); if (approvals.length !== 1) throw new DomainError(409, 'approval_not_unique', 'exactly one current approval is required'); return this.#answerQuestionTx(id, approvals[0].id, { actor, decision: 'accept', note: message }).ticket; }); }
+  async reopen(id, { actor: rawActor = null, message = null } = {}) { return this.#transaction(() => { const ticket = this.#mutableTicket(id); const actor = this.#human(rawActor); if (ticket.state === 'Waiting' && this.#db.prepare("SELECT 1 FROM questions WHERE ticket_id=? AND kind='approval' AND status='open'").get(id)) throw new DomainError(409, 'approval_pending', 'answer the current approval with request_changes'); if (ticket.state !== 'Done' && ticket.state !== 'Waiting') throw new DomainError(409, 'invalid_state', 'only review or done tickets can be reopened'); this.#db.prepare("UPDATE tickets SET state='open',updated_at=? WHERE id=?").run(this.#now(), id); this.#event(id, ticket.project, 'reopened', actor.id, cleanOptional(message, 'message')); return this.#ticket(id); }); }
   async actorInbox(actorId, { after = 0 } = {}) { const actor = this.#actor(actorId); const cursor = Number(after); if (!Number.isSafeInteger(cursor) || cursor < 0) throw new DomainError(400, 'invalid_cursor', 'after must be a non-negative integer'); const questions = this.#db.prepare(`SELECT q.* FROM questions q JOIN tickets t ON t.id=q.ticket_id WHERE t.deleted_at IS NULL AND t.archived_at IS NULL AND q.status='open' AND ((q.target_type='actor' AND q.target_id=?) OR (q.target_type='role' AND EXISTS(SELECT 1 FROM actors ra WHERE ra.id=? AND ra.role_id=q.target_id))) ORDER BY q.created_at,q.id`).all(actor.id, actor.id).map((q) => this.#publicQuestion(q)); const events = this.#db.prepare(`SELECT e.id cursor,e.ticket_id,e.project,e.type,e.actor,e.message,e.metadata,e.created_at FROM events e WHERE e.id>? AND json_extract(e.metadata,'$.question_id') IN (SELECT q.id FROM questions q JOIN tickets t ON t.id=q.ticket_id WHERE t.deleted_at IS NULL AND t.archived_at IS NULL AND ((q.target_type='actor' AND q.target_id=?) OR (q.target_type='role' AND EXISTS(SELECT 1 FROM actors ra WHERE ra.id=? AND ra.role_id=q.target_id)))) ORDER BY e.id`).all(cursor, actor.id, actor.id).map((e) => ({ ...e, metadata: parseMetadata(e.metadata) })); const global = Number(this.#db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor); return { actor, questions, events, cursor: events.length ? events.at(-1).cursor : global }; }
   async listEvents({ project: rawProject, ticket: ticketId, after = 0 } = {}) { const cursor = Number(after); if (!Number.isSafeInteger(cursor) || cursor < 0) throw new DomainError(400, 'invalid_cursor', 'after must be a non-negative integer'); const where = ['id>?']; const values = [cursor]; if (rawProject) { where.push('project=?'); values.push(this.#project(rawProject).key); } if (ticketId) { this.#row(ticketId); where.push('ticket_id=?'); values.push(ticketId); } const events = this.#db.prepare(`SELECT id cursor,ticket_id,project,type,actor,device_id,message,metadata,created_at FROM events WHERE ${where.join(' AND ')} ORDER BY id`).all(...values).map((e) => ({ ...e, metadata: parseMetadata(e.metadata) })); const global = Number(this.#db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor); return { events, cursor: events.length ? events.at(-1).cursor : global }; }
 }

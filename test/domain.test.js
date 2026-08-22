@@ -21,7 +21,7 @@ async function fixture() {
 async function seeded() {
   const f = await fixture();
   await f.store.createProject('ABC');
-  const ticket = await f.store.createTicket({ project: 'ABC', title: 'Trace claim fencing', body: 'details', actor: 'maks', assignee: { type: 'device', id: 'worker-a' } });
+  const ticket = await f.store.createTicket({ project: 'ABC', title: 'Trace claim fencing', description: 'details', actor: 'maks', assignment:'Agent' });
   return { ...f, ticket };
 }
 
@@ -35,11 +35,11 @@ const identity = (claim) => ({
 test('SQLite ticket fields, numbering, and event history survive store restart', async () => {
   const { store, file } = await fixture();
   assert.deepEqual(await store.createProject('abc'), { key: 'ABC', next_number: 1, created_at: 1_700_000_000_000 });
-  const first = await store.createTicket({ project: 'ABC', title: ' first ', body: 'body', assigned_to: 'worker-a', actor: 'maks' });
+  const first = await store.createTicket({ project: 'ABC', title: ' first ', description: 'body', assignment:'Agent', actor: 'maks' });
   assert.equal(first.id, 'ABC-1');
-  assert.equal(first.state, 'open');
-  assert.equal(first.body, 'body');
-  assert.equal(first.assigned_to, 'worker-a');
+  assert.equal(first.state, 'Open');
+  assert.equal(first.description, 'body');
+  assert.equal(first.assignment, 'Agent');
   await store.close();
 
   const reopened = new Store(file, { now: () => 1_700_000_001_000 });
@@ -47,14 +47,14 @@ test('SQLite ticket fields, numbering, and event history survive store restart',
   const second = await reopened.createTicket({ project: 'ABC', title: 'second' });
   assert.equal(second.id, 'ABC-2');
   assert.equal((await reopened.getTicket('ABC-1')).title, 'first');
-  assert.deepEqual((await reopened.listEvents({ ticket: 'ABC-1' })).events.map((event) => event.type), ['ticket_created', 'assigned']);
+  assert.deepEqual((await reopened.listEvents({ ticket: 'ABC-1' })).events.map((event) => event.type), ['ticket_created']);
   await reopened.close();
 });
 
 test('durable claim survives arbitrary elapsed time and restart without liveness inference', async () => {
   const { store, file, ticket, advance } = await seeded();
   const claim = await store.claim(ticket.id, { actor: 'worker-a' });
-  assert.equal(claim.ticket.state, 'open');
+  assert.equal(claim.ticket.state, 'Working');
   assert.equal(claim.ticket.claim.generation, 1);
   assert.equal(typeof claim.ticket.claim.claim_id, 'string');
   assert.equal('token_hash' in claim.ticket.claim, false);
@@ -81,38 +81,39 @@ test('submit review, accept done, and reopen open are explicit state transitions
   const { store, ticket } = await seeded();
   const claim = await store.claim(ticket.id, { actor: 'worker-a' });
   const reviewed = (await store.submit(ticket.id, { ...identity(claim), reviewer:{type:'actor',id:'maks'}, message: 'ready for review' })).ticket;
-  assert.equal(reviewed.state, 'review');
+  assert.equal(reviewed.state, 'Waiting');
   assert.equal(reviewed.claim, null);
   const done = await store.accept(ticket.id, { actor: 'maks', message: 'accepted' });
-  assert.equal(done.state, 'done');
+  assert.equal(done.state, 'Done');
   const reopened = await store.reopen(ticket.id, { actor: 'maks', message: 'follow-up needed' });
-  assert.equal(reopened.state, 'open');
+  assert.equal(reopened.state, 'Open');
   assert.equal(reopened.claim, null);
 });
 
-test('coordinator assignment is launch authorization and atomic claimNext honors exact device', async () => {
+test('Agent assignment is launch authorization and atomic claimNext skips Unassigned work', async () => {
   const { store, file } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' });
-  await store.createTicket({ project: 'ABC', title: 'Assigned', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
-  assert.equal((await store.claimNext({ project: 'ABC', device: 'worker-b' })).ticket.id, 'ABC-1');
+  await store.createTicket({ project: 'ABC', title: 'Assigned', assignment: 'Agent', actor: 'maks' });
+  assert.equal((await store.claimNext({ project: 'ABC', device: 'worker-b' })).ticket.id, 'ABC-2');
+  await store.createTicket({ project: 'ABC', title: 'Concurrent', assignment: 'Agent', actor: 'maks' });
   const other = new Store(file); await other.init();
   const outcomes = await Promise.all([store.claimNext({ project: 'ABC', device: 'worker-a' }), other.claimNext({ project: 'ABC', device: 'worker-a' })]);
-  assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-2'); await other.close();
+  assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3'); await other.close();
 });
 
-test('coordinator reassignment immediately changes worker eligibility without authority rows', async () => {
+test('assignment category changes eligibility without exposing identity authority', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Launch', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
-  await store.editTicket('ABC-1', { actor: 'maks', assignee: { type: 'device', id: 'worker-b' } });
+  await store.createTicket({ project: 'ABC', title: 'Launch', actor: 'maks' });
   assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-a' }), null);
-  const claim = await store.claimNext({ project: 'ABC', device: 'worker-b' }); await store.release('ABC-1', identity(claim));
-  assert.ok(await store.claimNext({ project: 'ABC', device: 'worker-b' }));
+  await store.editTicket('ABC-1', { actor: 'maks', assignment: 'Agent' });
+  const claim = await store.claimNext({ project: 'ABC', device: 'worker-b' });
+  assert.equal(claim.ticket.assignment, 'Agent');
   assert.equal('execution_authority' in await store.getTicket('ABC-1'), false);
 });
 
 test('structured blockers prevent relaunch until a human resolves them', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Blocked', assignee: { type: 'device', id: 'worker-a' }, actor: 'maks' });
+  await store.createTicket({ project: 'ABC', title: 'Blocked', assignment:'Agent', actor: 'maks' });
   const claim = await store.claimNext({ project: 'ABC', device: 'worker-a' });
   const blocked = await store.blockTicket('ABC-1', { ...identity(claim), reason: 'Need review' });
   assert.equal(blocked.ticket.unresolved_blockers, 1);
@@ -157,33 +158,27 @@ test('event cursor is global monotonic and polling after cursor filters project 
   assert.ok(ticketEvents.cursor >= progress.cursor);
 });
 
-test('human edits every ticket field while assignment remains distinct from the active claim', async () => {
+test('human edits mutable ticket fields while project identity and active claim remain stable', async () => {
   const { store, ticket } = await seeded();
-  await store.createProject('XYZ');
   const claim = await store.claim(ticket.id, { actor: 'worker-a' });
-  const edited = await store.editTicket(ticket.id, { title: 'Moved', body: '**new** body', project: 'XYZ', assignee: { type: 'actor', id: 'worker-b' }, actor: 'maks' });
-  assert.equal(edited.id, ticket.id);
-  assert.equal(edited.project, 'XYZ');
-  assert.equal(edited.title, 'Moved');
-  assert.equal(edited.body, '**new** body');
-  assert.deepEqual(edited.assignee, { type: 'actor', id: 'worker-b' });
-  assert.equal(edited.claim.claim_id, claim.ticket.claim.claim_id);
-  assert.equal(edited.claim.actor, 'worker-a');
-  const events = (await store.listEvents({ ticket: ticket.id })).events.slice(2);
-  assert.deepEqual(events.map((event) => event.type), ['claimed', 'ticket_edited', 'ticket_moved', 'assigned']);
-  assert.ok(events.filter((event) => event.type !== 'claimed').every((event) => event.actor === 'maks'));
+  const edited = await store.editTicket(ticket.id, { title: 'Updated', description: '**new** body', assignment: 'Human', actor: 'maks' });
+  assert.equal(edited.id, ticket.id); assert.equal(edited.project, 'ABC');
+  assert.equal(edited.title, 'Updated'); assert.equal(edited.description, '**new** body'); assert.equal(edited.assignment, 'Human');
+  assert.equal(edited.claim.claim_id, claim.ticket.claim.claim_id); assert.equal(edited.claim.actor, 'worker-a');
+  await assert.rejects(store.editTicket(ticket.id, { project: 'XYZ', actor: 'maks' }), (error) => error.code === 'immutable_project');
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'claimed', 'ticket_edited']);
 });
 
 test('human direct state changes fence claims and progress stays in the ticket event chronology', async () => {
   const { store, ticket, advance } = await seeded();
   await store.claim(ticket.id, { actor: 'worker-a' });
-  const review = await store.setTicketState(ticket.id, { state: 'review', actor: 'maks' });
-  assert.equal(review.state, 'review'); assert.equal(review.claim, null);
+  const review = await store.setTicketState(ticket.id, { state: 'Waiting', actor: 'maks' });
+  assert.equal(review.state, 'Waiting'); assert.equal(review.claim, null);
   advance(1000);
   const progress = await store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'Human **progress** note.' });
   assert.equal(progress.event.type, 'progress'); assert.equal(progress.event.actor, 'maks');
-  await store.setTicketState(ticket.id, { state: 'done', actor: 'maks' });
-  await store.setTicketState(ticket.id, { state: 'open', actor: 'maks' });
+  await store.setTicketState(ticket.id, { state: 'Done', actor: 'maks' });
+  await store.setTicketState(ticket.id, { state: 'Open', actor: 'maks' });
   const events = (await store.listEvents({ ticket: ticket.id })).events.filter((event) => ['state_changed', 'progress'].includes(event.type));
   assert.deepEqual(events.map((event) => event.type), ['state_changed', 'progress', 'state_changed', 'state_changed']);
   assert.ok(events.every((event) => event.actor === 'maks' && event.created_at && event.message));
@@ -191,7 +186,7 @@ test('human direct state changes fence claims and progress stays in the ticket e
 
 test('direct state override resolves a pending approval instead of leaving a stale inbox question', async () => {
   const { store, ticket } = await seeded(); const claim = await store.claim(ticket.id, { actor: 'worker-a' }); const submitted = await store.submit(ticket.id, { ...identity(claim), reviewer: { type: 'actor', id: 'maks' } });
-  await store.setTicketState(ticket.id, { state: 'open', actor: 'maks' });
+  await store.setTicketState(ticket.id, { state: 'Open', actor: 'maks' });
   const question = (await store.listQuestions(ticket.id)).questions.find((item) => item.id === submitted.question.id);
   assert.equal(question.status, 'answered'); assert.equal(JSON.parse(question.answer).decision, 'request_changes');
   const answer = (await store.listEvents({ ticket: ticket.id })).events.find((event) => event.type === 'question_answered'); assert.equal(answer.metadata.question_event_id, question.question_event_id);
@@ -220,7 +215,7 @@ test('archived tickets are immutable and leave inboxes until restored', async ()
   assert.deepEqual((await store.actorInbox('maks')).questions, []);
   for (const operation of [
     () => store.editTicket(ticket.id, { actor: 'maks', title: 'archived edit' }),
-    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'Done' }),
     () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'archived progress' }),
     () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'archived?', target_type: 'actor', target_id: 'worker-a' }),
     () => store.answerQuestion(ticket.id, asked.question.id, { actor: 'maks', answer: 'not yet' }),
@@ -252,20 +247,20 @@ test('deleted tombstones reject subsequent human mutations', async () => {
   const { store, ticket } = await seeded(); await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true });
   for (const operation of [
     () => store.editTicket(ticket.id, { actor: 'maks', title: 'zombie' }),
-    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'done' }),
+    () => store.setTicketState(ticket.id, { actor: 'maks', state: 'Done' }),
     () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'zombie' }),
     () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'zombie?', target_type: 'actor', target_id: 'worker-a' }),
     () => store.accept(ticket.id, { actor: 'maks' }),
     () => store.reopen(ticket.id, { actor: 'maks' })
   ]) await assert.rejects(operation(), (error) => error.code === 'ticket_deleted');
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'assigned', 'deleted']);
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'deleted']);
 });
 
 test('ticket edit and assignment retain the minimal canonical fields and record events', async () => {
   const { store, ticket } = await seeded();
-  const edited = await store.editTicket(ticket.id, { title: 'Updated', body: 'new body', assigned_to: null, actor: 'maks' });
+  const edited = await store.editTicket(ticket.id, { title: 'Updated', description: 'new body', assignment: 'Unassigned', actor: 'maks' });
   assert.equal(edited.title, 'Updated');
-  assert.equal(edited.body, 'new body');
-  assert.equal(edited.assigned_to, null);
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'assigned', 'ticket_edited', 'assigned']);
+  assert.equal(edited.description, 'new body');
+  assert.equal(edited.assignment, 'Unassigned');
+  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'ticket_edited']);
 });

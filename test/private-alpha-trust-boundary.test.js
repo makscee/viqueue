@@ -42,7 +42,7 @@ test('agent progress fails closed without the complete current claim identity', 
   await store.bootstrapCoordinator({ id: 'coord', name: 'Coordinator' });
   const pairing = await store.createPairingCode('coord', { intended_kind: 'worker' });
   await store.pairDevice({ code: pairing.code, id: 'worker', name: 'Worker' });
-  const ticket = await store.createTicket({ project: 'ABC', title: 'Claim boundary', actor: 'coord', assignee: { type: 'device', id: 'worker' } });
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Claim boundary', actor: 'coord', assignment:'Agent' });
   const claim = await store.claim(ticket.id, { actor: 'worker' });
   await assert.rejects(store.postEvent(ticket.id, { actor: 'worker', message: 'unfenced' }), (error) => error.code === 'stale_claim');
   await assert.rejects(store.postEvent(ticket.id, { ...claimIdentity(claim), claim_token: 'wrong', message: 'wrong token' }), (error) => error.code === 'stale_claim');

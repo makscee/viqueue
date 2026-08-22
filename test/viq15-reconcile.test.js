@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -32,7 +32,7 @@ function fixture(dir) {
 }
 
 function inTemp(fn) {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'viq15-reconcile-'));
+  const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'viq15-reconcile-')));
   try { return fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
