@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
 
@@ -26,15 +26,59 @@ const fileSha256 = (file) => new Promise((resolve, reject) => {
   stream.on('error', reject); stream.on('data', (chunk) => digest.update(chunk)); stream.on('end', () => resolve(digest.digest('hex')));
 });
 const exists = async (file) => stat(file).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
+const encodeSqlValue = (value) => {
+  if (value === null) return ['null'];
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return ['blob', Buffer.from(value).toString('base64')];
+  if (typeof value === 'bigint') return ['integer', value.toString()];
+  if (typeof value === 'number') return ['number', Object.is(value, -0) ? '-0' : String(value)];
+  return [typeof value, value];
+};
+const databaseIdentity = (db) => {
+  const digest = createHash('sha256');
+  const objects = db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_autoindex_%' ORDER BY type,name").all();
+  digest.update(JSON.stringify({
+    userVersion: db.prepare('PRAGMA user_version').get().user_version,
+    applicationId: db.prepare('PRAGMA application_id').get().application_id,
+    encoding: db.prepare('PRAGMA encoding').get().encoding,
+    objects
+  }));
+  for (const { name } of db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()) {
+    const quoted = `"${name.replaceAll('"', '""')}"`;
+    const rows = db.prepare(`SELECT * FROM ${quoted}`).all().map((row) => JSON.stringify(Object.values(row).map(encodeSqlValue))).sort();
+    digest.update(JSON.stringify([name, rows]));
+  }
+  return digest.digest('hex');
+};
+const syncPath = async (target) => {
+  const handle = await open(target, 'r');
+  try { await handle.sync(); } finally { await handle.close(); }
+};
+const v11Binding = (db) => {
+  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='_viqueue_migration_family'").get()) return null;
+  try {
+    const rows = db.prepare('SELECT migration,family_token FROM _viqueue_migration_family').all();
+    if (rows.length !== 1 || rows[0].migration !== 'VIQ-11' || !/^[a-f0-9]{64}$/.test(rows[0].family_token)) throw new Error('contradictory binding');
+    return rows[0].family_token;
+  } catch { throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 database family binding is invalid'); }
+};
+const bindV11Family = (db, familyToken) => {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec('CREATE TABLE _viqueue_migration_family (migration TEXT PRIMARY KEY,family_token TEXT NOT NULL) STRICT');
+    db.prepare("INSERT INTO _viqueue_migration_family(migration,family_token) VALUES('VIQ-11',?)").run(familyToken);
+    db.exec('COMMIT');
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+};
 const validateV11Snapshot = async (source, snapshot, manifestFile) => {
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestFile, 'utf8')); } catch { throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is missing or invalid'); }
-  if (manifest?.format !== 1 || manifest?.migration !== 'VIQ-11' || manifest?.source !== source || !/^[a-f0-9]{64}$/.test(manifest?.sha256)) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is not trusted for this database');
+  if (manifest?.format !== 2 || manifest?.migration !== 'VIQ-11' || manifest?.source !== source || !/^[a-f0-9]{64}$/.test(manifest?.sha256) || !/^[a-f0-9]{64}$/.test(manifest?.familyToken) || !/^[a-f0-9]{64}$/.test(manifest?.preStampIdentity)) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is not trusted for this database');
   if ((await fileSha256(snapshot)) !== manifest.sha256) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot authentication failed');
   const check = new DatabaseSync(snapshot, { readOnly: true });
   try {
-    if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || Number(check.prepare('PRAGMA user_version').get().user_version) >= 11) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot is not a valid pre-migration database');
+    if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || Number(check.prepare('PRAGMA user_version').get().user_version) >= 11 || databaseIdentity(check) !== manifest.preStampIdentity) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot is not a valid pre-migration database');
   } finally { check.close(); }
+  return manifest;
 };
 
 export class Store {
@@ -42,11 +86,15 @@ export class Store {
   constructor(file, { now = Date.now } = {}) { this.#file = file; this.#now = now; }
 
   static async rollbackV11(file) {
-    const source = path.resolve(file), snapshot = `${source}.pre-viq11.sqlite`, manifest = `${snapshot}.manifest.json`, temporary = `${source}.rollback.${process.pid}`;
-    await validateV11Snapshot(source, snapshot, manifest);
+    const source = path.resolve(file), snapshot = `${source}.pre-viq11.sqlite`, manifestFile = `${snapshot}.manifest.json`, temporary = `${source}.rollback.${process.pid}`;
+    const manifest = await validateV11Snapshot(source, snapshot, manifestFile);
+    const live = new DatabaseSync(source, { readOnly: true });
+    try {
+      if (v11Binding(live) !== manifest.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
+    } finally { live.close(); }
     await rm(temporary, { force: true });
     await copyFile(snapshot, temporary);
-    await validateV11Snapshot(source, temporary, manifest);
+    await validateV11Snapshot(source, temporary, manifestFile);
     const preserved = `${source}.post-viq11.${Date.now()}`;
     await rename(source, preserved);
     for (const suffix of ['-wal','-shm']) { try { await rename(`${source}${suffix}`, `${preserved}${suffix}`); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
@@ -57,8 +105,9 @@ export class Store {
   async init() {
     await mkdir(path.dirname(path.resolve(this.#file)), { recursive: true });
     this.#db = new DatabaseSync(this.#file);
-    this.#db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
+    this.#db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     await this.#prepareV11Migration();
+    this.#db.exec('PRAGMA journal_mode=WAL;');
     this.#db.exec(`
       CREATE TABLE IF NOT EXISTS projects (key TEXT PRIMARY KEY,next_number INTEGER NOT NULL,created_at INTEGER NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS tickets (
@@ -122,17 +171,25 @@ export class Store {
     }
     const source = path.resolve(this.#file), destination = `${source}.pre-viq11.sqlite`, manifest = `${destination}.manifest.json`;
     const [hasSnapshot, hasManifest] = await Promise.all([exists(destination), exists(manifest)]);
+    let sealed;
     if (hasSnapshot || hasManifest) {
       if (!hasSnapshot || !hasManifest) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot family is incomplete; refusing to overwrite it');
-      await validateV11Snapshot(source, destination, manifest);
+      sealed = await validateV11Snapshot(source, destination, manifest);
     } else {
       const temporary = `${destination}.tmp.${process.pid}`, temporaryManifest = `${manifest}.tmp.${process.pid}`;
       await rm(temporary, { force: true }); await rm(temporaryManifest, { force: true });
-      await backup(this.#db, temporary);
-      const sealed = { format: 1, migration: 'VIQ-11', source, sha256: await fileSha256(temporary) };
-      await writeFile(temporaryManifest, `${JSON.stringify(sealed)}\n`, { mode: 0o600 });
-      await rename(temporary, destination);
-      await rename(temporaryManifest, manifest);
+      await backup(this.#db, temporary); await syncPath(temporary);
+      const pristine = new DatabaseSync(temporary, { readOnly: true });
+      try { sealed = { format: 2, migration: 'VIQ-11', source, sha256: await fileSha256(temporary), familyToken: randomBytes(32).toString('hex'), preStampIdentity: databaseIdentity(pristine) }; } finally { pristine.close(); }
+      await writeFile(temporaryManifest, `${JSON.stringify(sealed)}\n`, { mode: 0o600 }); await syncPath(temporaryManifest);
+      await rename(temporary, destination); await syncPath(path.dirname(destination));
+      await rename(temporaryManifest, manifest); await syncPath(path.dirname(manifest));
+    }
+    const binding = v11Binding(this.#db);
+    if (binding && binding !== sealed.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
+    if (!binding) {
+      if (databaseIdentity(this.#db) !== sealed.preStampIdentity) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 unstamped source does not match its rollback snapshot');
+      bindV11Family(this.#db, sealed.familyToken);
     }
     this.#v11Plan = plan;
   }

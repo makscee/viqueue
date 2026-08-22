@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -74,6 +74,67 @@ test('VIQ-11 retry preserves the first snapshot and rollback restores exact pre-
   assert.deepEqual(await readFile(snapshot), firstSnapshotBytes, 'retry must not replace the first pre-VIQ-11 snapshot');
   await Store.rollbackV11(file);
   const restored = new DatabaseSync(file, { readOnly: true }); assert.deepEqual(capture(restored), original); restored.close();
+});
+
+test('VIQ-11 rejects a valid snapshot pair from another database family at the same path', async () => {
+  const familyA = await database(); await familyA.store.createProject('AAA'); await familyA.store.createTicket({ project: 'AAA', title: 'family A', assignment: 'Human' }); await familyA.store.close();
+  let db = new DatabaseSync(familyA.file); db.exec('PRAGMA user_version=10'); db.close();
+  const migratedA = new Store(familyA.file); await migratedA.init(); await migratedA.close();
+
+  const familyB = await database(); await familyB.store.createProject('BBB'); await familyB.store.createTicket({ project: 'BBB', title: 'family B', assignment: 'Agent' }); await familyB.store.close();
+  db = new DatabaseSync(familyB.file); db.exec('PRAGMA user_version=10'); db.close();
+  await copyFile(familyB.file, familyA.file);
+  const capture = (file) => {
+    const check = new DatabaseSync(file, { readOnly: true });
+    try {
+      return {
+        version: check.prepare('PRAGMA user_version').get().user_version,
+        projects: check.prepare('SELECT key,next_number FROM projects ORDER BY key').all().map((row) => ({ ...row })),
+        tickets: check.prepare('SELECT id,project,number,title,assignment FROM tickets ORDER BY id').all().map((row) => ({ ...row })),
+        memberships: check.prepare('SELECT ticket_id,project_key FROM ticket_projects ORDER BY ticket_id,project_key').all().map((row) => ({ ...row }))
+      };
+    } finally { check.close(); }
+  };
+  const before = capture(familyA.file), beforeBytes = await readFile(familyA.file);
+  const swapped = new Store(familyA.file); await assert.rejects(swapped.init(), (error) => error.code === 'invalid_migration_snapshot'); await swapped.close();
+  assert.deepEqual(capture(familyA.file), before); assert.deepEqual(await readFile(familyA.file), beforeBytes);
+  await assert.rejects(Store.rollbackV11(familyA.file), (error) => error.code === 'invalid_migration_snapshot');
+  assert.deepEqual(capture(familyA.file), before); assert.deepEqual(await readFile(familyA.file), beforeBytes);
+  assert.deepEqual(before, {
+    version: 10,
+    projects: [{ key: 'BBB', next_number: 2 }],
+    tickets: [{ id: 'BBB-1', project: 'BBB', number: 1, title: 'family B', assignment: 'Agent' }],
+    memberships: [{ ticket_id: 'BBB-1', project_key: 'BBB' }]
+  });
+});
+
+test('VIQ-11 recovers only the exact unstamped source after the manifest-before-binding crash gap', async () => {
+  const { file, store } = await database(); await store.createProject('VIQ'); await store.createTicket({ project: 'VIQ', title: 'pristine', assignment: 'Human' }); await store.close();
+  let db = new DatabaseSync(file); db.exec('PRAGMA user_version=10'); db.close();
+  const first = new Store(file); await first.init(); await first.close();
+  const snapshot = `${file}.pre-viq11.sqlite`, manifest = JSON.parse(await readFile(`${snapshot}.manifest.json`, 'utf8'));
+  await copyFile(snapshot, file);
+  const recovered = new Store(file); await recovered.init(); await recovered.close();
+  db = new DatabaseSync(file, { readOnly: true });
+  assert.equal(db.prepare("SELECT family_token FROM _viqueue_migration_family WHERE migration='VIQ-11'").get().family_token, manifest.familyToken);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 11); db.close();
+  await Store.rollbackV11(file);
+  db = new DatabaseSync(file, { readOnly: true });
+  assert.equal(db.prepare("SELECT 1 FROM sqlite_schema WHERE name='_viqueue_migration_family'").get(), undefined);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 10);
+  assert.deepEqual(db.prepare('SELECT id,assignment FROM tickets').all().map((row) => ({ ...row })), [{ id: 'VIQ-1', assignment: 'Human' }]); db.close();
+});
+
+test('VIQ-11 rejects contradictory live family bindings before retry or rollback mutation', async () => {
+  const { file, store } = await database(); await store.createProject('VIQ'); await store.createTicket({ project: 'VIQ', title: 'bound' }); await store.close();
+  let db = new DatabaseSync(file); db.exec('PRAGMA user_version=10'); db.close();
+  const migrated = new Store(file); await migrated.init(); await migrated.close();
+  db = new DatabaseSync(file); db.prepare("UPDATE _viqueue_migration_family SET family_token=? WHERE migration='VIQ-11'").run('f'.repeat(64)); db.exec('PRAGMA user_version=10'); db.close();
+  const before = await readFile(file);
+  const retry = new Store(file); await assert.rejects(retry.init(), (error) => error.code === 'invalid_migration_snapshot'); await retry.close();
+  assert.deepEqual(await readFile(file), before);
+  await assert.rejects(Store.rollbackV11(file), (error) => error.code === 'invalid_migration_snapshot');
+  assert.deepEqual(await readFile(file), before);
 });
 
 test('VIQ-11 migration refuses stale or corrupted snapshot families instead of overwriting them', async () => {
