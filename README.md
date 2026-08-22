@@ -1,66 +1,65 @@
 # viqueue
 
-viqueue is a minimalist pull-based ticket dispatcher for agents and humans. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.4.1 is a prerelease for local evaluation; it is not production-ready.
+viqueue is a minimalist pull-based ticket board for a private, single-operator dogfood environment. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.4.1 remains a prerelease and is not production-ready.
 
-## Daily Alpha contract
+## Pairing PoC contract
 
-The HTTP JSON core is the only state machine. `viq`, MCP stdio, and the browser are thin HTTP clients. Runtime data lives in one SQLite file using Node 22's built-in `node:sqlite` and normalized projects, tickets, claims, events, actors, roles, actor-role memberships, and questions.
+The HTTP JSON core is the only state machine. Authorization is intentionally small:
 
-Tickets have only `open`, `review`, and `done` states. Registered actors and roles provide typed actor/role assignment. Active agents may claim unassigned work; assigned work requires matching actor or role membership. Claim owners can ask fenced questions while continuing progress, and submission explicitly targets a reviewer whose approval answer atomically accepts or requests changes. The board projects active tickets as Ready (open without a claim), Working (open with a claim), Review, and Done, with Archived as a separate fifth history column.
+- one-time, short-lived device pairing codes;
+- fixed paired device kind: `coordinator` or `worker`;
+- simple roles used only as worker assignment groups.
 
-**A claim persists until an explicit release, submission, or takeover. Silence changes nothing.** Claims are authority locks, not liveness. Claim identity contains an opaque `claim_id`, actor, generation, and an unguessable token whose hash—not plaintext—is stored. Executor mutations require all current credentials. Agent text-question answers likewise require the current claim credentials for that ticket and the claimed actor must match; human answers use actor/role authorization without claim credentials, and approvals are human-only. Explicit local-operator takeover increments generation and fences every older owner.
+A coordinator may create/edit/archive tickets, assign to a worker device or role, answer/review submissions, issue/revoke pairing, and manage roles. A worker may read assigned work, claim it atomically, post claim-fenced progress/questions/blockers/submissions, or release its claim. Roles grant no API permissions.
 
-**Progress events are observations, not proof of liveness.** Events form append-only per-ticket and global streams with a monotonic cursor. Agents pull work; viqueue never starts workers.
+Assignment is launch authorization. Every HTTP, CLI, and `/viq` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Exact device/role assignments are preferred; eligible unassigned free-pool tickets may also be claimed atomically within project, role, and membership boundaries. Takeover is absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
 
-## Run
+Claims remain durable generation-fenced locks until explicit release or submission. Claim and device credentials are returned only at creation/pairing, stored by hash in SQLite, and never included in ticket/model context.
 
-Requires Node.js 22. Runtime has no third-party dependencies; Playwright is development-only.
+## Bootstrap and run
+
+Requires Node.js 22.
 
 ```sh
 npm test
 npm run build
-VIQ_OPERATOR_TOKEN=local-secret node dist/src/server.js --storage=./data/viqueue.sqlite
+viq-bootstrap --storage ./data/viqueue.sqlite --id coord --name "Coordinator"
+node dist/src/server.js --storage=./data/viqueue.sqlite
 ```
 
-Open `http://127.0.0.1:7373` for the responsive board (four active columns plus Archived) and prominent **Questions for you** inbox. The persisted actor selector is private-alpha workflow context, not authentication; server-side actor/role eligibility is still enforced.
-
-Representative CLI operations:
+`viq-bootstrap` is a local install action and prints the first coordinator credential once. Supply a credential with `--device-token` or `VIQ_DEVICE_TOKEN`:
 
 ```text
-viq actor create eva --name Eva --kind agent --machine tower-pi --auth TOKEN
-viq actor show|update|deactivate eva; viq role grant|revoke eva reviewers --auth TOKEN
-viq project create ABC                 viq project list
-viq ticket create ABC "Fix parser" --body "..." --assignee eva
-viq ticket list ABC --assignee eva     viq ticket show ABC-1
-viq ticket edit ABC-1 --assignee-role builders
-viq ticket next --project ABC          viq ticket claim ABC-1 --actor eva
-viq question ask ABC-1 <claim credentials> --text "Need input" --target-role reviewers
-viq question answer ABC-1 Q --actor maks --answer "yes" # agents also pass claim credentials
-viq ticket submit ABC-1 <claim credentials> --reviewer-role reviewers
-viq ticket takeover ABC-1 --actor maks --auth LOCAL_TOKEN
-viq ticket accept|reopen ABC-1 --actor maks --auth LOCAL_TOKEN
-viq event post ABC-1 <claim credentials> --message "tests green"
-viq event list --project ABC --after CURSOR
+viq project create ABC --device-token COORDINATOR_CREDENTIAL
+viq device pair-code --kind worker --device-token COORDINATOR_CREDENTIAL
+viq role create tower-pi --name "Tower Pi" --device-token COORDINATOR_CREDENTIAL
+viq role grant tower-worker tower-pi --device-token COORDINATOR_CREDENTIAL
+viq ticket create ABC "Fix parser" --assignee-role tower-pi --device-token COORDINATOR_CREDENTIAL
+viq ticket claim-next --project ABC --device-token WORKER_CREDENTIAL
 ```
 
-CLI JSON mode writes one JSON document. Exit codes are 0 success, 2 usage, 3 conflict, 4 not found, 5 other HTTP error, and 6 client/transport error. MCP exposes coherent equivalents through `tools/list`; run `viq-mcp` with `VIQ_URL` (legacy `VIQ_SERVER` is also accepted). `VIQ_OPERATOR_TOKEN` is only needed for operator tools. The actor selector and actor fields are private-alpha workflow identity, not adversarial authentication: keep HTTP behind a trusted loopback or private Tailscale boundary and never expose it with Funnel/public ingress.
+The browser board shows a pairing form when no valid local pairing exists. New coordinator-issued codes bind actor, kind, device ID, and device name, so code-only clients need only the one-time code; the browser retains ID/name inputs for legacy nullable codes. The board verifies `/v1/devices/me` and stores only the returned credential in `localStorage['viq.deviceCredential']`. Invalid/revoked credentials are cleared automatically, and **Disconnect this device** clears only browser-local state without revoking the server-side device.
 
-## Import v0.2 JSON safely
+MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. Install the existing package in a user's Pi profile with `pi install <Viq package>`. Subsequent Pi sessions for that Unix user discover:
 
-The server never silently interprets or discards an old JSON file. Create a new SQLite file explicitly:
-
-```sh
-viq-import --from ./data/viqueue.json --to ./data/viqueue.sqlite
+```text
+/viq PAIRING_CODE [--project KEY]
+/viq status
+/viq pause|resume|stop
 ```
 
-The one-shot importer preserves project keys, next numbers, ticket IDs/titles, submitted review state, evidence as an import event, and legacy claim fencing credentials. A legacy current claim is imported as a durable current claim with the same actor, generation, and token authority. Submitted tickets release their old claim. If any claim lacks actor, generation, or token, import fails closed and removes the incomplete target. Existing targets are never overwritten. Keep the old JSON backup until validation is complete.
+`/viq PAIRING_CODE` pairs and starts the worker in the current visible Pi session; there is no separate worker command or launch ritual. Before every claim attempt it visibly runs `tools/vault-sync/vault-sync sync` in the current Vault and claims only after status proves a clean `CURRENT/EQUAL` canonical commit. The VIQ server remains the sole eligibility and atomic claim authority, and the complete returned ticket contract is injected unchanged with sanitized history. `viq_submit` visibly syncs again and submits the operator evidence plus the exact published commit only after publication succeeds; conflict, guard, or offline failure retains the fenced claim for retry.
 
-## Local bundle and evidence
+Pairing writes JSON outside repositories at `${XDG_CONFIG_HOME:-~/.config}/viq/credential.json`, with directory mode 0700 and file mode 0600. Sessions for the same Unix user reuse it; other users do not. Ordinary root Pi is supported and receives a root-only file. Polling is a timer owned by that Pi session, stopped on session shutdown, with no daemon or duplicate lifecycle store. Explicit `VIQ_WORKER_LOCKDOWN=1` preserves the historical isolated-workspace/root refusal contour. Credentials stay out of prompts, status, tool results, argv, environment, and request bodies; the trusted Pi process necessarily can read its own Unix user's file.
 
-`npm run bundle` creates deterministic `release/viqueue-v0.4.1-rc.tar.gz` plus SHA-256. Its reversible installer adds the launchers `viq`, `viq-import`, `viq-phone-auth`, `viq-trace-tailscale-upstream`, `viqueue-server`, `viqueue-mcp`, and `viqueue-phone-gateway` under `${VIQ_PREFIX:-~/.local}`; uninstall preserves separately located ticket data. Nothing here publishes, pushes, tags, deploys, or launches workers. See the [isolated phone-auth staging runbook](docs/phone-auth-staging-runbook.md) before configuring a gateway.
+An exact worker-only archive is built from clean committed `HEAD` with `npm run bundle:worker -- OUTPUT_DIR`. It includes `SOURCE_COMMIT`, `SOURCE_TREE`, the configured `package.json` discovery path, and only the worker extension/runtime. `scripts/install-viq-worker.sh` requires an explicit `VIQ_WORKER_ROOT`, exact candidate commit, and exact current predecessor before it creates a read-only release and atomically renames the `current` symlink. `scripts/rollback-viq-worker.sh` accepts only that installed candidate and the sealed predecessor; the VIQ-15 predecessor is `1398284ed89a6cf9395f129483f709e63c009286`. Tests and rehearsals must use an isolated root, never `/opt/viq-worker`.
 
-`npm run e2e` exercises CLI, MCP, the standard Chromium flow, and the isolated HTTPS phone-browser flow. Evidence is written only to `VIQ_EVIDENCE_DIR` when explicitly set; otherwise the command uses disposable temporary output.
+## Migration and rollback
 
-Browser coverage is intentionally non-duplicative: desktop (1280px) owns the full changed-control flow, including Markdown questions/answers, linked and human-readable history, editing, assignment, project/state changes, archive/restore, and deletion. Mobile (390px) is a representative layout/modal/filter/edit/archive/delete smoke with overflow checks; it does not repeat the full desktop suite. See [ADR 0008](docs/adr-0008-v03-daily-alpha-core.md), the accepted [private-alpha trust boundaries](docs/adr-0011-private-alpha-trust-boundaries.md), [CHANGELOG.md](CHANGELOG.md), and [release notes](release-notes/v0.4.1.md).
+The forward migration creates `devices`, `pairing_codes`, and `device_roles`. The old `execution_authorities` table is retained only so rollback to the earlier build remains possible; candidate code neither joins, writes, consumes, nor exposes it. Install requires a local coordinator bootstrap before switching clients. Rollback restores the prior binary and database snapshot together; old binaries can still read their retained table.
 
-viqueue is licensed under the [Apache License 2.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+The VIQ-15 cutover preflight and rollback intentionally do not pin whole-table row counts. Tickets, events, role memberships, and other unrelated live state may legitimately change between review and cutover and must be preserved. Global database safety is instead enforced by SQLite integrity, the exact schema digest, authenticated rollback artifacts, and source/SQLite-consistent-backup schema-and-count equality after writers stop. The reconciliation helper separately fails closed on the exact claims, open questions, actors, assignments, and timestamps that VIQ-15 changes.
+
+The v0.2 importer remains explicit and never overwrites an existing target. `npm run bundle` refuses a dirty tree, records exact commit/tree identity, and creates a deterministic local archive. The installer writes an immutable release directory and atomically switches `current`, preserving `previous`; `rollback-local.sh` switches it back. When `VIQ_STORAGE` already exists, install requires an explicit offline confirmation and uses SQLite's backup API to capture and validate committed main/WAL state before any pointer change. Optional rollback restoration first creates and validates a SQLite-consistent post-candidate preservation copy, then prepares and validates the prior snapshot before replacing the database and removing stale sidecars; it likewise requires `VIQ_RESTORE_STORAGE=1`, `VIQ_STORAGE`, and offline confirmation. Uninstall removes launchers/pointers but preserves release and backup evidence. Nothing here publishes, deploys, or mutates live state.
+
+viqueue is licensed under the [Apache License 2.0](LICENSE). See [SECURITY.md](SECURITY.md) for the bounded private-PoC threat model.

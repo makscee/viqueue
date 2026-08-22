@@ -1,6 +1,6 @@
 # ADR 0008: v0.3 Daily Alpha core
 
-Status: accepted for local prerelease development
+Status: superseded historical ADR; ADR 0012 removes takeover and replaces actor authority with paired devices.
 
 v0.3 replaces the JSON tracer with one SQLite database and four durable domain tables: projects, tickets, claims, and events. Node 22's built-in `node:sqlite` is used despite its runtime experimental warning because the supported Node 22.22 test/runtime provides the required stable synchronous API and this avoids a production dependency.
 

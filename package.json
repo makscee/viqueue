@@ -5,27 +5,30 @@
   "type": "module",
   "bin": {
     "viq": "bin/viq.js",
+    "viq-bootstrap": "bin/viq-bootstrap.js",
     "viq-mcp": "src/mcp-server.js",
     "viqueue-mcp": "src/mcp-server.js",
-    "viq-import": "bin/viq-import.js",
-    "viq-phone-auth": "bin/viq-phone-auth.js",
-    "viq-trace-tailscale-upstream": "bin/viq-trace-tailscale-upstream.js",
-    "viqueue-phone-gateway": "src/phone-gateway.js"
+    "viq-import": "bin/viq-import.js"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
     "build": "node scripts/build.js",
     "bundle": "npm run build && node scripts/bundle.js",
+    "bundle:worker": "node scripts/package-viq-worker.js",
     "scan:secrets": "node scripts/scan-secrets.js",
     "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
-    "e2e:mcp": "bash test/mcp-e2e.sh",
     "e2e:browser": "node test/browser-e2e.js",
-    "e2e:phone": "node test/phone-auth-e2e.js"
+    "e2e:browser-pairing": "node test/browser-pairing-e2e.js",
+    "e2e:coordinator-worker": "node test/coordinator-worker-browser-e2e.js",
+    "e2e:coordinator-worker:hermetic": "bash scripts/run-coordinator-worker-browser-e2e.sh"
   },
   "engines": {
     "node": ">=22"
   },
   "license": "Apache-2.0",
+  "pi": {
+    "extensions": ["./extensions/viq-worker/index.ts"]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/makscee/viqueue.git"
@@ -44,9 +47,11 @@
     "CONTRIBUTING.md",
     "SECURITY.md",
     "docs",
-    "release-notes"
+    "release-notes",
+    "extensions"
   ],
   "devDependencies": {
-    "playwright": "^1.62.1"
+    "@earendil-works/pi-coding-agent": "0.83.0",
+    "playwright": "1.62.1"
   }
 }

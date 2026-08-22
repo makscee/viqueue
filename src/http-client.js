@@ -1,12 +1,12 @@
 export class HttpApplicationClient {
-  constructor({ server = process.env.VIQ_URL ?? 'http://127.0.0.1:7373', operatorToken } = {}) {
+  constructor({ server = process.env.VIQ_URL ?? 'http://127.0.0.1:7373', deviceToken = process.env.VIQ_DEVICE_TOKEN } = {}) {
     this.server = server.replace(/\/$/, '');
-    this.operatorToken = operatorToken;
+    this.deviceToken = deviceToken;
   }
 
-  async request(method, route, body, { takeover = false } = {}) {
+  async request(method, route, body) {
     const headers = { 'content-type': 'application/json' };
-    if (takeover && this.operatorToken) headers.authorization = `Bearer ${this.operatorToken}`;
+    if (this.deviceToken) headers.authorization = `Bearer ${this.deviceToken}`;
     let response;
     try {
       response = await fetch(`${this.server}${route}`, {

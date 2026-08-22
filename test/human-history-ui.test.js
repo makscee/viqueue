@@ -39,15 +39,13 @@ test('reusable modal closes only from backdrop or Escape and restores trigger fo
   assert.equal(triggerFocused, 2);
 });
 
-test('project chip left click is exclusive/toggle-All and right click excludes only that project', () => {
+test('project chips toggle independently with left click', () => {
   const projects = ['LIFE', 'VIQ', 'WORK'];
   let selected = new Set(projects);
-  selected = selectProject(projects, selected, 'VIQ', 'exclusive');
-  assert.deepEqual([...selected], ['VIQ']);
-  selected = selectProject(projects, selected, 'VIQ', 'exclusive');
-  assert.deepEqual([...selected], projects);
-  selected = selectProject(projects, selected, 'VIQ', 'exclude');
+  selected = selectProject(projects, selected, 'VIQ');
   assert.deepEqual([...selected], ['LIFE', 'WORK']);
+  selected = selectProject(projects, selected, 'VIQ');
+  assert.deepEqual([...selected], ['LIFE', 'WORK', 'VIQ']);
 });
 
 test('semantic All projects includes projects discovered by refresh', () => {
@@ -65,13 +63,12 @@ test('project and assignee filters compose, including unassigned tickets', () =>
   assert.deepEqual(applyTicketFilters(tickets, new Set(['VIQ']), new Set(['none'])).map((ticket) => ticket.id), ['VIQ-2']);
 });
 
-test('filter chips expose accessible selected state, context-menu exclusion, and empty reset', async () => {
+test('filter chips expose accessible selected state and empty reset', async () => {
   const [html, app] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.js', 'utf8')]);
   for (const id of ['project-chips', 'assignee-chips', 'reset-filters']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(app, /aria-pressed/);
-  assert.match(app, /contextmenu/);
-  assert.match(app, /preventDefault/);
-  assert.match(`${html}${app}`, /No tickets match these filters/);
+  assert.doesNotMatch(app, /contextmenu/);
+  assert.match(`${html}${app}`, /No tickets match/);
 });
 
 test('human ticket UI exposes every field, direct state, progress, archive, restore, delete, and attributed timeline', async () => {

@@ -9,16 +9,18 @@ const inlineMarkdown = (value) => escapeHtml(value)
   .replace(/\[([^\]]+)]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="noreferrer noopener" target="_blank">$1</a>');
 
 export function applyTicketFilters(tickets, selectedProjects, selectedAssignees) {
-  return tickets.filter((ticket) => selectedProjects.has(ticket.project) && (
+  return tickets.filter((ticket) => (ticket.projects ?? [ticket.project]).some((project) => selectedProjects.has(project)) && (
     selectedAssignees.size === 0 || selectedAssignees.has(ticket.assignee ? `${ticket.assignee.type}:${ticket.assignee.id}` : 'none')
   ));
 }
 
-export function selectProject(projects, selected, project, mode = 'exclusive') {
-  if (mode === 'exclude') return new Set(projects.filter((key) => key !== project));
-  if (selected.size === 1 && selected.has(project)) return new Set(projects);
-  return new Set([project]);
+export function selectProject(projects, selected, project) {
+  const next = new Set(selected); next.has(project) ? next.delete(project) : next.add(project); return next;
 }
+
+export const boardProjection = (ticket) => ticket.state === 'open' ? (ticket.claim ? 'working' : 'todo') : ticket.state;
+export const boardColumns = [['todo', 'To do'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done']];
+export function dedupeTickets(tickets) { return [...new Map(tickets.map((ticket) => [ticket.id, ticket])).values()]; }
 
 export function reconcileProjectSelection(projectsOrPrevious, projectsOrSelected, selectedOrAll, preferred = null) {
   if (projectsOrSelected instanceof Set) {

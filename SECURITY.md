@@ -1,26 +1,22 @@
 # Security policy
 
-## Supported version
+## Supported version and reporting
 
-viqueue is pre-1.0 prerelease software. Security fixes are currently made on the latest `main`; there is no supported release branch, response-time guarantee, or production-security claim.
+viqueue is pre-1.0 prerelease software with no production-security or response-time guarantee. Use GitHub **private vulnerability reporting** for `makscee/viqueue`; do not publish credentials or exploit details in issues.
 
-## Reporting a vulnerability
+## Pairing PoC boundary
 
-Use GitHub **private vulnerability reporting** for `makscee/viqueue`:
+This candidate is a private, single-operator PoC, not a generic IAM or public multi-tenant service.
 
-1. Open the repository's **Security** tab.
-2. Choose **Report a vulnerability**.
-3. Submit affected version/commit, impact, reproduction conditions, and suggested mitigation when safe.
+- Every API request except health, static assets, and one-time pairing exchange requires a paired device bearer credential.
+- Device kind is fixed at pairing: `coordinator` or `worker`.
+- Coordinator and worker permissions are hard-coded at HTTP ingress; roles affect assignment eligibility only.
+- Pairing codes are short-lived, one-time, hashed at rest, and issued only by an active paired coordinator.
+- Device credentials are random, returned once, hashed at rest, and invalid after device revocation.
+- Worker claims require the same active-device, assignment, state, blocker, and active-claim predicate through HTTP, CLI, and `/viq-worker`; MCP is read-only.
+- Claim mutations additionally require the current claim ID, generation, and token and are intentionally absent from MCP.
+- The browser board pairs directly with a one-time code, stores only its returned credential in browser local storage, verifies it through `/v1/devices/me`, clears it on `401` or local disconnect, and never revokes a device as part of disconnect.
+- The Pi worker stores its device credential outside the ticket workspace in an owner-only regular file. It excludes device and claim credentials from prompts, status, and normal tool results, rejects workspace symlink escape, denies shell while active, and refuses root.
+- Keep the core on loopback or an explicitly private network. Never use Funnel/public ingress for this PoC.
 
-Do not disclose suspected vulnerabilities, exploit details, or secrets in public issues or discussions. If the GitHub private reporting control is unavailable, retain the details privately until the repository owner enables it; do not fall back to public disclosure. No separate security email address is claimed.
-
-## Private-alpha trust boundaries
-
-- The phone gateway's single active paired browser device is its access boundary; it identifies a browser profile, not a person or selected actor.
-- The board actor selector is workflow identity for attribution and inbox routing, not authentication or access control.
-- The core and phone-gateway listeners default/remain on loopback; keep any separately approved tailnet ingress private. Never use Funnel or public ingress.
-- Agent mutations require the current claim's complete claim ID, actor, generation, and token. Assignment and actor selection grant no agent authority.
-- The takeover bearer token is a local gate, not production authentication. Claim tokens and storage files are sensitive local data.
-- MCP hosts execute the configured stdio command with the user's permissions; install only trusted source/bundles.
-
-These are accepted private-alpha boundaries, not IAM or a production-security claim. See [ADR 0011](docs/adr-0011-private-alpha-trust-boundaries.md).
+No second phone/browser authentication ledger or gateway is shipped by this candidate.
