@@ -18,7 +18,10 @@ export function selectProject(projects, selected, project) {
   const next = new Set(selected); next.has(project) ? next.delete(project) : next.add(project); return next;
 }
 
-export const boardProjection = (ticket) => ticket.state === 'open' ? (ticket.claim ? 'working' : 'todo') : ticket.state;
+export const boardProjection = (ticket) => {
+  const state = ticket.state.toLowerCase();
+  return state === 'open' ? (ticket.claim ? 'working' : 'todo') : state === 'waiting' ? 'review' : state;
+};
 export const boardColumns = [['todo', 'To do'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done']];
 export function dedupeTickets(tickets) { return [...new Map(tickets.map((ticket) => [ticket.id, ticket])).values()]; }
 
