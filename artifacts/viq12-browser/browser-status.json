@@ -1,8 +1,28 @@
 {
+  "passed": true,
+  "scenarios": {
+    "keyboardReorder": true,
+    "cancellation": true,
+    "dragMovement": true,
+    "activityBothFilters": true,
+    "modalFocusRestored": true,
+    "pairingAndRevocation": true,
+    "noHorizontalOverflow": true,
+    "liveRegionAnnouncements": true
+  },
   "viewports": [
-    "1280x900",
-    "390x844",
-    "320x800"
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
   ],
   "consoleErrors": [],
   "pageErrors": []

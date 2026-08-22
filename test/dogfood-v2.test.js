@@ -52,7 +52,7 @@ test('project-scoped next and claimNext use the immutable canonical project', as
   await f.store.close();
 });
 
-test.skip('compact board contract is four columns, OR project filters, deduplicated tickets and popup surfaces', async () => {
+test.skip('VIQ-13+ excluded: legacy compact Admin/archive/question popup contract', { skip: 'VIQ-12 four-lane filters and modal behavior have current unit and browser E2E coverage' }, async () => {
   assert.deepEqual(boardColumns.map((column) => column[1]), ['To do','Working','Review','Done']);
   assert.equal(boardProjection({ state: 'open', claim: null }), 'todo'); assert.equal(boardProjection({ state: 'open', claim: {} }), 'working');
   const ticket = { id: 'ONE-1', project: 'ONE', projects: ['ONE','TWO'], assignee: null };

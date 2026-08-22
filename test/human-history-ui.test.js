@@ -53,25 +53,23 @@ test('semantic All projects includes projects discovered by refresh', () => {
   assert.deepEqual([...reconcileProjectSelection(['LIFE', 'VIQ'], ['LIFE', 'NEW', 'VIQ'], new Set(['VIQ']))], ['VIQ']);
 });
 
-test.skip('project and assignee filters compose, including unassigned tickets', () => {
+test('project and Human/Agent filters compose with OR within assignment choices', () => {
   const tickets = [
-    { id: 'LIFE-1', project: 'LIFE', assignee: { type: 'actor', id: 'maks' } },
-    { id: 'VIQ-1', project: 'VIQ', assignee: { type: 'role', id: 'workers' } },
-    { id: 'VIQ-2', project: 'VIQ', assignee: null }
+    { id: 'LIFE-1', project: 'LIFE', assignment: 'Human' },
+    { id: 'VIQ-1', project: 'VIQ', assignment: 'Agent' },
+    { id: 'VIQ-2', project: 'VIQ', assignment: 'Human' }
   ];
-  assert.deepEqual(applyTicketFilters(tickets, new Set(['VIQ']), new Set(['role:workers'])).map((ticket) => ticket.id), ['VIQ-1']);
-  assert.deepEqual(applyTicketFilters(tickets, new Set(['VIQ']), new Set(['none'])).map((ticket) => ticket.id), ['VIQ-2']);
+  assert.deepEqual(applyTicketFilters(tickets, new Set(['VIQ']), new Set(['Human','Agent'])).map((ticket) => ticket.id), ['VIQ-1','VIQ-2']);
+  assert.deepEqual(applyTicketFilters(tickets, new Set(['VIQ']), new Set(['Human'])).map((ticket) => ticket.id), ['VIQ-2']);
 });
 
-test.skip('filter chips expose accessible selected state and empty reset', async () => {
+test('filter chips expose accessible selected state and empty reset', async () => {
   const [html, app] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.js', 'utf8')]);
-  for (const id of ['project-chips', 'assignee-chips', 'reset-filters']) assert.match(html, new RegExp(`id="${id}"`));
-  assert.match(app, /aria-pressed/);
-  assert.doesNotMatch(app, /contextmenu/);
-  assert.match(`${html}${app}`, /No tickets match/);
+  for (const id of ['project-chips', 'role-chips', 'reset-filters']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(app, /aria-pressed/); assert.doesNotMatch(app, /contextmenu/); assert.match(`${html}${app}`, /No tickets match/);
 });
 
-test.skip('human ticket UI exposes every field, direct state, progress, archive, restore, delete, and attributed timeline', async () => {
+test.skip('VIQ-13+ excluded: full history/archive/admin ticket mutation surface', { skip: 'VIQ-12 replacement coverage is browser-pairing E2E for board filters, movement, activity, and modal accessibility' }, async () => {
   const app = await readFile('web/app.js', 'utf8');
   for (const term of ['Edit ticket', 'Ticket title', 'Project', 'Assignee', 'State', 'Add progress', 'Archive', 'Restore', 'Delete ticket', 'Confirm delete']) assert.match(app, new RegExp(term));
   assert.match(app, /\/state/);
@@ -92,14 +90,14 @@ test('browser acceptance keeps full desktop coverage and a representative non-du
     assert.ok(mobile.includes(interaction), `missing mobile interaction: ${interaction}`);
 });
 
-test.skip('nested modal flows restore their prior view before returning focus to an in-dialog trigger', async () => {
+test.skip('VIQ-14 excluded: nested question/approval modal flows', { skip: 'VIQ-12 modal focus restoration is covered behaviorally in browser-pairing E2E' }, async () => {
   const app = await readFile('web/app.js', 'utf8');
   assert.match(app, /modalStack/);
   assert.match(app, /restoreModal/);
   assert.match(app, /\.dismiss\(\)/);
 });
 
-test.skip('ticket, question, project, and ticket-create flows share one modal shell', async () => {
+test.skip('VIQ-13+ excluded: Admin/project/question full modal surface', { skip: 'VIQ-12 ticket create/summary modal focus is covered behaviorally in browser-pairing E2E' }, async () => {
   const [html, app] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.js', 'utf8')]);
   assert.equal((html.match(/<dialog\b/g) || []).length, 1);
   for (const id of ['open-project-create', 'open-ticket-create', 'modal']) assert.match(html, new RegExp(`id="${id}"`));

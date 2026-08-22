@@ -14,6 +14,19 @@ export function applyTicketFilters(tickets, selectedProjects, selectedRoles) {
   ));
 }
 
+export function applyActivityFilters(events, visibleTickets, selectedProjects, selectedRoles, allProjectKeys) {
+  const scoped = selectedRoles.size > 0 || selectedProjects.size !== allProjectKeys.length || allProjectKeys.some((key) => !selectedProjects.has(key));
+  if (!scoped) return events;
+  const visibleIds = new Set(visibleTickets.map(({ id }) => id));
+  return events.filter((event) => event.ticket_id && visibleIds.has(event.ticket_id));
+}
+
+export function activityFact(event) {
+  const subject = event.ticket_id || (event.project ? `Project ${event.project}` : 'System');
+  const action = String(event.type).replaceAll('_', ' ');
+  return { heading: `${subject} · ${action}`, detail: event.actor ? `Actor: ${event.actor}` : 'Actor: system' };
+}
+
 export function selectProject(projects, selected, project) {
   const next = new Set(selected); next.has(project) ? next.delete(project) : next.add(project); return next;
 }

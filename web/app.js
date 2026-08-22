@@ -1,4 +1,4 @@
-import { applyTicketFilters, createModalController, reconcileProjectSelection } from './ui-core.js';
+import { activityFact, applyActivityFilters, applyTicketFilters, createModalController, reconcileProjectSelection } from './ui-core.js';
 
 const $ = (selector) => document.querySelector(selector);
 const credentialKey = 'viq.deviceCredential';
@@ -28,7 +28,7 @@ function renderFilters() {
   for (const role of ['Human', 'Agent']) roles.append(chip(role, state.selectedRoles.has(role), () => { state.selectedRoles.has(role) ? state.selectedRoles.delete(role) : state.selectedRoles.add(role); renderFilters(); renderBoard(); }));
 }
 const visibleTickets = () => applyTicketFilters(state.tickets, state.selectedProjects, state.selectedRoles);
-function filteredEvents(visible) { const ids = new Set(visible.map(({ id }) => id)); return state.events.filter((event) => !event.ticket_id || ids.has(event.ticket_id)).toReversed(); }
+function filteredEvents(visible) { return applyActivityFilters(state.events, visible, state.selectedProjects, state.selectedRoles, state.projects.map(({ key }) => key)).toReversed(); }
 function announce(message) { $('#status').textContent = message; }
 function openTicket(ticket, trigger) {
   const content = document.createElement('div'); content.className = 'ticket-summary';
@@ -54,12 +54,13 @@ function cardFor(ticket, laneTickets, index) {
     if (event.key === 'ArrowLeft') { nextState = lanes[Math.max(0, lanes.indexOf(ticket.state) - 1)]; nextIndex = 0; }
     if (event.key === 'ArrowRight') { nextState = lanes[Math.min(lanes.length - 1, lanes.indexOf(ticket.state) + 1)]; nextIndex = 0; }
     if (nextState === ticket.state && nextIndex === index) return;
-    await moveTicket(ticket.id, nextState, nextIndex);
+    const target = visibleTickets().filter((item) => item.state === nextState && item.id !== ticket.id);
+    await moveTicket(ticket.id, nextState, nextIndex, target.map(({ id }) => id));
   }));
   return card;
 }
-async function moveTicket(id, lane, index) {
-  await request(`/v1/tickets/${encodeURIComponent(id)}/board-position`, { method: 'POST', body: JSON.stringify({ state: lane, index }) });
+async function moveTicket(id, lane, index, visibleIds = visibleTickets().filter((ticket) => ticket.state === lane && ticket.id !== id).map(({ id }) => id)) {
+  await request(`/v1/tickets/${encodeURIComponent(id)}/board-position`, { method: 'POST', body: JSON.stringify({ state: lane, index, visible_ids: visibleIds }) });
   state.drag = null; await refresh(id); const laneTickets = visibleTickets().filter((ticket) => ticket.state === lane); const position = laneTickets.findIndex((ticket) => ticket.id === id) + 1; announce(`${id} moved to ${lane}, position ${position} of ${laneTickets.length}.`);
 }
 function laneSurface(name, tickets) {
@@ -76,7 +77,7 @@ function laneSurface(name, tickets) {
 function activitySurface(events) {
   const section = document.createElement('section'); section.className = 'surface activity'; section.dataset.surface = 'Activity'; section.setAttribute('aria-label', 'Activity'); section.innerHTML = `<h2>Activity <span>${events.length}</span></h2>`;
   const list = document.createElement('ol'); list.className = 'activity-list';
-  for (const event of events) { const item = document.createElement('li'); const ticket = state.tickets.find(({ id }) => id === event.ticket_id); item.innerHTML = '<strong></strong><p></p><small></small>'; item.children[0].textContent = `${event.ticket_id || 'System'} · ${event.type.replaceAll('_', ' ')}`; item.children[1].textContent = event.message || ticket?.title || 'Recorded'; item.children[2].textContent = new Date(event.created_at).toLocaleString(); list.append(item); }
+  for (const event of events) { const item = document.createElement('li'); const fact = activityFact(event); item.innerHTML = '<strong></strong><p></p><small></small>'; item.children[0].textContent = fact.heading; item.children[1].textContent = fact.detail; item.children[2].textContent = new Date(event.created_at).toLocaleString(); list.append(item); }
   if (!events.length) list.innerHTML = '<li class="empty">No matching activity yet.</li>'; section.append(list); return section;
 }
 function renderBoard(focusId = null) {

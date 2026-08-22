@@ -419,21 +419,38 @@ export class Store {
     this.#event(id, ticket.project, 'state_changed', actor.id, `Moved from ${ticket.state} to ${state}.`, { from: ticket.state, to: state });
     return this.#ticket(id);
   }); }
-  async moveHumanTicket(id, { state, index, actor: rawActor }) { return this.#transaction(() => {
+  async moveHumanTicket(id, { state, index, visible_ids: rawVisibleIds, actor: rawActor }) { return this.#transaction(() => {
     const ticket = this.#mutableTicket(id); const actor = this.#workflowActor(rawActor);
     if (actor.kind !== 'human') throw new DomainError(403, 'human_required', 'a human actor is required');
     if (ticket.assignment !== 'Human') throw new DomainError(409, 'human_assignment_required', 'only Human-assigned tickets can be moved on the board');
     if (!['Open','Working','Waiting','Done'].includes(state)) throw new DomainError(400, 'invalid_state', 'state must be Open, Working, Waiting, or Done');
     const position = Number(index); if (!Number.isSafeInteger(position) || position < 0) throw new DomainError(400, 'invalid_position', 'index must be a non-negative integer');
+    if (!Array.isArray(rawVisibleIds) || rawVisibleIds.some((item) => typeof item !== 'string')) throw new DomainError(400, 'invalid_visible_order', 'visible_ids must be the ordered visible target-lane ticket ids');
+    const visibleIds = rawVisibleIds.filter((ticketId) => ticketId !== id);
+    if (new Set(visibleIds).size !== visibleIds.length || position > visibleIds.length) throw new DomainError(400, 'invalid_visible_order', 'visible_ids and index must describe one ordered visible subsequence');
     if (ticket.claim) throw new DomainError(409, 'active_claim', 'claimed tickets cannot be moved by the human board');
+    const global = this.#db.prepare('SELECT id,board_state FROM tickets WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY board_order DESC,id').all();
+    const targetIds = global.filter((row) => row.board_state === state && row.id !== id).map((row) => row.id);
+    let cursor = -1;
+    for (const visibleId of visibleIds) {
+      const next = targetIds.indexOf(visibleId, cursor + 1);
+      if (next < 0) throw new DomainError(409, 'stale_visible_order', 'visible_ids are no longer an ordered target-lane subsequence');
+      cursor = next;
+    }
+    const ordered = global.map((row) => row.id).filter((ticketId) => ticketId !== id);
+    let insertion;
+    if (position < visibleIds.length) insertion = ordered.indexOf(visibleIds[position]);
+    else if (visibleIds.length) insertion = ordered.indexOf(visibleIds.at(-1)) + 1;
+    else {
+      const targetPositions = ordered.map((ticketId, offset) => targetIds.includes(ticketId) ? offset : -1).filter((offset) => offset >= 0);
+      insertion = targetPositions.length ? targetPositions.at(-1) + 1 : 0;
+    }
+    ordered.splice(insertion, 0, id);
     const storedState = state === 'Done' ? 'done' : state === 'Waiting' ? 'review' : 'open';
     this.#db.prepare('UPDATE tickets SET state=?,board_state=? WHERE id=?').run(storedState, state, id);
     if (ticket.state !== state) this.#event(id, ticket.project, 'state_changed', actor.id, `Moved from ${ticket.state} to ${state}.`, { from: ticket.state, to: state });
     else this.#event(id, ticket.project, 'ticket_reordered', actor.id, `Moved within ${state}.`, { state });
-    const ids = this.#db.prepare("SELECT id FROM tickets WHERE board_state=? AND id<>? AND deleted_at IS NULL AND archived_at IS NULL AND NOT EXISTS(SELECT 1 FROM claims c WHERE c.ticket_id=tickets.id AND c.released_at IS NULL) ORDER BY board_order DESC,id").all(state, id).map((row) => row.id);
-    ids.splice(Math.min(position, ids.length), 0, id);
-    const base = Number(this.#db.prepare('SELECT COALESCE(MAX(board_order),0) value FROM tickets').get().value) + ids.length + 1;
-    ids.forEach((ticketId, offset) => this.#db.prepare('UPDATE tickets SET board_order=? WHERE id=?').run(base - offset, ticketId));
+    ordered.forEach((ticketId, offset) => this.#db.prepare('UPDATE tickets SET board_order=? WHERE id=?').run(ordered.length - offset, ticketId));
     return this.#ticket(id);
   }); }
 
