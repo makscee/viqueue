@@ -26,29 +26,6 @@ const fileSha256 = (file) => new Promise((resolve, reject) => {
   stream.on('error', reject); stream.on('data', (chunk) => digest.update(chunk)); stream.on('end', () => resolve(digest.digest('hex')));
 });
 const exists = async (file) => stat(file).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
-const encodeSqlValue = (value) => {
-  if (value === null) return ['null'];
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return ['blob', Buffer.from(value).toString('base64')];
-  if (typeof value === 'bigint') return ['integer', value.toString()];
-  if (typeof value === 'number') return ['number', Object.is(value, -0) ? '-0' : String(value)];
-  return [typeof value, value];
-};
-const databaseIdentity = (db) => {
-  const digest = createHash('sha256');
-  const objects = db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_autoindex_%' ORDER BY type,name").all();
-  digest.update(JSON.stringify({
-    userVersion: db.prepare('PRAGMA user_version').get().user_version,
-    applicationId: db.prepare('PRAGMA application_id').get().application_id,
-    encoding: db.prepare('PRAGMA encoding').get().encoding,
-    objects
-  }));
-  for (const { name } of db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()) {
-    const quoted = `"${name.replaceAll('"', '""')}"`;
-    const rows = db.prepare(`SELECT * FROM ${quoted}`).all().map((row) => JSON.stringify(Object.values(row).map(encodeSqlValue))).sort();
-    digest.update(JSON.stringify([name, rows]));
-  }
-  return digest.digest('hex');
-};
 const syncPath = async (target) => {
   const handle = await open(target, 'r');
   try { await handle.sync(); } finally { await handle.close(); }
@@ -72,14 +49,15 @@ const bindV11Family = (db, familyToken) => {
 const validateV11Snapshot = async (source, snapshot, manifestFile) => {
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestFile, 'utf8')); } catch { throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is missing or invalid'); }
-  if (manifest?.format !== 2 || manifest?.migration !== 'VIQ-11' || manifest?.source !== source || !/^[a-f0-9]{64}$/.test(manifest?.sha256) || !/^[a-f0-9]{64}$/.test(manifest?.familyToken) || !/^[a-f0-9]{64}$/.test(manifest?.preStampIdentity)) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is not trusted for this database');
+  if (manifest?.format !== 2 || manifest?.migration !== 'VIQ-11' || manifest?.source !== source || !/^[a-f0-9]{64}$/.test(manifest?.sha256) || !/^[a-f0-9]{64}$/.test(manifest?.familyToken)) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is not trusted for this database');
   if ((await fileSha256(snapshot)) !== manifest.sha256) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot authentication failed');
   const check = new DatabaseSync(snapshot, { readOnly: true });
   try {
-    if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || Number(check.prepare('PRAGMA user_version').get().user_version) >= 11 || databaseIdentity(check) !== manifest.preStampIdentity) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot is not a valid pre-migration database');
+    if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || Number(check.prepare('PRAGMA user_version').get().user_version) >= 11) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot is not a valid pre-migration database');
   } finally { check.close(); }
   return manifest;
 };
+const unstampedV11Recovery = () => new DomainError(409, 'migration_snapshot_recovery_required', 'VIQ-11 snapshot exists but the live database has no durable family token; operator recovery is required');
 
 export class Store {
   #file; #now; #db; #v11Plan = null;
@@ -90,7 +68,9 @@ export class Store {
     const manifest = await validateV11Snapshot(source, snapshot, manifestFile);
     const live = new DatabaseSync(source, { readOnly: true });
     try {
-      if (v11Binding(live) !== manifest.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
+      const binding = v11Binding(live);
+      if (!binding) throw unstampedV11Recovery();
+      if (binding !== manifest.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
     } finally { live.close(); }
     await rm(temporary, { force: true });
     await copyFile(snapshot, temporary);
@@ -133,6 +113,16 @@ export class Store {
   }
 
   async #prepareV11Migration() {
+    const source = path.resolve(this.#file), destination = `${source}.pre-viq11.sqlite`, manifest = `${destination}.manifest.json`;
+    const [hasSnapshot, hasManifest] = await Promise.all([exists(destination), exists(manifest)]);
+    const binding = v11Binding(this.#db);
+    let sealed = null;
+    if (hasSnapshot || hasManifest) {
+      if (!hasSnapshot || !hasManifest) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot family is incomplete; refusing to overwrite it');
+      sealed = await validateV11Snapshot(source, destination, manifest);
+      if (!binding) throw unstampedV11Recovery();
+      if (binding !== sealed.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
+    } else if (binding) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 bound database is missing its snapshot family');
     const hasTickets = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='tickets'").get();
     if (!hasTickets || Number(this.#db.prepare('PRAGMA user_version').get().user_version) >= 11) return;
     const ticketColumns = this.#columns('tickets');
@@ -169,26 +159,14 @@ export class Store {
       if (!['Unassigned', 'Human', 'Agent'].includes(assignment)) throw new DomainError(409, 'unsafe_assignment_migration', `ticket ${ticket.id} assignment is invalid`);
       plan.push({ id: ticket.id, assignment });
     }
-    const source = path.resolve(this.#file), destination = `${source}.pre-viq11.sqlite`, manifest = `${destination}.manifest.json`;
-    const [hasSnapshot, hasManifest] = await Promise.all([exists(destination), exists(manifest)]);
-    let sealed;
-    if (hasSnapshot || hasManifest) {
-      if (!hasSnapshot || !hasManifest) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot family is incomplete; refusing to overwrite it');
-      sealed = await validateV11Snapshot(source, destination, manifest);
-    } else {
+    if (!sealed) {
       const temporary = `${destination}.tmp.${process.pid}`, temporaryManifest = `${manifest}.tmp.${process.pid}`;
       await rm(temporary, { force: true }); await rm(temporaryManifest, { force: true });
       await backup(this.#db, temporary); await syncPath(temporary);
-      const pristine = new DatabaseSync(temporary, { readOnly: true });
-      try { sealed = { format: 2, migration: 'VIQ-11', source, sha256: await fileSha256(temporary), familyToken: randomBytes(32).toString('hex'), preStampIdentity: databaseIdentity(pristine) }; } finally { pristine.close(); }
+      sealed = { format: 2, migration: 'VIQ-11', source, sha256: await fileSha256(temporary), familyToken: randomBytes(32).toString('hex') };
       await writeFile(temporaryManifest, `${JSON.stringify(sealed)}\n`, { mode: 0o600 }); await syncPath(temporaryManifest);
       await rename(temporary, destination); await syncPath(path.dirname(destination));
       await rename(temporaryManifest, manifest); await syncPath(path.dirname(manifest));
-    }
-    const binding = v11Binding(this.#db);
-    if (binding && binding !== sealed.familyToken) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot belongs to a different database family');
-    if (!binding) {
-      if (databaseIdentity(this.#db) !== sealed.preStampIdentity) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 unstamped source does not match its rollback snapshot');
       bindV11Family(this.#db, sealed.familyToken);
     }
     this.#v11Plan = plan;

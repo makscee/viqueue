@@ -19,6 +19,10 @@ async function database() {
   return { dir, file, store, coordinator };
 }
 
+const physicalState = async (file) => Object.fromEntries(await Promise.all(['', '-wal', '-shm'].map(async (suffix) => {
+  try { return [suffix || 'database', await readFile(`${file}${suffix}`)]; } catch (error) { if (error.code === 'ENOENT') return [suffix || 'database', null]; throw error; }
+})));
+
 test('VIQ-11 store capture uses immutable one-project identity and canonical defaults', async () => {
   const { store } = await database();
   assert.deepEqual(await store.createProject('viq'), { key: 'VIQ', next_number: 1, created_at: (await store.listProjects())[0].created_at });
@@ -96,9 +100,9 @@ test('VIQ-11 rejects a valid snapshot pair from another database family at the s
     } finally { check.close(); }
   };
   const before = capture(familyA.file), beforeBytes = await readFile(familyA.file);
-  const swapped = new Store(familyA.file); await assert.rejects(swapped.init(), (error) => error.code === 'invalid_migration_snapshot'); await swapped.close();
+  const swapped = new Store(familyA.file); await assert.rejects(swapped.init(), (error) => error.code === 'migration_snapshot_recovery_required'); await swapped.close();
   assert.deepEqual(capture(familyA.file), before); assert.deepEqual(await readFile(familyA.file), beforeBytes);
-  await assert.rejects(Store.rollbackV11(familyA.file), (error) => error.code === 'invalid_migration_snapshot');
+  await assert.rejects(Store.rollbackV11(familyA.file), (error) => error.code === 'migration_snapshot_recovery_required');
   assert.deepEqual(capture(familyA.file), before); assert.deepEqual(await readFile(familyA.file), beforeBytes);
   assert.deepEqual(before, {
     version: 10,
@@ -108,21 +112,54 @@ test('VIQ-11 rejects a valid snapshot pair from another database family at the s
   });
 });
 
-test('VIQ-11 recovers only the exact unstamped source after the manifest-before-binding crash gap', async () => {
+test('VIQ-11 fails closed on an exact unstamped source after the manifest-before-binding crash gap', async () => {
   const { file, store } = await database(); await store.createProject('VIQ'); await store.createTicket({ project: 'VIQ', title: 'pristine', assignment: 'Human' }); await store.close();
   let db = new DatabaseSync(file); db.exec('PRAGMA user_version=10'); db.close();
   const first = new Store(file); await first.init(); await first.close();
-  const snapshot = `${file}.pre-viq11.sqlite`, manifest = JSON.parse(await readFile(`${snapshot}.manifest.json`, 'utf8'));
+  const snapshot = `${file}.pre-viq11.sqlite`;
   await copyFile(snapshot, file);
-  const recovered = new Store(file); await recovered.init(); await recovered.close();
-  db = new DatabaseSync(file, { readOnly: true });
-  assert.equal(db.prepare("SELECT family_token FROM _viqueue_migration_family WHERE migration='VIQ-11'").get().family_token, manifest.familyToken);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 11); db.close();
-  await Store.rollbackV11(file);
-  db = new DatabaseSync(file, { readOnly: true });
-  assert.equal(db.prepare("SELECT 1 FROM sqlite_schema WHERE name='_viqueue_migration_family'").get(), undefined);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 10);
-  assert.deepEqual(db.prepare('SELECT id,assignment FROM tickets').all().map((row) => ({ ...row })), [{ id: 'VIQ-1', assignment: 'Human' }]); db.close();
+  const capture = () => {
+    const check = new DatabaseSync(file, { readOnly: true });
+    try {
+      return {
+        version: check.prepare('PRAGMA user_version').get().user_version,
+        journalMode: check.prepare('PRAGMA journal_mode').get().journal_mode,
+        objects: check.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name").all().map((row) => ({ ...row })),
+        tickets: check.prepare('SELECT id,assignment FROM tickets ORDER BY id').all().map((row) => ({ ...row }))
+      };
+    } finally { check.close(); }
+  };
+  const beforeLogical = capture(), beforePhysical = await physicalState(file);
+  const recoveryError = (error) => error.code === 'migration_snapshot_recovery_required' && /operator recovery is required/.test(error.message);
+  const recovered = new Store(file); await assert.rejects(recovered.init(), recoveryError); await recovered.close();
+  assert.deepEqual(capture(), beforeLogical); assert.deepEqual(await physicalState(file), beforePhysical);
+  await assert.rejects(Store.rollbackV11(file), recoveryError);
+  assert.deepEqual(capture(), beforeLogical); assert.deepEqual(await physicalState(file), beforePhysical);
+});
+
+test('VIQ-11 INTEGER-vs-REAL family probe rejects init and rollback without mutation', async () => {
+  const familyA = await database(); await familyA.store.createProject('VIQ'); await familyA.store.createTicket({ project: 'VIQ', title: 'typed identity' }); await familyA.store.close();
+  let db = new DatabaseSync(familyA.file); db.exec('CREATE TABLE identity_probe(value); INSERT INTO identity_probe VALUES(1); PRAGMA user_version=10'); db.close();
+  const familyBFile = path.join(familyA.dir, 'family-b.sqlite'); await copyFile(familyA.file, familyBFile);
+  db = new DatabaseSync(familyBFile); db.exec('UPDATE identity_probe SET value=CAST(1 AS REAL)'); db.close();
+  const migratedA = new Store(familyA.file); await migratedA.init(); await migratedA.close();
+  await copyFile(familyBFile, familyA.file);
+  const capture = () => {
+    const check = new DatabaseSync(familyA.file, { readOnly: true });
+    try {
+      return {
+        value: { ...check.prepare('SELECT typeof(value) type,quote(value) quoted FROM identity_probe').get() },
+        version: check.prepare('PRAGMA user_version').get().user_version,
+        binding: check.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='_viqueue_migration_family'").get()
+      };
+    } finally { check.close(); }
+  };
+  const beforeLogical = capture(), beforePhysical = await physicalState(familyA.file);
+  assert.deepEqual(beforeLogical.value, { type: 'real', quoted: '1.0' }); assert.equal(beforeLogical.binding, undefined);
+  const swapped = new Store(familyA.file); await assert.rejects(swapped.init(), (error) => error.code === 'migration_snapshot_recovery_required'); await swapped.close();
+  assert.deepEqual(capture(), beforeLogical); assert.deepEqual(await physicalState(familyA.file), beforePhysical);
+  await assert.rejects(Store.rollbackV11(familyA.file), (error) => error.code === 'migration_snapshot_recovery_required');
+  assert.deepEqual(capture(), beforeLogical); assert.deepEqual(await physicalState(familyA.file), beforePhysical);
 });
 
 test('VIQ-11 rejects contradictory live family bindings before retry or rollback mutation', async () => {
