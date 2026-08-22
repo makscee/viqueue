@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -48,6 +48,43 @@ test('VIQ-11 migration snapshot restores complete pre-migration identity and cou
   const migrated = new Store(file); await migrated.init(); assert.equal((await migrated.createTicket({ project: 'VIQ', title: 'after' })).id, 'VIQ-2'); await migrated.close();
   const rollback = await Store.rollbackV11(file); assert.match(rollback.preserved, /post-viq11/);
   const restored = new DatabaseSync(file, { readOnly: true }); assert.equal(restored.prepare('PRAGMA user_version').get().user_version, 10); assert.deepEqual(restored.prepare('SELECT id FROM tickets ORDER BY id').all().map((row) => row.id), ['VIQ-1']); assert.equal(restored.prepare("SELECT next_number FROM projects WHERE key='VIQ'").get().next_number, 2); restored.close();
+});
+
+test('VIQ-11 retry preserves the first snapshot and rollback restores exact pre-migration identity', async () => {
+  const { file, store } = await database();
+  await store.createProject('VIQ'); await store.createActor({ id: 'agent-a', name: 'Agent A', kind: 'agent' });
+  const ticket = await store.createTicket({ project: 'VIQ', title: 'legacy agent', assignment: 'Agent' }); await store.close();
+  const legacy = new DatabaseSync(file);
+  legacy.prepare("UPDATE tickets SET assigned_to='agent-a',assignee_type='actor',assignee_id='agent-a' WHERE id=?").run(ticket.id);
+  legacy.prepare("INSERT INTO questions(id,ticket_id,asked_by,target_type,target_id,kind,text,status,created_at,question_event_id) VALUES('q-original',?,'coord','actor','coord','text','identity?','open',123,NULL)").run(ticket.id);
+  legacy.exec(`ALTER TABLE tickets DROP COLUMN assignment; ALTER TABLE questions DROP COLUMN question_event_id; PRAGMA user_version=10;
+    CREATE TRIGGER fail_viq11_finish BEFORE UPDATE ON projects BEGIN SELECT RAISE(FAIL,'injected VIQ-11 finish failure'); END`);
+  const capture = (db) => {
+    const objects = db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_autoindex_%' ORDER BY type,name").all();
+    const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all().map(({ name }) => [name, db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()]);
+    return { userVersion: db.prepare('PRAGMA user_version').get().user_version, objects, tables };
+  };
+  const original = capture(legacy); legacy.close();
+
+  const first = new Store(file); await assert.rejects(first.init(), /injected VIQ-11 finish failure/); await first.close();
+  let intermediate = new DatabaseSync(file); assert.ok(intermediate.prepare("SELECT 1 FROM pragma_table_info('questions') WHERE name='question_event_id'").get()); intermediate.exec('DROP TRIGGER fail_viq11_finish'); intermediate.close();
+  const snapshot = `${file}.pre-viq11.sqlite`, firstSnapshotBytes = await readFile(snapshot);
+
+  const retried = new Store(file); await retried.init(); assert.equal((await retried.getTicket(ticket.id)).assignment, 'Agent'); await retried.close();
+  assert.deepEqual(await readFile(snapshot), firstSnapshotBytes, 'retry must not replace the first pre-VIQ-11 snapshot');
+  await Store.rollbackV11(file);
+  const restored = new DatabaseSync(file, { readOnly: true }); assert.deepEqual(capture(restored), original); restored.close();
+});
+
+test('VIQ-11 migration refuses stale or corrupted snapshot families instead of overwriting them', async () => {
+  const { file, store } = await database(); await store.close();
+  const legacy = new DatabaseSync(file); legacy.exec('PRAGMA user_version=10'); legacy.close();
+  const snapshot = `${file}.pre-viq11.sqlite`, manifest = `${snapshot}.manifest.json`;
+  await writeFile(snapshot, 'unrelated');
+  const incomplete = new Store(file); await assert.rejects(incomplete.init(), (error) => error.code === 'invalid_migration_snapshot'); await incomplete.close();
+  await writeFile(manifest, JSON.stringify({ format: 1, migration: 'VIQ-11', source: file, sha256: '0'.repeat(64) }));
+  const corrupt = new Store(file); await assert.rejects(corrupt.init(), (error) => error.code === 'invalid_migration_snapshot'); await corrupt.close();
+  assert.equal((await readFile(snapshot, 'utf8')), 'unrelated');
 });
 
 test('VIQ-11 migration fails closed on conflicting membership and leaves source unchanged', async () => {

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
 
@@ -20,17 +21,32 @@ const serializeMetadata = (value) => {
   if (typeof value !== 'object' || Array.isArray(value)) throw new DomainError(400, 'invalid_metadata', 'metadata must be a JSON object');
   return JSON.stringify(value);
 };
+const fileSha256 = (file) => new Promise((resolve, reject) => {
+  const digest = createHash('sha256'), stream = createReadStream(file);
+  stream.on('error', reject); stream.on('data', (chunk) => digest.update(chunk)); stream.on('end', () => resolve(digest.digest('hex')));
+});
+const exists = async (file) => stat(file).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
+const validateV11Snapshot = async (source, snapshot, manifestFile) => {
+  let manifest;
+  try { manifest = JSON.parse(await readFile(manifestFile, 'utf8')); } catch { throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is missing or invalid'); }
+  if (manifest?.format !== 1 || manifest?.migration !== 'VIQ-11' || manifest?.source !== source || !/^[a-f0-9]{64}$/.test(manifest?.sha256)) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot manifest is not trusted for this database');
+  if ((await fileSha256(snapshot)) !== manifest.sha256) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot authentication failed');
+  const check = new DatabaseSync(snapshot, { readOnly: true });
+  try {
+    if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || Number(check.prepare('PRAGMA user_version').get().user_version) >= 11) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot is not a valid pre-migration database');
+  } finally { check.close(); }
+};
 
 export class Store {
   #file; #now; #db; #v11Plan = null;
   constructor(file, { now = Date.now } = {}) { this.#file = file; this.#now = now; }
 
   static async rollbackV11(file) {
-    const source = path.resolve(file), snapshot = `${source}.pre-viq11.sqlite`, temporary = `${source}.rollback.${process.pid}`;
+    const source = path.resolve(file), snapshot = `${source}.pre-viq11.sqlite`, manifest = `${snapshot}.manifest.json`, temporary = `${source}.rollback.${process.pid}`;
+    await validateV11Snapshot(source, snapshot, manifest);
     await rm(temporary, { force: true });
     await copyFile(snapshot, temporary);
-    const check = new DatabaseSync(temporary, { readOnly: true });
-    try { if (check.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok') throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 rollback snapshot failed integrity check'); } finally { check.close(); }
+    await validateV11Snapshot(source, temporary, manifest);
     const preserved = `${source}.post-viq11.${Date.now()}`;
     await rename(source, preserved);
     for (const suffix of ['-wal','-shm']) { try { await rename(`${source}${suffix}`, `${preserved}${suffix}`); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
@@ -104,11 +120,20 @@ export class Store {
       if (!['Unassigned', 'Human', 'Agent'].includes(assignment)) throw new DomainError(409, 'unsafe_assignment_migration', `ticket ${ticket.id} assignment is invalid`);
       plan.push({ id: ticket.id, assignment });
     }
-    const destination = `${this.#file}.pre-viq11.sqlite`, temporary = `${destination}.tmp.${process.pid}`;
-    await rm(temporary, { force: true });
-    await backup(this.#db, temporary);
-    await rm(destination, { force: true });
-    await rename(temporary, destination);
+    const source = path.resolve(this.#file), destination = `${source}.pre-viq11.sqlite`, manifest = `${destination}.manifest.json`;
+    const [hasSnapshot, hasManifest] = await Promise.all([exists(destination), exists(manifest)]);
+    if (hasSnapshot || hasManifest) {
+      if (!hasSnapshot || !hasManifest) throw new DomainError(409, 'invalid_migration_snapshot', 'VIQ-11 snapshot family is incomplete; refusing to overwrite it');
+      await validateV11Snapshot(source, destination, manifest);
+    } else {
+      const temporary = `${destination}.tmp.${process.pid}`, temporaryManifest = `${manifest}.tmp.${process.pid}`;
+      await rm(temporary, { force: true }); await rm(temporaryManifest, { force: true });
+      await backup(this.#db, temporary);
+      const sealed = { format: 1, migration: 'VIQ-11', source, sha256: await fileSha256(temporary) };
+      await writeFile(temporaryManifest, `${JSON.stringify(sealed)}\n`, { mode: 0o600 });
+      await rename(temporary, destination);
+      await rename(temporaryManifest, manifest);
+    }
     this.#v11Plan = plan;
   }
 
