@@ -127,11 +127,15 @@ export class Store {
     if (!hasTickets || Number(this.#db.prepare('PRAGMA user_version').get().user_version) >= 11) return;
     const ticketColumns = this.#columns('tickets');
     const hasMemberships = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='ticket_projects'").get();
+    const hasEvents = this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='events'").get();
+    const eventHasProject = hasEvents && this.#columns('events').includes('project');
     const tickets = this.#db.prepare('SELECT * FROM tickets ORDER BY id').all();
     const plan = [];
     for (const ticket of tickets) {
       const memberships = hasMemberships ? this.#db.prepare('SELECT project_key FROM ticket_projects WHERE ticket_id=? ORDER BY project_key').all(ticket.id).map((row) => row.project_key) : [ticket.project];
-      if (memberships.length !== 1 || memberships[0] !== ticket.project) throw new DomainError(409, 'unsafe_project_migration', `ticket ${ticket.id} must have exactly one truthful project`);
+      const eventProjects = eventHasProject ? this.#db.prepare('SELECT DISTINCT project FROM events WHERE ticket_id=? AND project IS NOT NULL ORDER BY project').all(ticket.id).map((row) => row.project) : [];
+      const projectExists = this.#db.prepare('SELECT 1 FROM projects WHERE key=?').get(ticket.project);
+      if (!projectExists || !memberships.includes(ticket.project) || eventProjects.some((project) => project !== ticket.project)) throw new DomainError(409, 'unsafe_project_migration', `ticket ${ticket.id} has contradictory project provenance`);
       if (!Number.isSafeInteger(ticket.number) || ticket.number < 1 || ticket.id !== `${ticket.project}-${ticket.number}`) throw new DomainError(409, 'unsafe_ticket_identity_migration', `ticket ${ticket.id} has contradictory identity`);
       let assignment = ticketColumns.includes('assignment') ? ticket.assignment : null;
       if (!assignment) {
@@ -157,7 +161,7 @@ export class Store {
         }
       }
       if (!['Unassigned', 'Human', 'Agent'].includes(assignment)) throw new DomainError(409, 'unsafe_assignment_migration', `ticket ${ticket.id} assignment is invalid`);
-      plan.push({ id: ticket.id, assignment });
+      plan.push({ id: ticket.id, project: ticket.project, assignment });
     }
     if (!sealed) {
       const temporary = `${destination}.tmp.${process.pid}`, temporaryManifest = `${manifest}.tmp.${process.pid}`;
@@ -176,7 +180,13 @@ export class Store {
     if (Number(this.#db.prepare('PRAGMA user_version').get().user_version) >= 11) return;
     this.#transaction(() => {
       if (!this.#columns('tickets').includes('assignment')) this.#db.exec("ALTER TABLE tickets ADD COLUMN assignment TEXT NOT NULL DEFAULT 'Unassigned' CHECK(assignment IN ('Unassigned','Human','Agent'))");
-      for (const row of this.#v11Plan ?? []) this.#db.prepare('UPDATE tickets SET assignment=? WHERE id=?').run(row.assignment, row.id);
+      const deletedTicketGuards = this.#db.prepare("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ('deleted_tickets_immutable','tickets_audit_preserved') AND tbl_name='tickets' ORDER BY name").all();
+      for (const guard of deletedTicketGuards) this.#db.exec(`DROP TRIGGER "${guard.name}"`);
+      for (const row of this.#v11Plan ?? []) {
+        this.#db.prepare('UPDATE tickets SET assignment=? WHERE id=? AND assignment<>?').run(row.assignment, row.id, row.assignment);
+        if (this.#db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='ticket_projects'").get()) this.#db.prepare('DELETE FROM ticket_projects WHERE ticket_id=? AND project_key<>?').run(row.id, row.project);
+      }
+      for (const guard of deletedTicketGuards) this.#db.exec(guard.sql);
       this.#db.exec('UPDATE projects SET next_number=MAX(next_number,COALESCE((SELECT MAX(number)+1 FROM tickets WHERE tickets.project=projects.key),1)); PRAGMA user_version=11');
     });
     this.#v11Plan = null;

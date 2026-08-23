@@ -186,9 +186,9 @@ test('VIQ-11 migration refuses stale or corrupted snapshot families instead of o
   assert.equal((await readFile(snapshot, 'utf8')), 'unrelated');
 });
 
-test('VIQ-11 migration fails closed on conflicting membership and leaves source unchanged', async () => {
+test('VIQ-11 migration fails closed on conflicting project provenance and leaves source unchanged', async () => {
   const { file, store } = await database(); await store.createProject('VIQ'); await store.createProject('OPS'); await store.createTicket({ project: 'VIQ', title: 'truth' }); await store.close();
-  const db = new DatabaseSync(file); db.exec('PRAGMA user_version=10'); db.prepare('INSERT INTO ticket_projects(ticket_id,project_key) VALUES(?,?)').run('VIQ-1', 'OPS'); const before = JSON.stringify(db.prepare('SELECT * FROM ticket_projects ORDER BY project_key').all()); db.close();
+  const db = new DatabaseSync(file); db.exec('PRAGMA user_version=10'); db.prepare('INSERT INTO ticket_projects(ticket_id,project_key) VALUES(?,?)').run('VIQ-1', 'OPS'); db.prepare("INSERT INTO events(ticket_id,project,type,created_at) VALUES('VIQ-1','OPS','contradictory_project',2)").run(); const before = JSON.stringify(db.prepare('SELECT * FROM ticket_projects ORDER BY project_key').all()); db.close();
   const reopened = new Store(file); await assert.rejects(reopened.init(), (e) => e.code === 'unsafe_project_migration');
   const check = new DatabaseSync(file); assert.equal(JSON.stringify(check.prepare('SELECT * FROM ticket_projects ORDER BY project_key').all()), before); assert.equal(check.prepare('PRAGMA user_version').get().user_version, 10); check.close();
 });
