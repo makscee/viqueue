@@ -1,0 +1,38 @@
+{
+  "passed": true,
+  "scenarios": {
+    "machinesPairRevoke": true,
+    "keyboardReorder": true,
+    "cancellation": true,
+    "dragMovement": true,
+    "activityBothFilters": true,
+    "modalAsyncCloseWins": true,
+    "targetSizing": true,
+    "reducedMotion": true,
+    "focusOrder": true,
+    "modalContainment": true,
+    "keyboardAlternative": true,
+    "reflow200": true,
+    "wcagAAContrast": true,
+    "modalFocusRestored": true,
+    "pairingAndRevocation": true,
+    "noHorizontalOverflow": true,
+    "liveRegionAnnouncements": true
+  },
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": []
+}
