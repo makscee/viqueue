@@ -21,6 +21,43 @@ async function fixture() {
 }
 const authority = (claim, session_capability) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, device: claim.ticket.claim.device_id, generation: claim.ticket.claim.generation, claim_token: claim.claim_token, session_capability });
 
+test('VIQ-13 Store claims fail closed without pre-existing session authority and do not mutate tickets', async () => {
+  const { store, file, a, b } = await fixture();
+  const ticket = await store.createTicket({ project: 'AAA', title: 'session required', assignment: 'Agent' });
+  const session = await store.openWorkerSession(a.device.id);
+  const revoked = await store.openWorkerSession(a.device.id);
+  const wrongMachine = await store.openWorkerSession(b.device.id);
+  await store.closeWorkerSession(a.device.id, revoked.session_capability);
+  const snapshot = async () => {
+    const db = new DatabaseSync(file, { readOnly: true });
+    const counts = {
+      claims: db.prepare('SELECT COUNT(*) count FROM claims').get().count,
+      events: db.prepare('SELECT COUNT(*) count FROM events').get().count,
+      sessions: db.prepare('SELECT COUNT(*) count FROM worker_sessions').get().count
+    };
+    db.close();
+    return { ticket: await store.getTicket(ticket.id), counts };
+  };
+  const before = await snapshot();
+  for (const attempt of [
+    () => store.claim(ticket.id, { device: a.device.id }),
+    () => store.claimNext({ device: a.device.id }),
+    () => store.claim(ticket.id, { actor: a.device.id }),
+    () => store.claimNext({ actor: a.device.id, session_capability: 'ps_chosen.not-server-issued' }),
+    () => store.claim(ticket.id, { device: a.device.id, session_capability: wrongMachine.session_capability }),
+    () => store.claimNext({ device: a.device.id, session_capability: revoked.session_capability })
+  ]) {
+    await assert.rejects(attempt(), (error) => error.code === 'session_unauthorized');
+    assert.deepEqual(await snapshot(), before);
+  }
+  const claim = await store.claim(ticket.id, { device: a.device.id, session_capability: session.session_capability });
+  assert.equal(claim.ticket.state, 'Working');
+  assert.equal(claim.ticket.claim.session_id, session.session_id);
+  assert.equal('session_capability' in claim, false);
+  assert.deepEqual((await snapshot()).counts, { claims: 1, events: before.counts.events + 1, sessions: before.counts.sessions });
+  await store.close();
+});
+
 test('VIQ-13 atomically claims authoritative first eligible Agent Open ticket and records machine/session provenance', async () => {
   const { store, a } = await fixture();
   await store.createTicket({ project: 'AAA', title: 'older agent', assignment: 'Agent' });

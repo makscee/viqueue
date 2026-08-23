@@ -1,3 +1,4 @@
+import { claimWithSession } from './helpers/worker-session.js';
 import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -51,7 +52,7 @@ test('VIQ-12 reorder preserves claimed and all other unaffected relative positio
   const code = await store.createPairingCode('human', { actor_id: 'worker', intended_kind: 'worker', device_id: 'worker-device', device_name: 'Worker device' });
   const worker = await store.pairDevice({ code: code.code, id: 'worker-device', name: 'Worker device' });
   await store.createTicket({ project: 'VIQ', title: 'human low', assignment: 'Human' }); const claimed = await store.createTicket({ project: 'OPS', title: 'claimed middle', assignment: 'Agent' });
-  await store.claim(claimed.id, { device: worker.device.id }); await store.createTicket({ project: 'VIQ', title: 'human high', assignment: 'Human' }); await store.createTicket({ project: 'OPS', title: 'unclaimed high', assignment: 'Agent' });
+  await claimWithSession(store, claimed.id, { device: worker.device.id }); await store.createTicket({ project: 'VIQ', title: 'human high', assignment: 'Human' }); await store.createTicket({ project: 'OPS', title: 'unclaimed high', assignment: 'Agent' });
   const before = (await store.listBoardTickets()).map(({ id }) => id); assert.deepEqual(before, ['OPS-2','VIQ-2','OPS-1','VIQ-1']);
   await store.moveHumanTicket('VIQ-1', { state: 'Open', index: 0, visible_ids: ['VIQ-2'], actor: 'human' });
   const after = (await store.listBoardTickets()).map(({ id }) => id); assert.deepEqual(after, ['OPS-2','VIQ-1','OPS-1','VIQ-2']); assert.equal((await store.getTicket(claimed.id)).state, 'Working'); await store.close();
@@ -63,7 +64,7 @@ test('VIQ-12 Working reorder uses effective lane membership when a claimed Agent
   const worker = await store.pairDevice({ code: code.code, id: 'worker-device', name: 'Worker device' });
   const humanLow = await store.createTicket({ project: 'VIQ', title: 'human low', assignment: 'Human' });
   const claimed = await store.createTicket({ project: 'OPS', title: 'claimed Agent', assignment: 'Agent' });
-  const claim = await store.claim(claimed.id, { device: worker.device.id });
+  const claim = await claimWithSession(store, claimed.id, { device: worker.device.id });
   const humanHigh = await store.createTicket({ project: 'VIQ', title: 'human high', assignment: 'Human' });
 
   await store.moveHumanTicket(humanLow.id, { state: 'Working', index: 1, visible_ids: [claimed.id], actor: 'human' });

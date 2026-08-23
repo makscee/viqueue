@@ -1,3 +1,4 @@
+import { claimWithSession, claimNextWithSession } from './helpers/worker-session.js';
 import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -55,7 +56,7 @@ test('SQLite ticket fields, numbering, and event history survive store restart',
 
 test('durable claim survives arbitrary elapsed time and restart without liveness inference', async () => {
   const { store, file, ticket, advance } = await seeded();
-  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   assert.equal(claim.ticket.state, 'Working');
   assert.equal(claim.ticket.claim.generation, 1);
   assert.equal(typeof claim.ticket.claim.claim_id, 'string');
@@ -72,7 +73,7 @@ test('durable claim survives arbitrary elapsed time and restart without liveness
 
 test('explicit release removes authority and makes open ticket ready', async () => {
   const { store, ticket } = await seeded();
-  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const released = await store.release(ticket.id, identity(claim));
   assert.equal(released.claim, null);
   assert.equal((await store.next({ project: 'ABC', device: 'worker-a' })).id, ticket.id);
@@ -81,7 +82,7 @@ test('explicit release removes authority and makes open ticket ready', async () 
 
 test('submit review, accept done, and reopen open are explicit state transitions', async () => {
   const { store, ticket } = await seeded();
-  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const reviewed = (await store.submit(ticket.id, { ...identity(claim), reviewer:{type:'actor',id:'maks'}, message: 'ready for review' })).ticket;
   assert.equal(reviewed.state, 'Waiting');
   assert.equal(reviewed.claim, null);
@@ -96,19 +97,19 @@ test('Agent assignment is launch authorization and atomic claimNext skips Unassi
   const { store, file } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' });
   await store.createTicket({ project: 'ABC', title: 'Assigned', assignment: 'Agent', actor: 'maks' });
-  assert.equal((await store.claimNext({ project: 'ABC', device: 'worker-b' })).ticket.id, 'ABC-2');
+  assert.equal((await claimNextWithSession(store, { project: 'ABC', device: 'worker-b' })).ticket.id, 'ABC-2');
   await store.createTicket({ project: 'ABC', title: 'Concurrent', assignment: 'Agent', actor: 'maks' });
   const other = new Store(file); await other.init();
-  const outcomes = await Promise.all([store.claimNext({ project: 'ABC', device: 'worker-a' }), other.claimNext({ project: 'ABC', device: 'worker-a' })]);
+  const outcomes = await Promise.all([claimNextWithSession(store, { project: 'ABC', device: 'worker-a' }), claimNextWithSession(other, { project: 'ABC', device: 'worker-a' })]);
   assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3'); await other.close();
 });
 
 test('assignment category changes eligibility without exposing identity authority', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Launch', actor: 'maks' });
-  assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-a' }), null);
+  assert.equal(await claimNextWithSession(store, { project: 'ABC', device: 'worker-a' }), null);
   await store.editTicket('ABC-1', { actor: 'maks', assignment: 'Agent' });
-  const claim = await store.claimNext({ project: 'ABC', device: 'worker-b' });
+  const claim = await claimNextWithSession(store, { project: 'ABC', device: 'worker-b' });
   assert.equal(claim.ticket.assignment, 'Agent');
   assert.equal('execution_authority' in await store.getTicket('ABC-1'), false);
 });
@@ -116,13 +117,13 @@ test('assignment category changes eligibility without exposing identity authorit
 test('structured blockers prevent relaunch until a human resolves them', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Blocked', assignment:'Agent', actor: 'maks' });
-  const claim = await store.claimNext({ project: 'ABC', device: 'worker-a' });
+  const claim = await claimNextWithSession(store, { project: 'ABC', device: 'worker-a' });
   const blocked = await store.blockTicket('ABC-1', { ...identity(claim), reason: 'Need review' });
   assert.equal(blocked.ticket.unresolved_blockers, 1);
   await store.release('ABC-1', identity(claim));
-  assert.equal(await store.claimNext({ project: 'ABC', device: 'worker-a' }), null);
+  assert.equal(await claimNextWithSession(store, { project: 'ABC', device: 'worker-a' }), null);
   await store.resolveBlock('ABC-1', blocked.block.id, { actor: 'maks' });
-  assert.ok(await store.claimNext({ project: 'ABC', device: 'worker-a' }));
+  assert.ok(await claimNextWithSession(store, { project: 'ABC', device: 'worker-a' }));
 });
 
 test('competing claims are atomic across independent SQLite connections', async () => {
@@ -130,8 +131,8 @@ test('competing claims are atomic across independent SQLite connections', async 
   const other = new Store(file);
   await other.init();
   const outcomes = await Promise.allSettled([
-    store.claim(ticket.id, { device: 'worker-a' }),
-    other.claim(ticket.id, { device: 'worker-a' })
+    claimWithSession(store, ticket.id, { device: 'worker-a' }),
+    claimWithSession(other, ticket.id, { device: 'worker-a' })
   ]);
   assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 1);
   assert.equal(outcomes.find((outcome) => outcome.status === 'rejected').reason.code, 'ticket_ineligible');
@@ -146,7 +147,7 @@ test('takeover surface is absent; only explicit release permits another claim', 
 test('event cursor is global monotonic and polling after cursor filters project or ticket', async () => {
   const { store, ticket } = await seeded();
   const initial = await store.listEvents({ project: 'ABC' });
-  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const progress = await store.postEvent(ticket.id, { ...identity(claim), message: 'tests are green' });
   await store.createProject('XYZ');
   await store.createTicket({ project: 'XYZ', title: 'other' });
@@ -162,7 +163,7 @@ test('event cursor is global monotonic and polling after cursor filters project 
 
 test('human edits mutable ticket fields while project identity and active claim remain stable', async () => {
   const { store, ticket } = await seeded();
-  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const edited = await store.editTicket(ticket.id, { title: 'Updated', description: '**new** body', assignment: 'Human', actor: 'maks' });
   assert.equal(edited.id, ticket.id); assert.equal(edited.project, 'ABC');
   assert.equal(edited.title, 'Updated'); assert.equal(edited.description, '**new** body'); assert.equal(edited.assignment, 'Human');
@@ -173,7 +174,7 @@ test('human edits mutable ticket fields while project identity and active claim 
 
 test('human direct state changes fence claims and progress stays in the ticket event chronology', async () => {
   const { store, ticket, advance } = await seeded();
-  await store.claim(ticket.id, { actor: 'worker-a' });
+  await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const review = await store.setTicketState(ticket.id, { state: 'Waiting', actor: 'maks' });
   assert.equal(review.state, 'Waiting'); assert.equal(review.claim, null);
   advance(1000);
@@ -187,7 +188,7 @@ test('human direct state changes fence claims and progress stays in the ticket e
 });
 
 test('direct state override resolves a pending approval instead of leaving a stale inbox question', async () => {
-  const { store, ticket } = await seeded(); const claim = await store.claim(ticket.id, { actor: 'worker-a' }); const submitted = await store.submit(ticket.id, { ...identity(claim), reviewer: { type: 'actor', id: 'maks' } });
+  const { store, ticket } = await seeded(); const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' }); const submitted = await store.submit(ticket.id, { ...identity(claim), reviewer: { type: 'actor', id: 'maks' } });
   await store.setTicketState(ticket.id, { state: 'Open', actor: 'maks' });
   const question = (await store.listQuestions(ticket.id)).questions.find((item) => item.id === submitted.question.id);
   assert.equal(question.status, 'answered'); assert.equal(JSON.parse(question.answer).decision, 'request_changes');
@@ -195,9 +196,9 @@ test('direct state override resolves a pending approval instead of leaving a sta
 });
 
 test('archive is reversible while confirmed delete tombstones without erasing history', async () => {
-  const { store, ticket } = await seeded(); const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const { store, ticket } = await seeded(); const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const archived = await store.archiveTicket(ticket.id, { actor: 'maks' }); assert.ok(archived.archived_at); assert.equal(archived.claim, null); await assert.rejects(store.verify(ticket.id, identity(claim)), (error) => error.code === 'stale_claim');
-  assert.deepEqual(await store.listTickets('ABC'), []); assert.equal(await store.next({ project: 'ABC', device: 'worker-a' }), null); await assert.rejects(store.claim(ticket.id, { actor: 'worker-a' }), (error) => error.code === 'ticket_ineligible');
+  assert.deepEqual(await store.listTickets('ABC'), []); assert.equal(await store.next({ project: 'ABC', device: 'worker-a' }), null); await assert.rejects(claimWithSession(store, ticket.id, { actor: 'worker-a' }), (error) => error.code === 'ticket_ineligible');
   assert.deepEqual((await store.listTickets('ABC', { includeArchived: true })).map((item) => item.id), [ticket.id]);
   const restored = await store.restoreTicket(ticket.id, { actor: 'maks' }); assert.equal(restored.archived_at, null);
   for (const confirmed of [undefined, false, null, 0, 1, 'true', [], {}]) {
@@ -211,7 +212,7 @@ test('archive is reversible while confirmed delete tombstones without erasing hi
 
 test('archived tickets are immutable and leave inboxes until restored', async () => {
   const { store, ticket } = await seeded();
-  const claim = await store.claim(ticket.id, { actor: 'worker-a' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker-a' });
   const asked = await store.askQuestion(ticket.id, { ...identity(claim), text: 'Still active?', target_type: 'actor', target_id: 'maks' });
   await store.archiveTicket(ticket.id, { actor: 'maks' });
   assert.deepEqual((await store.actorInbox('maks')).questions, []);

@@ -1,3 +1,4 @@
+import { claimNextWithSession } from './helpers/worker-session.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -37,7 +38,7 @@ test('one-project tickets reject legacy memberships and preserve claim authority
   await assert.rejects(f.store.createTicket({ projects: ['ONE','TWO'], project: 'ONE', title: 'legacy' }), (e) => e.code === 'invalid_ticket_fields');
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'agent work', assignment: 'Agent', actor: 'mair' });
   assert.deepEqual((await f.store.listTickets('ONE')).map((t) => t.id), [ticket.id]); assert.deepEqual(await f.store.listTickets('TWO'), []);
-  const claim = await f.store.claimNext({ project: 'ONE', device: 'worker-one' });
+  const claim = await claimNextWithSession(f.store, { project: 'ONE', device: 'worker-one' });
   await assert.rejects(f.store.verify(ticket.id, { ...identity(claim), device: 'worker-two' }), (error) => error.code === 'stale_claim');
   await assert.rejects(f.store.postEvent(ticket.id, { ...identity(claim), device: 'worker-two', message: 'continued' }), (error) => error.code === 'stale_claim');
   await f.store.close();
@@ -47,7 +48,7 @@ test('next and claimNext use authoritative global order regardless of legacy pro
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'canonical membership', assignment: 'Agent', actor: 'mair' });
   assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
-  assert.equal((await f.store.claimNext({ project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
+  assert.equal((await claimNextWithSession(f.store, { project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
   await f.store.close();
 });
 
