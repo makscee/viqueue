@@ -23,7 +23,7 @@ export function applyActivityFilters(events, visibleTickets, selectedProjects, s
 
 export function activityFact(event) {
   const subject = event.ticket_id || (event.project ? `Project ${event.project}` : 'System');
-  const action = String(event.type).replaceAll('_', ' ');
+  const action = ({ role_created: 'assignment group created', role_granted: 'role membership added', role_revoked: 'role membership removed' })[event.type] || String(event.type).replaceAll('_', ' ');
   return { heading: `${subject} · ${action}`, detail: event.actor ? `Actor: ${event.actor}` : 'Actor: system' };
 }
 
