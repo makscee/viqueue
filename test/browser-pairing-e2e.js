@@ -82,6 +82,18 @@ try {
   await page.getByRole('button', { name: 'CAT', exact: true }).click(); await page.getByRole('button', { name: 'Human', exact: true }).click();
   await page.screenshot({ path: path.join(evidence, 'desktop-1280x900.png') });
 
+  await page.locator('.ticket-card[data-id="DOG-2"] .ticket-open').click(); await page.locator('#modal[open]').waitFor();
+  let releaseNote; const noteReleased = new Promise((resolve) => { releaseNote = resolve; });
+  let noteObserved; const noteStarted = new Promise((resolve) => { noteObserved = resolve; });
+  await page.route('**/v1/tickets/DOG-2/notes', async (route) => { noteObserved(); await noteReleased; await route.continue(); });
+  await page.locator('.manual-event-composer textarea').fill('Delayed factual event');
+  const noteResponse = page.waitForResponse((response) => response.url().endsWith('/v1/tickets/DOG-2/notes') && response.request().method() === 'POST');
+  await page.locator('.manual-event-composer').getByRole('button', { name: 'Add event' }).click(); await noteStarted;
+  await page.keyboard.press('Escape'); await page.locator('#modal').waitFor({ state: 'hidden' }); releaseNote(); await noteResponse; await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#modal[open]').count(), 0); assert.equal(await page.evaluate(() => document.activeElement?.closest?.('.ticket-card')?.dataset.id), 'DOG-2');
+  assert.equal((await api('GET', '/v1/events?ticket=DOG-2')).events.some((event) => event.message === 'Delayed factual event'), true); scenarios.modalAsyncCloseWins = true;
+  await page.unroute('**/v1/tickets/DOG-2/notes');
+
   await page.getByRole('button', { name: 'Disconnect this device' }).click();
   await page.getByText('This browser is disconnected. The server-side device was not revoked.').waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('viq.deviceCredential')), null);

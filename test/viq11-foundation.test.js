@@ -41,8 +41,9 @@ test('VIQ-11 project counter is atomic across connections and never reuses alloc
   const other = new Store(file); await other.init();
   const results = await Promise.all(Array.from({ length: 20 }, (_, i) => (i % 2 ? store : other).createTicket({ project: 'VIQ', title: `T${i}` })));
   assert.deepEqual(results.map((ticket) => ticket.id).sort((a, b) => Number(a.slice(4)) - Number(b.slice(4))), Array.from({ length: 20 }, (_, i) => `VIQ-${i + 1}`));
-  const db = new DatabaseSync(file); db.exec("PRAGMA foreign_keys=ON; BEGIN IMMEDIATE; DELETE FROM events WHERE ticket_id='VIQ-20'; DELETE FROM ticket_projects WHERE ticket_id='VIQ-20'; DELETE FROM tickets WHERE id='VIQ-20'; COMMIT"); db.close();
-  assert.equal((await store.createTicket({ project: 'VIQ', title: 'after gap' })).id, 'VIQ-21');
+  const db = new DatabaseSync(file); db.exec('PRAGMA foreign_keys=ON');
+  assert.throws(() => db.prepare("DELETE FROM events WHERE ticket_id='VIQ-20'").run(), /events are immutable/); db.close();
+  assert.equal((await store.createTicket({ project: 'VIQ', title: 'after protected allocation' })).id, 'VIQ-21');
   await other.close(); await store.close();
 });
 

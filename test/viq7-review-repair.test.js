@@ -76,9 +76,10 @@ test('archive and delete timestamps use NULL semantics when clock is zero', asyn
   await assert.rejects(store.editTicket(ticket.id, { actor: 'maks', title: 'No' }), (error) => error.code === 'ticket_archived');
   assert.equal((await store.restoreTicket(ticket.id, { actor: 'maks' })).archived_at, null);
   assert.equal((await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true })).deleted_at, 0);
-  await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true });
+  await assert.rejects(store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true }), (error) => error.code === 'ticket_not_found');
   await assert.rejects(store.editTicket(ticket.id, { actor: 'maks', title: 'No' }), (error) => error.code === 'ticket_deleted');
-  const types = (await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type);
+  await assert.rejects(store.listEvents({ ticket: ticket.id }), (error) => error.code === 'ticket_not_found');
+  const types = (await store.auditDeletedTicket(ticket.id)).events.map((event) => event.type);
   assert.equal(types.filter((type) => type === 'archived').length, 1);
   assert.equal(types.filter((type) => type === 'deleted').length, 1);
 });

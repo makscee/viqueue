@@ -3,11 +3,8 @@ import { activityFact, applyActivityFilters, applyTicketFilters, createModalCont
 const $ = (selector) => document.querySelector(selector);
 const credentialKey = 'viq.deviceCredential';
 const lanes = ['Open', 'Working', 'Waiting', 'Done'];
-const state = { projects: [], tickets: [], events: [], questions: [], archived: [], actors: [], devices: [], roles: [], inbox: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null };
-const modalStack = [];
-function restoreModal() { const previous = modalStack.pop(); if (!previous) return false; $('#modal-title').textContent = previous.title; $('#modal-eyebrow').textContent = previous.eyebrow; $('#modal-content').replaceChildren(...previous.content); previous.trigger?.focus(); return true; }
-const modal = createModalController($('#modal'), { requestClose: restoreModal });
-$('#modal').addEventListener('close', () => { modalStack.length = 0; });
+const state = { projects: [], tickets: [], events: [], questions: [], actors: [], devices: [], roles: [], inbox: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null };
+const modal = createModalController($('#modal'));
 const request = async (path, options = {}) => {
   const credential = localStorage.getItem(credentialKey);
   const response = await fetch(path, { ...options, headers: { 'content-type': 'application/json', ...(credential ? { authorization: `Bearer ${credential}` } : {}), ...(options.headers || {}) } });
@@ -25,7 +22,7 @@ const assigneeName = (assignee) => assignee?.type === 'actor' ? actorName(assign
 const projection = (ticket) => ticket.state === 'done' ? 'done' : ticket.state === 'review' ? 'review' : ticket.claim ? 'working' : 'todo';
 const stateName = (ticket) => ({ todo: 'To do', working: 'Working', review: 'Review', done: 'Done' })[projection(ticket)];
 function markdownElement(tag, text, className = '') { const element = document.createElement(tag); element.className = className; element.innerHTML = renderMarkdown(text); return element; }
-function openModal({ title, eyebrow = '', content, trigger, initialFocus }) { if ($('#modal').open && trigger?.isConnected) modalStack.push({ title: $('#modal-title').textContent, eyebrow: $('#modal-eyebrow').textContent, content: [...$('#modal-content').childNodes], trigger }); $('#modal-title').textContent = title; $('#modal-eyebrow').textContent = eyebrow; $('#modal-content').replaceChildren(content); modal.open({ trigger, initialFocus }); }
+function openModal({ title, eyebrow = '', content, trigger, initialFocus }) { $('#modal-title').textContent = title; $('#modal-eyebrow').textContent = eyebrow; $('#modal-content').replaceChildren(content); modal.open({ trigger, initialFocus }); }
 const report = (error) => { $('#status').textContent = `Something went wrong: ${error.message}`; };
 const safely = (handler) => async (event) => { try { await handler(event); } catch (error) { report(error); } };
 function showPairing(message = '') { modal.dismiss(); $('#app-shell').hidden = true; $('#refresh').hidden = true; $('#disconnect-device').hidden = true; $('#pairing').hidden = false; $('#pairing-form').reset(); $('#pairing-status').textContent = message; $('#pairing-form').elements.code.focus(); }
@@ -100,7 +97,6 @@ async function refresh(focusId = null) {
   const [projects, board, activity, questions, actors, devices, roles] = await Promise.all([request('/v1/projects'), request('/v1/board'), request('/v1/events?after=0'), request('/v1/questions'), request('/v1/actors'), request('/v1/devices'), request('/v1/roles')]);
   state.projects = projects.projects; state.tickets = board.tickets; state.events = activity.events; state.questions = questions.questions; state.actors = actors.actors; state.devices = devices.devices; state.roles = roles.roles;
   const identity = actorId() || localStorage.getItem('viq.actor') || ''; $('#actor-select').replaceChildren(new Option('Actor', ''), ...state.actors.map((actor) => new Option(actor.name, actor.id))); $('#actor-select').value = state.actors.some((actor) => actor.id === identity) ? identity : '';
-  state.archived = dedupeTickets((await Promise.all(state.projects.map((project) => request(`/v1/projects/${encodeURIComponent(project.key)}/tickets?include_archived=true`)))).flatMap((body) => body.tickets)).filter((ticket) => ticket.archived_at !== null);
   state.selectedProjects = reconcileProjectSelection(previous, state.projects.map(({ key }) => key), state.selectedProjects, null); if (!previous.length) { state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.allProjects = true; }
   renderFilters(); renderBoard(focusId); await refreshInbox(); announce(`${visibleTickets().length} tickets shown`);
 }
@@ -159,7 +155,7 @@ function openDelete(ticket, trigger) {
   openModal({ title: 'Delete ticket', eyebrow: ticket.id, content: form, trigger, initialFocus: form.elements.confirm });
 }
 
-async function showDetail(id, trigger) {
+async function legacyShowDetail(id, trigger) {
   const [{ ticket }, { questions }, { blocks }, { events }] = await Promise.all([request(`/v1/tickets/${id}`), request(`/v1/tickets/${id}/questions`), request(`/v1/tickets/${id}/blocks`), request(`/v1/events?ticket=${id}`)]);
   const content = document.createElement('div'); content.className = 'ticket-detail';
   content.append(markdownElement('div', ticket.body || 'No additional context.', 'detail-body markdown'));
@@ -190,6 +186,34 @@ async function showDetail(id, trigger) {
   timeline.append(list); content.append(timeline); const focusReturn = trigger?.isConnected ? trigger : document.querySelector(`.ticket-card[data-id="${CSS.escape(ticket.id)}"]`); openModal({ title: ticket.title, eyebrow: ticket.id, content, trigger: focusReturn });
 }
 
+
+function eventItem(event) {
+  const labels = { ticket_created: 'Ticket created', ticket_edited: 'Ticket edited', manual_event: 'Factual event', progress: 'Factual event', question_asked: 'Question asked', question_answered: 'Question answered', claimed: 'Work claimed', released: 'Claim released', submitted: 'Submitted', accepted: 'Approved', changes_requested: 'Changes requested', reopened: 'Reopened', state_changed: 'State changed', blocked: 'Blocked', block_resolved: 'Block resolved' };
+  const item = document.createElement('li'); item.className = `event event-${event.type}`; item.dataset.cursor = event.cursor;
+  const head = document.createElement('div'); head.className = 'event-head'; const title = document.createElement('strong'); title.textContent = labels[event.type] || event.type.replaceAll('_', ' ');
+  const provenance = document.createElement('span'); const who = event.actor ? actorName(event.actor) : 'System'; provenance.textContent = `${who}${event.actor_role ? ` · ${roleName(event.actor_role)}` : ''}${event.machine ? ` · ${event.machine}` : ''} · `; const time = document.createElement('time'); time.dateTime = new Date(event.created_at).toISOString(); time.textContent = new Date(event.created_at).toLocaleString(); provenance.append(time); head.append(title, provenance); item.append(head);
+  if (event.message) item.append(markdownElement('div', event.message, 'markdown event-message')); return item;
+}
+
+async function showDetail(id, trigger, intent = modal.begin()) {
+  if (!modal.isActive(intent)) return;
+  const focusReturn = trigger?.isConnected ? trigger : document.querySelector(`.ticket-card[data-id="${CSS.escape(id)}"]`);
+  const [{ ticket }, { questions }, { blocks }, history] = await Promise.all([request(`/v1/tickets/${id}`), request(`/v1/tickets/${id}/questions`), request(`/v1/tickets/${id}/blocks`), request(`/v1/tickets/${id}/history?limit=25`)]);
+  if (!modal.isActive(intent)) return;
+  const content = document.createElement('div'); content.className = 'ticket-detail ticket-detail-editor';
+  const identity = document.createElement('dl'); identity.className = 'ticket-facts immutable-facts'; identity.innerHTML = `<div><dt>ID</dt><dd></dd></div><div><dt>Project</dt><dd></dd></div><div><dt>Current state</dt><dd></dd></div>`; [ticket.id, ticket.project, ticket.state].forEach((value, index) => { identity.children[index].querySelector('dd').textContent = value; }); content.append(identity);
+  const edit = document.createElement('form'); edit.className = 'modal-form detail-edit-form'; edit.innerHTML = '<label>Title<input name="title" required></label><label>Description (Markdown)<textarea name="description" rows="6"></textarea></label><label>Assignment<select name="assignment"><option>Unassigned</option><option>Human</option><option>Agent</option></select></label><button>Save changes</button>'; edit.elements.title.value = ticket.title; edit.elements.description.value = ticket.description; edit.elements.assignment.value = ticket.assignment;
+  edit.addEventListener('submit', safely(async (event) => { event.preventDefault(); await request(`/v1/tickets/${ticket.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(new FormData(edit))) }); await refresh(modal.isActive(intent) ? null : ticket.id); if (!modal.isActive(intent)) return; await showDetail(ticket.id, focusReturn, intent); announce('Ticket updated'); })); content.append(edit);
+  const openSection = document.createElement('section'); openSection.className = 'ticket-open-questions'; openSection.innerHTML = '<h3>Open questions</h3>'; const openQuestions = questions.filter((question) => question.status === 'open'); for (const question of openQuestions) openSection.append(questionCard(question, { compact: true, afterAnswer: async () => { if (modal.isActive(intent)) await showDetail(ticket.id, focusReturn, intent); else document.querySelector(`.ticket-card[data-id="${CSS.escape(ticket.id)}"]`)?.focus(); } })); if (!openQuestions.length) openSection.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: 'No open questions.' })); content.append(openSection);
+  const composer = document.createElement('form'); composer.className = 'modal-form manual-event-composer'; composer.innerHTML = '<h3>Add factual event</h3><label>What happened?<textarea name="message" rows="3" required></textarea></label><button>Add event</button>'; composer.addEventListener('submit', safely(async (event) => { event.preventDefault(); await request(`/v1/tickets/${ticket.id}/notes`, { method: 'POST', body: JSON.stringify({ message: composer.elements.message.value }) }); await refresh(modal.isActive(intent) ? null : ticket.id); if (!modal.isActive(intent)) return; await showDetail(ticket.id, focusReturn, intent); announce('Factual event added'); })); content.append(composer);
+  const timeline = document.createElement('section'); timeline.className = 'ticket-history'; timeline.innerHTML = '<h3>Complete history</h3>'; const list = document.createElement('ol'); list.className = 'event-timeline'; history.events.forEach((entry) => list.append(eventItem(entry))); timeline.append(list);
+  if (history.has_more) { const more = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary history-more', textContent: 'Load earlier history' }); let before = history.next_before; more.addEventListener('click', safely(async () => { const page = await request(`/v1/tickets/${ticket.id}/history?limit=25&before=${before}`); const fragment = document.createDocumentFragment(); page.events.forEach((entry) => fragment.append(eventItem(entry))); list.prepend(fragment); before = page.next_before; more.hidden = !page.has_more; announce('Earlier history loaded'); })); timeline.append(more); } content.append(timeline);
+  for (const block of blocks.filter((item) => item.status === 'open')) { const resolve = Object.assign(document.createElement('button'), { type: 'button', textContent: `Resolve block: ${block.reason}`, className: 'secondary resolve-block' }); resolve.addEventListener('click', safely(async () => { await request(`/v1/tickets/${ticket.id}/blocks/${encodeURIComponent(block.id)}/resolve`, { method: 'POST', body: '{}' }); await refresh(modal.isActive(intent) ? null : ticket.id); if (modal.isActive(intent)) await showDetail(ticket.id, focusReturn, intent); })); content.append(resolve); }
+  const danger = document.createElement('section'); danger.className = 'danger-zone inline-delete'; danger.innerHTML = '<h3>Delete permanently</h3><p>Deletion is non-restorable. The hidden audit tombstone and complete history are retained.</p><button type="button" class="danger reveal-delete">Delete ticket…</button><form hidden><label><input type="checkbox" name="confirm" required> I understand this ticket cannot be restored</label><button class="danger">Confirm permanent delete</button><button type="button" class="secondary cancel-delete">Cancel</button></form>'; const confirm = danger.querySelector('form'); danger.querySelector('.reveal-delete').addEventListener('click', () => { confirm.hidden = false; danger.querySelector('.reveal-delete').hidden = true; confirm.elements.confirm.focus(); }); danger.querySelector('.cancel-delete').addEventListener('click', () => { confirm.hidden = true; danger.querySelector('.reveal-delete').hidden = false; danger.querySelector('.reveal-delete').focus(); }); confirm.addEventListener('submit', safely(async (event) => { event.preventDefault(); await request(`/v1/tickets/${ticket.id}/delete`, { method: 'POST', body: JSON.stringify({ confirmed: confirm.elements.confirm.checked }) }); modal.dismiss(); await refresh(); announce('Ticket permanently deleted'); })); content.append(danger);
+  if (!modal.isActive(intent)) return;
+  $('#modal-title').textContent = ticket.title; $('#modal-eyebrow').textContent = `${ticket.id} · ${ticket.project} · ${ticket.state}`; $('#modal-content').replaceChildren(content);
+  modal.open({ title: ticket.title, content, trigger: focusReturn, initialFocus: edit.elements.title, intent });
+}
 
 function openDeviceManagement(trigger) {
   const panel = document.createElement('div'); panel.className = 'device-management';
@@ -224,7 +248,6 @@ $('#pairing-form').addEventListener('submit', async (event) => { event.preventDe
 $('#disconnect-device').addEventListener('click', () => { localStorage.removeItem(credentialKey); showPairing('This browser is disconnected. The server-side device was not revoked.'); });
 $('#refresh').addEventListener('click', safely(async () => refresh())); $('#close-modal').addEventListener('click', () => modal.close());
 $('#actor-select').addEventListener('change', safely(async (event) => { localStorage.setItem('viq.actor', event.target.value); await refreshInbox(); }));
-$('#open-archive').addEventListener('click', (event) => { const panel = document.createElement('div'); panel.className = 'archive-popup'; for (const ticket of state.archived) { const row = document.createElement('p'); row.textContent = `${ticket.id} — ${ticket.title} `; const restore = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Restore' }); restore.addEventListener('click', safely(async () => ticketAction(ticket.id, 'restore'))); row.append(restore); panel.append(row); } if (!state.archived.length) panel.textContent = 'Archive is empty.'; openModal({ title: 'Archive', content: panel, trigger: event.currentTarget }); });
 $('#open-device-management').addEventListener('click', (event) => openDeviceManagement(event.currentTarget)); $('#open-project-create').addEventListener('click', (event) => openProjectCreate(event.currentTarget)); $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
 $('#reset-filters').addEventListener('click', () => { state.allProjects = true; state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.selectedRoles.clear(); renderFilters(); renderBoard(); });
 $('#state-tabs').addEventListener('click', (event) => { const tab = event.target.closest('[data-tab]'); if (!tab) return; state.active = tab.dataset.tab; renderBoard(); });
