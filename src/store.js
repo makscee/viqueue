@@ -334,7 +334,8 @@ export class Store {
     return { type, id };
   }
   #row(id) { const row = this.#db.prepare(`SELECT t.*,c.claim_id,c.actor claim_actor,c.device_id claim_device_id,c.generation,c.claimed_at,(SELECT COUNT(*) FROM ticket_blocks b WHERE b.ticket_id=t.id AND b.status='open') unresolved_blockers,(SELECT COUNT(*) FROM questions q WHERE q.ticket_id=t.id AND q.status='open') open_questions FROM tickets t LEFT JOIN claims c ON c.ticket_id=t.id AND c.released_at IS NULL WHERE t.id=?`).get(id); if (!row) throw new DomainError(404, 'ticket_not_found', `ticket ${id} not found`); return row; }
-  #publicTicket(row) { const claim = row.claim_id ? { claim_id: row.claim_id, actor: row.claim_actor, device_id: row.claim_device_id ?? null, generation: row.generation, claimed_at: row.claimed_at } : null; const state = claim ? 'Working' : (row.board_state ?? (row.state === 'done' ? 'Done' : row.state === 'review' ? 'Waiting' : 'Open')); return { id: row.id, project: row.project, title: row.title, description: row.body, assignment: row.assignment ?? 'Unassigned', state, board_order: Number(row.board_order ?? 0), open_questions: Number(row.open_questions ?? 0), archived_at: row.archived_at ?? null, deleted_at: row.deleted_at ?? null, created_at: row.created_at, updated_at: row.updated_at, claim, unresolved_blockers: Number(row.unresolved_blockers ?? 0) }; }
+  #effectiveBoardState(row) { return row.claim_id ? 'Working' : (row.board_state ?? (row.state === 'done' ? 'Done' : row.state === 'review' ? 'Waiting' : 'Open')); }
+  #publicTicket(row) { const claim = row.claim_id ? { claim_id: row.claim_id, actor: row.claim_actor, device_id: row.claim_device_id ?? null, generation: row.generation, claimed_at: row.claimed_at } : null; const state = this.#effectiveBoardState(row); return { id: row.id, project: row.project, title: row.title, description: row.body, assignment: row.assignment ?? 'Unassigned', state, board_order: Number(row.board_order ?? 0), open_questions: Number(row.open_questions ?? 0), archived_at: row.archived_at ?? null, deleted_at: row.deleted_at ?? null, created_at: row.created_at, updated_at: row.updated_at, claim, unresolved_blockers: Number(row.unresolved_blockers ?? 0) }; }
   #ticket(id) { return this.#publicTicket(this.#row(id)); }
   #mutableTicket(id) { const ticket = this.#ticket(id); if (ticket.deleted_at !== null) throw new DomainError(409, 'ticket_deleted', 'deleted tickets are immutable tombstones'); if (ticket.archived_at !== null) throw new DomainError(409, 'ticket_archived', 'archived tickets are immutable until restored'); return ticket; }
   #title(value) { if (typeof value !== 'string' || !value.trim()) throw new DomainError(400, 'invalid_title', 'title is required'); return value.trim(); }
@@ -429,8 +430,8 @@ export class Store {
     const visibleIds = rawVisibleIds.filter((ticketId) => ticketId !== id);
     if (new Set(visibleIds).size !== visibleIds.length || position > visibleIds.length) throw new DomainError(400, 'invalid_visible_order', 'visible_ids and index must describe one ordered visible subsequence');
     if (ticket.claim) throw new DomainError(409, 'active_claim', 'claimed tickets cannot be moved by the human board');
-    const global = this.#db.prepare('SELECT id,board_state FROM tickets WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY board_order DESC,id').all();
-    const targetIds = global.filter((row) => row.board_state === state && row.id !== id).map((row) => row.id);
+    const global = this.#db.prepare('SELECT t.id,t.board_state,c.claim_id FROM tickets t LEFT JOIN claims c ON c.ticket_id=t.id AND c.released_at IS NULL WHERE t.deleted_at IS NULL AND t.archived_at IS NULL ORDER BY t.board_order DESC,t.id').all();
+    const targetIds = global.filter((row) => this.#effectiveBoardState(row) === state && row.id !== id).map((row) => row.id);
     let cursor = -1;
     for (const visibleId of visibleIds) {
       const next = targetIds.indexOf(visibleId, cursor + 1);

@@ -56,6 +56,29 @@ test('VIQ-12 reorder preserves claimed and all other unaffected relative positio
   const after = (await store.listBoardTickets()).map(({ id }) => id); assert.deepEqual(after.filter((id) => id !== 'VIQ-1'), before.filter((id) => id !== 'VIQ-1')); assert.equal((await store.getTicket(claimed.id)).state, 'Working'); await store.close();
 });
 
+test('VIQ-12 Working reorder uses effective lane membership when a claimed Agent ticket is visible', async () => {
+  const { store } = await fixture(); await store.createActor({ id: 'worker', name: 'Worker', kind: 'agent' });
+  const code = await store.createPairingCode('human', { actor_id: 'worker', intended_kind: 'worker', device_id: 'worker-device', device_name: 'Worker device' });
+  const worker = await store.pairDevice({ code: code.code, id: 'worker-device', name: 'Worker device' });
+  const humanLow = await store.createTicket({ project: 'VIQ', title: 'human low', assignment: 'Human' });
+  const claimed = await store.createTicket({ project: 'OPS', title: 'claimed Agent', assignment: 'Agent' });
+  const claim = await store.claim(claimed.id, { device: worker.device.id });
+  const humanHigh = await store.createTicket({ project: 'VIQ', title: 'human high', assignment: 'Human' });
+
+  await store.moveHumanTicket(humanLow.id, { state: 'Working', index: 1, visible_ids: [claimed.id], actor: 'human' });
+  assert.deepEqual((await store.listBoardTickets()).filter(({ state }) => state === 'Working').map(({ id }) => id), [claimed.id, humanLow.id]);
+  const beforeReorder = (await store.listBoardTickets()).map(({ id }) => id);
+  await store.moveHumanTicket(humanLow.id, { state: 'Working', index: 0, visible_ids: [claimed.id], actor: 'human' });
+  const afterReorder = (await store.listBoardTickets()).map(({ id }) => id);
+  assert.deepEqual(afterReorder.filter((id) => id !== humanLow.id), beforeReorder.filter((id) => id !== humanLow.id));
+  assert.deepEqual(afterReorder.filter((id) => [humanLow.id, claimed.id].includes(id)), [humanLow.id, claimed.id]);
+  assert.equal((await store.getTicket(claimed.id)).claim.claim_id, claim.ticket.claim.claim_id);
+  const beforeRejectedMove = [...afterReorder];
+  await assert.rejects(store.moveHumanTicket(claimed.id, { state: 'Working', index: 0, visible_ids: [humanLow.id], actor: 'human' }), (error) => error.code === 'human_assignment_required');
+  assert.deepEqual((await store.listBoardTickets()).map(({ id }) => id), beforeRejectedMove);
+  assert.equal((await store.getTicket(humanHigh.id)).state, 'Open'); await store.close();
+});
+
 test('VIQ-12 Activity obeys both scopes and projects only minimal facts', () => {
   const tickets = [{ id: 'VIQ-1', project: 'VIQ', assignment: 'Human' }, { id: 'OPS-1', project: 'OPS', assignment: 'Agent' }, { id: 'VIQ-2', project: 'VIQ', assignment: 'Agent' }];
   const events = [{ ticket_id: null, project: null, type: 'device_paired', actor: 'admin', message: 'secret prose' }, { ticket_id: 'VIQ-1', project: 'VIQ', type: 'progress', actor: 'human', message: 'arbitrary human prose' }, { ticket_id: 'OPS-1', project: 'OPS', type: 'claimed', actor: 'agent' }, { ticket_id: 'VIQ-2', project: 'VIQ', type: 'ticket_created', actor: null }];
