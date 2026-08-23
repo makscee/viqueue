@@ -3,7 +3,7 @@ import { activityFact, applyActivityFilters, applyTicketFilters, createModalCont
 const $ = (selector) => document.querySelector(selector);
 const credentialKey = 'viq.deviceCredential';
 const lanes = ['Open', 'Working', 'Waiting', 'Done'];
-const state = { projects: [], tickets: [], events: [], archived: [], actors: [], devices: [], roles: [], inbox: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null };
+const state = { projects: [], tickets: [], events: [], questions: [], archived: [], actors: [], devices: [], roles: [], inbox: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null };
 const modalStack = [];
 function restoreModal() { const previous = modalStack.pop(); if (!previous) return false; $('#modal-title').textContent = previous.title; $('#modal-eyebrow').textContent = previous.eyebrow; $('#modal-content').replaceChildren(...previous.content); previous.trigger?.focus(); return true; }
 const modal = createModalController($('#modal'), { requestClose: restoreModal });
@@ -80,52 +80,41 @@ function laneSurface(name, tickets) {
   stack.addEventListener('drop', safely(async (event) => { event.preventDefault(); stack.classList.remove('drop-target'); if (!state.drag) return; const cards = [...stack.querySelectorAll('.ticket-card:not(.dragging)')]; const target = event.target.closest('.ticket-card'); const index = target ? cards.indexOf(target) : cards.length; await moveTicket(state.drag.id, name, Math.max(0, index)); }));
   section.append(stack); return section;
 }
-function activitySurface(events) {
-  const section = document.createElement('section'); section.className = 'surface activity'; section.dataset.surface = 'Activity'; section.setAttribute('aria-label', 'Activity'); section.innerHTML = `<h2>Activity <span>${events.length}</span></h2>`;
+function visibleQuestions(visible) { const ids = new Set(visible.map(({ id }) => id)); return state.questions.filter((question) => ids.has(question.ticket_id)); }
+function activitySurface(events, questions) {
+  const section = document.createElement('section'); section.className = 'surface activity'; section.dataset.surface = 'Activity'; section.setAttribute('aria-label', 'Activity'); section.innerHTML = `<h2>Activity <span>${questions.length + events.length}</span></h2>`;
+  const open = document.createElement('section'); open.className = 'activity-questions'; open.innerHTML = '<h3>Open questions</h3>'; for (const question of questions) open.append(questionCard(question)); if (!questions.length) open.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: 'No open questions.' })); section.append(open);
   const list = document.createElement('ol'); list.className = 'activity-list';
   for (const event of events) { const item = document.createElement('li'); const fact = activityFact(event); item.innerHTML = '<strong></strong><p></p><small></small>'; item.children[0].textContent = fact.heading; item.children[1].textContent = fact.detail; item.children[2].textContent = new Date(event.created_at).toLocaleString(); list.append(item); }
   if (!events.length) list.innerHTML = '<li class="empty">No matching activity yet.</li>'; section.append(list); return section;
 }
 function renderBoard(focusId = null) {
-  const visible = visibleTickets(); const board = $('#board'); board.replaceChildren(); const events = filteredEvents(visible);
-  board.append(activitySurface(events)); for (const lane of lanes) board.append(laneSurface(lane, visible.filter((ticket) => ticket.state === lane)));
-  $('#filter-empty').hidden = visible.length !== 0; document.querySelectorAll('#state-tabs [data-tab]').forEach((tab) => { const name = tab.dataset.tab; tab.querySelector('span').textContent = name === 'Activity' ? events.length : visible.filter((ticket) => ticket.state === name).length; tab.setAttribute('aria-selected', String(name === state.active)); });
+  const visible = visibleTickets(); const board = $('#board'); board.replaceChildren(); const events = filteredEvents(visible); const questions = visibleQuestions(visible);
+  board.append(activitySurface(events, questions)); for (const lane of lanes) board.append(laneSurface(lane, visible.filter((ticket) => ticket.state === lane)));
+  $('#filter-empty').hidden = visible.length !== 0; document.querySelectorAll('#state-tabs [data-tab]').forEach((tab) => { const name = tab.dataset.tab; tab.querySelector('span').textContent = name === 'Activity' ? events.length + questions.length : visible.filter((ticket) => ticket.state === name).length; tab.setAttribute('aria-selected', String(name === state.active)); });
   const narrow = matchMedia('(max-width:600px)').matches; board.querySelectorAll('.surface').forEach((surface) => { surface.hidden = narrow && surface.dataset.surface !== state.active; });
   if (focusId) board.querySelector(`[data-id="${CSS.escape(focusId)}"]`)?.focus();
 }
 async function refresh(focusId = null) {
   const previous = state.projects.map(({ key }) => key);
-  const [projects, board, activity, actors, devices, roles] = await Promise.all([request('/v1/projects'), request('/v1/board'), request('/v1/events?after=0'), request('/v1/actors'), request('/v1/devices'), request('/v1/roles')]);
-  state.projects = projects.projects; state.tickets = board.tickets; state.events = activity.events; state.actors = actors.actors; state.devices = devices.devices; state.roles = roles.roles;
+  const [projects, board, activity, questions, actors, devices, roles] = await Promise.all([request('/v1/projects'), request('/v1/board'), request('/v1/events?after=0'), request('/v1/questions'), request('/v1/actors'), request('/v1/devices'), request('/v1/roles')]);
+  state.projects = projects.projects; state.tickets = board.tickets; state.events = activity.events; state.questions = questions.questions; state.actors = actors.actors; state.devices = devices.devices; state.roles = roles.roles;
   const identity = actorId() || localStorage.getItem('viq.actor') || ''; $('#actor-select').replaceChildren(new Option('Actor', ''), ...state.actors.map((actor) => new Option(actor.name, actor.id))); $('#actor-select').value = state.actors.some((actor) => actor.id === identity) ? identity : '';
   state.archived = dedupeTickets((await Promise.all(state.projects.map((project) => request(`/v1/projects/${encodeURIComponent(project.key)}/tickets?include_archived=true`)))).flatMap((body) => body.tickets)).filter((ticket) => ticket.archived_at !== null);
   state.selectedProjects = reconcileProjectSelection(previous, state.projects.map(({ key }) => key), state.selectedProjects, null); if (!previous.length) { state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.allProjects = true; }
   renderFilters(); renderBoard(focusId); await refreshInbox(); announce(`${visibleTickets().length} tickets shown`);
 }
-function openAnswer(question, trigger) {
-  if (!actorId()) throw new Error('Choose your coordinator device before answering');
-  const form = document.createElement('form'); form.className = 'modal-form answer-form'; form.dataset.ticket = question.ticket_id; form.dataset.question = question.id;
-  form.append(markdownElement('div', question.text, 'markdown question-markdown'));
-  if (question.kind === 'text') form.insertAdjacentHTML('beforeend', '<label>Your answer (Markdown)<textarea name="answer" required rows="5"></textarea></label><button>Send answer</button>');
-  else form.insertAdjacentHTML('beforeend', '<label>Note (optional, Markdown)<textarea name="note" rows="4"></textarea></label><div class="form-actions"><button name="decision" value="accept">Accept work</button><button class="secondary" name="decision" value="request_changes">Request changes</button></div>');
-  form.addEventListener('submit', safely(async (event) => {
-    event.preventDefault(); const data = Object.fromEntries(new FormData(form)); const decision = event.submitter?.value;
-    await request(`/v1/tickets/${question.ticket_id}/questions/${question.id}/answer`, { method: 'POST', body: JSON.stringify({ actor: actorId(), ...(decision ? { decision, note: data.note } : { answer: data.answer }) }) });
-    modal.dismiss(); await refresh(); $('#status').textContent = decision === 'accept' ? 'Work accepted' : decision === 'request_changes' ? 'Changes requested' : 'Answer sent';
-  }));
-  openModal({ title: question.kind === 'approval' ? 'Review request' : 'Answer question', eyebrow: question.ticket_id, content: form, trigger, initialFocus: form.querySelector('textarea') });
+function questionCard(question, { compact = false, afterAnswer = null } = {}) {
+  const ticket = state.tickets.find((item) => item.id === question.ticket_id); const article = document.createElement('article'); article.className = `question-card${question.blocking ? ' blocking' : ' non-blocking'}`; article.dataset.question = question.id;
+  article.innerHTML = '<small></small><h3></h3><div class="markdown"></div>'; article.querySelector('small').textContent = `${question.kind === 'approval' ? 'Approval' : question.blocking ? 'Blocking question' : 'Non-blocking question'} · ${question.ticket_id}`; article.querySelector('h3').textContent = ticket?.title || question.ticket_id; article.querySelector('.markdown').innerHTML = renderMarkdown(question.text);
+  const form = document.createElement('form'); form.className = 'inline-answer'; const requestId = crypto.randomUUID();
+  if (question.kind === 'text') form.innerHTML = `<label>Answer<span class="sr-only"> ${question.ticket_id}</span><textarea name="answer" required rows="${compact ? 2 : 3}"></textarea></label><button>Send answer</button>`;
+  else form.innerHTML = '<label>Note (optional)<textarea name="note" rows="2"></textarea></label><div class="form-actions"><button name="decision" value="accept">Accept work</button><button class="secondary" name="decision" value="request_changes">Request changes</button></div>';
+  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); const decision = event.submitter?.value; [...form.elements].forEach((element) => { element.disabled = true; }); await request(`/v1/tickets/${encodeURIComponent(question.ticket_id)}/questions/${encodeURIComponent(question.id)}/answer`, { method: 'POST', body: JSON.stringify({ request_id: requestId, ...(decision ? { decision, note: data.note } : { answer: data.answer }) }) }); await refresh(); announce(decision === 'accept' ? 'Work accepted' : decision === 'request_changes' ? 'Changes requested' : 'Answer sent'); await afterAnswer?.(); }));
+  article.append(form); return article;
 }
-
-function answerCard(question) {
-  const ticket = state.tickets.find((item) => item.id === question.ticket_id);
-  const article = document.createElement('article'); article.className = 'question-card'; article.tabIndex = 0; article.setAttribute('role', 'button');
-  article.innerHTML = '<small></small><h3></h3><div class="markdown"></div>';
-  article.querySelector('small').textContent = question.kind === 'approval' ? 'Review requested' : `Question · ${question.ticket_id}`;
-  article.querySelector('h3').textContent = ticket?.title || question.ticket_id; article.querySelector('.markdown').innerHTML = renderMarkdown(question.text);
-  article.addEventListener('click', () => openAnswer(question, article));
-  article.addEventListener('keydown', (event) => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); openAnswer(question, article); } });
-  return article;
-}
+const answerCard = (question) => questionCard(question, { compact: true });
+const openAnswer = questionCard; // compatibility name; answers render inline and never open a nested modal
 
 async function refreshInbox() {
   const actor = actorId(); state.inbox = actor ? (await request(`/v1/devices/${encodeURIComponent(actor)}/inbox?after=0`)).questions : [];
@@ -159,9 +148,9 @@ function openProgress(ticket, trigger) {
   openModal({ title: 'Add progress', eyebrow: ticket.id, content: form, trigger, initialFocus: form.elements.message });
 }
 function openQuestion(ticket, trigger) {
-  const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Question (Markdown)<textarea name="text" rows="6" required></textarea></label><label>Ask<select name="target" required></select></label><button>Ask question</button>';
+  const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Question (Markdown)<textarea name="text" rows="6" required></textarea></label><label>Ask<select name="target" required></select></label><label><input type="checkbox" name="blocking"> Blocking question</label><button>Ask question</button>';
   const actors = document.createElement('optgroup'); actors.label = 'People and actors'; for (const actor of state.actors) actors.append(new Option(actor.name, `actor:${actor.id}`)); form.elements.target.append(actors); const roles = document.createElement('optgroup'); roles.label = 'Roles'; for (const role of state.roles) roles.append(new Option(role.name, `role:${role.id}`)); form.elements.target.append(roles);
-  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const [type, id] = form.elements.target.value.split(':'); await request(`/v1/tickets/${ticket.id}/human-questions`, { method: 'POST', body: JSON.stringify({ actor: requireHuman(), responder: { type, id }, text: form.elements.text.value }) }); modal.dismiss(); await refresh(); $('#status').textContent = 'Question asked'; }));
+  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const [type, id] = form.elements.target.value.split(':'); await request(`/v1/tickets/${ticket.id}/human-questions`, { method: 'POST', body: JSON.stringify({ actor: requireHuman(), responder: { type, id }, text: form.elements.text.value, blocking: form.elements.blocking.checked }) }); modal.dismiss(); await refresh(); $('#status').textContent = 'Question asked'; }));
   openModal({ title: 'Ask question', eyebrow: ticket.id, content: form, trigger, initialFocus: form.elements.text });
 }
 function openDelete(ticket, trigger) {
@@ -188,13 +177,13 @@ async function showDetail(id, trigger) {
     const stateLabel = document.createElement('label'); stateLabel.textContent = 'State'; const stateSelect = document.createElement('select'); for (const [value, label] of [['open', 'Open'], ['review', 'Review'], ['done', 'Done']]) stateSelect.append(new Option(label, value)); stateSelect.value = ticket.state; stateSelect.addEventListener('change', safely(async () => { await changeState(ticket.id, stateSelect.value); modal.dismiss(); })); stateLabel.append(stateSelect); controls.append(stateLabel);
   } else { const restore = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Restore' }); restore.addEventListener('click', safely(async () => ticketAction(ticket.id, 'restore'))); controls.append(restore); }
   content.append(controls);
+  const questionSection = document.createElement('section'); questionSection.className = 'ticket-open-questions'; questionSection.innerHTML = '<h3>Open questions</h3>'; const openQuestions = questions.filter((question) => question.status === 'open'); for (const openQuestion of openQuestions) questionSection.append(questionCard(openQuestion, { afterAnswer: async () => { modal.dismiss(); await showDetail(ticket.id, focusReturn); } })); if (!openQuestions.length) questionSection.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: 'No open questions.' })); content.append(questionSection);
   const timeline = document.createElement('section'); timeline.innerHTML = '<h3>History</h3>'; const list = document.createElement('ol'); list.className = 'event-timeline';
   const questionById = new Map(questions.map((question) => [question.id, question])); const labels = { ticket_created: 'Ticket created', ticket_edited: 'Ticket edited', ticket_moved: 'Project changed', assigned: 'Assignment changed', blocked: 'Blocked', block_resolved: 'Block resolved', claimed: 'Work claimed', released: 'Claim released', progress: 'Progress', question_asked: 'Question asked', question_answered: 'Question answered', submitted: 'Submitted', accepted: 'Approved', changes_requested: 'Changes requested', reopened: 'Reopened', state_changed: 'State changed', archived: 'Archived', restored: 'Restored', deleted: 'Deleted' };
   for (const event of events) {
     const item = document.createElement('li'); item.className = `event event-${event.type}`; const question = questionById.get(event.metadata?.question_id); if (event.type === 'question_asked') item.classList.add('ticket-question');
     const header = document.createElement('div'); header.className = 'event-head'; const name = document.createElement('strong'); name.textContent = labels[event.type] || event.type.replaceAll('_', ' '); const byline = document.createElement('span'); const author = event.actor ? actorName(event.actor) : 'System'; const time = document.createElement('time'); time.dateTime = new Date(event.created_at).toISOString(); time.textContent = new Date(event.created_at).toLocaleString(); byline.textContent = `${author} · `; byline.append(time); header.append(name, byline); item.append(header);
     if (event.message) item.append(markdownElement('div', event.message, 'markdown event-message'));
-    if (event.type === 'question_asked' && question?.status === 'open') { item.tabIndex = 0; item.setAttribute('role', 'button'); item.addEventListener('click', () => openAnswer(question, item)); item.addEventListener('keydown', (keyEvent) => { if (['Enter', ' '].includes(keyEvent.key)) { keyEvent.preventDefault(); openAnswer(question, item); } }); }
     if (event.type === 'question_answered' && event.metadata?.question_event_id) item.dataset.questionEvent = String(event.metadata.question_event_id);
     list.append(item);
   }
@@ -235,7 +224,6 @@ $('#pairing-form').addEventListener('submit', async (event) => { event.preventDe
 $('#disconnect-device').addEventListener('click', () => { localStorage.removeItem(credentialKey); showPairing('This browser is disconnected. The server-side device was not revoked.'); });
 $('#refresh').addEventListener('click', safely(async () => refresh())); $('#close-modal').addEventListener('click', () => modal.close());
 $('#actor-select').addEventListener('change', safely(async (event) => { localStorage.setItem('viq.actor', event.target.value); await refreshInbox(); }));
-$('#open-questions').addEventListener('click', safely(async (event) => { await refreshInbox(); const panel = document.createElement('div'); panel.className = 'questions-popup'; panel.replaceChildren(...(state.inbox.length ? state.inbox.map(answerCard) : [Object.assign(document.createElement('p'), { textContent: 'No open questions.' })])); openModal({ title: 'Questions', content: panel, trigger: event.currentTarget }); }));
 $('#open-archive').addEventListener('click', (event) => { const panel = document.createElement('div'); panel.className = 'archive-popup'; for (const ticket of state.archived) { const row = document.createElement('p'); row.textContent = `${ticket.id} — ${ticket.title} `; const restore = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Restore' }); restore.addEventListener('click', safely(async () => ticketAction(ticket.id, 'restore'))); row.append(restore); panel.append(row); } if (!state.archived.length) panel.textContent = 'Archive is empty.'; openModal({ title: 'Archive', content: panel, trigger: event.currentTarget }); });
 $('#open-device-management').addEventListener('click', (event) => openDeviceManagement(event.currentTarget)); $('#open-project-create').addEventListener('click', (event) => openProjectCreate(event.currentTarget)); $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
 $('#reset-filters').addEventListener('click', () => { state.allProjects = true; state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.selectedRoles.clear(); renderFilters(); renderBoard(); });

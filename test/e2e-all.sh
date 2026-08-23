@@ -2,12 +2,14 @@
 set -euo pipefail
 : "${VIQ_EVIDENCE_DIR:?VIQ_EVIDENCE_DIR is required}"
 mkdir -p "$VIQ_EVIDENCE_DIR"
-suite_tmp=$(mktemp -d)
-trap 'rm -rf "$suite_tmp"' EXIT
-mkdir "$suite_tmp/controller" "$suite_tmp/worker"
-chmod 0755 "$suite_tmp" "$suite_tmp/worker"
-export TMPDIR="$suite_tmp/controller"
-export VIQ_WORKER_TMPDIR="$suite_tmp/worker"
+controller_root=${TMPDIR:-/tmp}
+worker_root=${VIQ_WORKER_TMPDIR:-/var/tmp}
+controller_tmp=$(mktemp -d "$controller_root/viq-e2e-controller.XXXXXX")
+worker_tmp=$(mktemp -d "$worker_root/viq-e2e-worker.XXXXXX")
+trap 'rm -rf "$controller_tmp" "$worker_tmp"' EXIT
+chmod 0755 "$worker_tmp"
+export TMPDIR="$controller_tmp"
+export VIQ_WORKER_TMPDIR="$worker_tmp"
 if [[ $(id -u) -ne 0 ]]; then export VIQ_WORKER_USER="${VIQ_WORKER_USER:-$(id -un)}"; fi
 export VIQ_EVIDENCE_DIR
 bash test/e2e.sh
