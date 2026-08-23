@@ -10,7 +10,9 @@ const claimIdentity = (claim) => ({
   claim_id: claim.ticket.claim.claim_id,
   actor: claim.ticket.claim.actor,
   generation: claim.ticket.claim.generation,
-  claim_token: claim.claim_token
+  claim_token: claim.claim_token,
+  device: claim.ticket.claim.device_id,
+  session_capability: claim.session_capability
 });
 
 test('accepted private-alpha trust boundary is explicit and mapped to enforced implementation seams', async () => {

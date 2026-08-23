@@ -21,7 +21,7 @@ async function fixture({ now } = {}) {
   return { store, file };
 }
 
-const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token });
+const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token, device: claim.ticket.claim.device_id, session_capability: claim.session_capability });
 
 test('direct history edit is human-only while agent progress remains claim-authorized', async () => {
   const { store } = await fixture();

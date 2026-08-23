@@ -15,7 +15,7 @@ async function fixture() {
   const one = await pair('worker-one'); const two = await pair('worker-two'); const other = await pair('other-one', 'other');
   return { store, admin, one, two, other, pair };
 }
-const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token });
+const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token, device: claim.ticket.claim.device_id, session_capability: claim.session_capability });
 
 test('actor-bound pairing, admin capability, role lifecycle, shared identity and immediate revocation', async () => {
   const f = await fixture();
@@ -38,9 +38,8 @@ test('one-project tickets reject legacy memberships and preserve claim authority
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'agent work', assignment: 'Agent', actor: 'mair' });
   assert.deepEqual((await f.store.listTickets('ONE')).map((t) => t.id), [ticket.id]); assert.deepEqual(await f.store.listTickets('TWO'), []);
   const claim = await f.store.claimNext({ project: 'ONE', device: 'worker-one' });
-  const continued = await f.store.verify(ticket.id, { ...identity(claim), device: 'worker-two' }); assert.equal(continued.claim.actor, 'worker');
-  await f.store.postEvent(ticket.id, { ...identity(claim), device: 'worker-two', message: 'continued' });
-  const progress = (await f.store.listEvents({ ticket: ticket.id })).events.find((e) => e.message === 'continued'); assert.deepEqual([progress.actor, progress.device_id], ['worker','worker-two']);
+  await assert.rejects(f.store.verify(ticket.id, { ...identity(claim), device: 'worker-two' }), (error) => error.code === 'stale_claim');
+  await assert.rejects(f.store.postEvent(ticket.id, { ...identity(claim), device: 'worker-two', message: 'continued' }), (error) => error.code === 'stale_claim');
   await f.store.close();
 });
 
