@@ -43,7 +43,7 @@ test('VIQ-12 filtered reorder changes the visible subsequence and preserves hidd
   await store.createTicket({ project: 'VIQ', title: 'visible high', assignment: 'Human' }); await store.createTicket({ project: 'OPS', title: 'hidden high', assignment: 'Agent' });
   assert.deepEqual((await store.listBoardTickets()).map(({ id }) => id), ['OPS-2','VIQ-2','OPS-1','VIQ-1']);
   await store.moveHumanTicket('VIQ-1', { state: 'Open', index: 0, visible_ids: ['VIQ-2'], actor: 'human' });
-  assert.deepEqual((await store.listBoardTickets()).map(({ id }) => id), ['OPS-2','VIQ-1','VIQ-2','OPS-1']); await store.close();
+  assert.deepEqual((await store.listBoardTickets()).map(({ id }) => id), ['OPS-2','VIQ-1','OPS-1','VIQ-2']); await store.close();
 });
 
 test('VIQ-12 reorder preserves claimed and all other unaffected relative positions', async () => {
@@ -52,8 +52,9 @@ test('VIQ-12 reorder preserves claimed and all other unaffected relative positio
   const worker = await store.pairDevice({ code: code.code, id: 'worker-device', name: 'Worker device' });
   await store.createTicket({ project: 'VIQ', title: 'human low', assignment: 'Human' }); const claimed = await store.createTicket({ project: 'OPS', title: 'claimed middle', assignment: 'Agent' });
   await store.claim(claimed.id, { device: worker.device.id }); await store.createTicket({ project: 'VIQ', title: 'human high', assignment: 'Human' }); await store.createTicket({ project: 'OPS', title: 'unclaimed high', assignment: 'Agent' });
-  const before = (await store.listBoardTickets()).map(({ id }) => id); await store.moveHumanTicket('VIQ-1', { state: 'Open', index: 0, visible_ids: ['VIQ-2'], actor: 'human' });
-  const after = (await store.listBoardTickets()).map(({ id }) => id); assert.deepEqual(after.filter((id) => id !== 'VIQ-1'), before.filter((id) => id !== 'VIQ-1')); assert.equal((await store.getTicket(claimed.id)).state, 'Working'); await store.close();
+  const before = (await store.listBoardTickets()).map(({ id }) => id); assert.deepEqual(before, ['OPS-2','VIQ-2','OPS-1','VIQ-1']);
+  await store.moveHumanTicket('VIQ-1', { state: 'Open', index: 0, visible_ids: ['VIQ-2'], actor: 'human' });
+  const after = (await store.listBoardTickets()).map(({ id }) => id); assert.deepEqual(after, ['OPS-2','VIQ-1','OPS-1','VIQ-2']); assert.equal((await store.getTicket(claimed.id)).state, 'Working'); await store.close();
 });
 
 test('VIQ-12 Working reorder uses effective lane membership when a claimed Agent ticket is visible', async () => {
@@ -81,9 +82,11 @@ test('VIQ-12 Working reorder uses effective lane membership when a claimed Agent
 
 test('VIQ-12 Activity obeys both scopes and projects only minimal facts', () => {
   const tickets = [{ id: 'VIQ-1', project: 'VIQ', assignment: 'Human' }, { id: 'OPS-1', project: 'OPS', assignment: 'Agent' }, { id: 'VIQ-2', project: 'VIQ', assignment: 'Agent' }];
-  const events = [{ ticket_id: null, project: null, type: 'device_paired', actor: 'admin', message: 'secret prose' }, { ticket_id: 'VIQ-1', project: 'VIQ', type: 'progress', actor: 'human', message: 'arbitrary human prose' }, { ticket_id: 'OPS-1', project: 'OPS', type: 'claimed', actor: 'agent' }, { ticket_id: 'VIQ-2', project: 'VIQ', type: 'ticket_created', actor: null }];
+  const events = [{ cursor: 10, ticket_id: null, project: null, type: 'device_paired', actor: 'admin', message: 'secret prose' }, { cursor: 11, ticket_id: 'VIQ-1', project: 'VIQ', type: 'progress', actor: 'human', message: 'arbitrary human prose' }, { cursor: 12, ticket_id: 'OPS-1', project: 'OPS', type: 'claimed', actor: 'agent' }, { cursor: 13, ticket_id: 'VIQ-2', project: 'VIQ', type: 'ticket_created', actor: null }];
   const projects = new Set(['VIQ']); const roles = new Set(['Human']); const visible = applyTicketFilters(tickets, projects, roles);
-  assert.deepEqual(applyActivityFilters(events, visible, projects, roles, ['VIQ','OPS']).map((event) => event.ticket_id), ['VIQ-1']);
+  const filtered = applyActivityFilters(events, visible, projects, roles, ['VIQ','OPS']);
+  assert.deepEqual(filtered.map((event) => event.cursor), [10, 11]);
+  assert.deepEqual(filtered.map((event) => event.type), ['device_paired', 'progress']);
   assert.deepEqual(activityFact(events[1]), { heading: 'VIQ-1 · progress', detail: 'Actor: human' }); assert.equal(JSON.stringify(activityFact(events[1])).includes('arbitrary human prose'), false);
   assert.equal(applyActivityFilters(events, tickets, new Set(['VIQ','OPS']), new Set(), ['VIQ','OPS']).length, 4);
 });

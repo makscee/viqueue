@@ -18,7 +18,7 @@ export function applyActivityFilters(events, visibleTickets, selectedProjects, s
   const scoped = selectedRoles.size > 0 || selectedProjects.size !== allProjectKeys.length || allProjectKeys.some((key) => !selectedProjects.has(key));
   if (!scoped) return events;
   const visibleIds = new Set(visibleTickets.map(({ id }) => id));
-  return events.filter((event) => event.ticket_id && visibleIds.has(event.ticket_id));
+  return events.filter((event) => event.ticket_id === null || visibleIds.has(event.ticket_id));
 }
 
 export function activityFact(event) {

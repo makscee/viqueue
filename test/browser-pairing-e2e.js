@@ -74,7 +74,10 @@ try {
   assert.equal(await page.locator('[data-surface="Waiting"] .ticket-card[data-id="DOG-1"]').count(), 1); assert.equal(await page.evaluate(() => document.activeElement?.dataset.id), 'DOG-1'); scenarios.dragMovement = true;
 
   await page.getByRole('button', { name: 'CAT', exact: true }).click(); await page.getByRole('button', { name: 'Human', exact: true }).click();
-  assert.equal(await page.locator('.activity-list li strong').evaluateAll((nodes) => nodes.every((node) => node.textContent.startsWith('DOG-'))), true);
+  const activityHeadings = await page.locator('.activity-list li strong').allTextContents();
+  assert.equal(activityHeadings.some((heading) => heading === 'System · device paired'), true);
+  assert.equal(activityHeadings.some((heading) => heading.startsWith('DOG-')), true);
+  assert.equal(activityHeadings.every((heading) => heading.startsWith('DOG-') || heading.startsWith('System ·')), true);
   assert.equal(await page.locator('.activity-list').innerText().then((text) => text.includes('arbitrary') || text.includes('Stress title')), false); scenarios.activityBothFilters = true;
   await page.getByRole('button', { name: 'CAT', exact: true }).click(); await page.getByRole('button', { name: 'Human', exact: true }).click();
   await page.screenshot({ path: path.join(evidence, 'desktop-1280x900.png') });

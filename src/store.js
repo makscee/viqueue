@@ -438,15 +438,10 @@ export class Store {
       if (next < 0) throw new DomainError(409, 'stale_visible_order', 'visible_ids are no longer an ordered target-lane subsequence');
       cursor = next;
     }
-    const ordered = global.map((row) => row.id).filter((ticketId) => ticketId !== id);
-    let insertion;
-    if (position < visibleIds.length) insertion = ordered.indexOf(visibleIds[position]);
-    else if (visibleIds.length) insertion = ordered.indexOf(visibleIds.at(-1)) + 1;
-    else {
-      const targetPositions = ordered.map((ticketId, offset) => targetIds.includes(ticketId) ? offset : -1).filter((offset) => offset >= 0);
-      insertion = targetPositions.length ? targetPositions.at(-1) + 1 : 0;
-    }
-    ordered.splice(insertion, 0, id);
+    const ordered = global.map((row) => row.id);
+    const visibleSlots = ordered.map((ticketId, offset) => ticketId === id || visibleIds.includes(ticketId) ? offset : -1).filter((offset) => offset >= 0);
+    const reorderedVisible = [...visibleIds]; reorderedVisible.splice(position, 0, id);
+    visibleSlots.forEach((offset, slot) => { ordered[offset] = reorderedVisible[slot]; });
     const storedState = state === 'Done' ? 'done' : state === 'Waiting' ? 'review' : 'open';
     this.#db.prepare('UPDATE tickets SET state=?,board_state=? WHERE id=?').run(storedState, state, id);
     if (ticket.state !== state) this.#event(id, ticket.project, 'state_changed', actor.id, `Moved from ${ticket.state} to ${state}.`, { from: ticket.state, to: state });
