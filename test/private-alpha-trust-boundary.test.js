@@ -1,3 +1,4 @@
+import { claimWithSession } from './helpers/worker-session.js';
 import assert from 'node:assert/strict';
 import { access, mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,9 @@ const claimIdentity = (claim) => ({
   claim_id: claim.ticket.claim.claim_id,
   actor: claim.ticket.claim.actor,
   generation: claim.ticket.claim.generation,
-  claim_token: claim.claim_token
+  claim_token: claim.claim_token,
+  device: claim.ticket.claim.device_id,
+  session_capability: claim.session_capability
 });
 
 test('accepted private-alpha trust boundary is explicit and mapped to enforced implementation seams', async () => {
@@ -43,7 +46,7 @@ test('agent progress fails closed without the complete current claim identity', 
   const pairing = await store.createPairingCode('coord', { intended_kind: 'worker' });
   await store.pairDevice({ code: pairing.code, id: 'worker', name: 'Worker' });
   const ticket = await store.createTicket({ project: 'ABC', title: 'Claim boundary', actor: 'coord', assignment:'Agent' });
-  const claim = await store.claim(ticket.id, { actor: 'worker' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker' });
   await assert.rejects(store.postEvent(ticket.id, { actor: 'worker', message: 'unfenced' }), (error) => error.code === 'stale_claim');
   await assert.rejects(store.postEvent(ticket.id, { ...claimIdentity(claim), claim_token: 'wrong', message: 'wrong token' }), (error) => error.code === 'stale_claim');
   assert.equal((await store.postEvent(ticket.id, { ...claimIdentity(claim), message: 'authorized' })).event.actor, 'worker');

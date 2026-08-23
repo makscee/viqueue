@@ -1,3 +1,4 @@
+import { claimWithSession } from './helpers/worker-session.js';
 import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -21,12 +22,12 @@ async function fixture({ now } = {}) {
   return { store, file };
 }
 
-const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token });
+const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token, device: claim.ticket.claim.device_id, session_capability: claim.session_capability });
 
 test('direct history edit is human-only while agent progress remains claim-authorized', async () => {
   const { store } = await fixture();
   const ticket = await store.createTicket({ project: 'ABC', title: 'Authority', actor: 'maks', assignment:'Agent' });
-  const claim = await store.claim(ticket.id, { actor: 'worker' });
+  const claim = await claimWithSession(store, ticket.id, { actor: 'worker' });
   await assert.rejects(store.editTicket(ticket.id, { actor: 'worker', title: 'Machine edit' }), (error) => error.code === 'coordinator_required');
   const progress = await store.postEvent(ticket.id, { ...identity(claim), message: 'Claim-authorized progress' });
   assert.equal(progress.event.actor, 'worker');
@@ -57,7 +58,7 @@ test('archived ticket is immutable and absent from inbox until explicit restore'
     () => store.appendTicketEvent(ticket.id, { actor: 'maks', message: 'No' }),
     () => store.askHumanQuestion(ticket.id, { actor: 'maks', text: 'No?', target_type: 'actor', target_id: 'eva' }),
     () => store.answerQuestion(ticket.id, question.id, { actor: 'eva', answer: 'No' }),
-    () => store.claim(ticket.id, { actor: 'worker' }),
+    () => claimWithSession(store, ticket.id, { actor: 'worker' }),
     () => store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true })
   ];
   for (const mutation of mutations) await assert.rejects(mutation(), (error) => ['ticket_archived', 'ticket_ineligible'].includes(error.code));

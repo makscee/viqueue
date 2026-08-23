@@ -15,7 +15,7 @@ const base = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, ['src/server.js', `--port=${port}`, `--storage=${work}/data.sqlite`, '--operator-token=e2e-only']);
 for (let i = 0; i < 100; i += 1) { try { if ((await fetch(`${base}/health`)).ok) break; } catch {} await new Promise((resolve) => setTimeout(resolve, 20)); }
 const api = async (method, route, body, auth = false) => { const response = await fetch(`${base}${route}`, { method, headers: { 'content-type': 'application/json', ...(auth ? { authorization: 'Bearer e2e-only' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const result = response.status === 204 ? null : await response.json(); assert.ok(response.ok, `${method} ${route}: ${JSON.stringify(result)}`); return result; };
-const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, claim_token: claim.claim_token, generation: claim.ticket.claim.generation, actor: claim.ticket.claim.actor });
+const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, claim_token: claim.claim_token, generation: claim.ticket.claim.generation, actor: claim.ticket.claim.actor, device: claim.ticket.claim.device_id, session_capability: claim.session_capability });
 const log = []; const note = (message) => { log.push(message); console.log(message); };
 for (const actor of [{ id: 'worker', name: 'Worker', kind: 'agent' }, { id: 'maks', name: 'Maks', kind: 'human' }, { id: 'eva', name: 'Eva', kind: 'human' }]) await api('POST', '/v1/actors', actor, true);
 for (const project of ['VIQ', 'LIFE', 'WORK']) await api('POST', '/v1/projects', { key: project });

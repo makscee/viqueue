@@ -1,3 +1,4 @@
+import { claimNextWithSession } from './helpers/worker-session.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,7 +16,7 @@ async function fixture() {
   const one = await pair('worker-one'); const two = await pair('worker-two'); const other = await pair('other-one', 'other');
   return { store, admin, one, two, other, pair };
 }
-const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token });
+const identity = (claim) => ({ claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, generation: claim.ticket.claim.generation, claim_token: claim.claim_token, device: claim.ticket.claim.device_id, session_capability: claim.session_capability });
 
 test('actor-bound pairing, admin capability, role lifecycle, shared identity and immediate revocation', async () => {
   const f = await fixture();
@@ -37,18 +38,17 @@ test('one-project tickets reject legacy memberships and preserve claim authority
   await assert.rejects(f.store.createTicket({ projects: ['ONE','TWO'], project: 'ONE', title: 'legacy' }), (e) => e.code === 'invalid_ticket_fields');
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'agent work', assignment: 'Agent', actor: 'mair' });
   assert.deepEqual((await f.store.listTickets('ONE')).map((t) => t.id), [ticket.id]); assert.deepEqual(await f.store.listTickets('TWO'), []);
-  const claim = await f.store.claimNext({ project: 'ONE', device: 'worker-one' });
-  const continued = await f.store.verify(ticket.id, { ...identity(claim), device: 'worker-two' }); assert.equal(continued.claim.actor, 'worker');
-  await f.store.postEvent(ticket.id, { ...identity(claim), device: 'worker-two', message: 'continued' });
-  const progress = (await f.store.listEvents({ ticket: ticket.id })).events.find((e) => e.message === 'continued'); assert.deepEqual([progress.actor, progress.device_id], ['worker','worker-two']);
+  const claim = await claimNextWithSession(f.store, { project: 'ONE', device: 'worker-one' });
+  await assert.rejects(f.store.verify(ticket.id, { ...identity(claim), device: 'worker-two' }), (error) => error.code === 'stale_claim');
+  await assert.rejects(f.store.postEvent(ticket.id, { ...identity(claim), device: 'worker-two', message: 'continued' }), (error) => error.code === 'stale_claim');
   await f.store.close();
 });
 
-test('project-scoped next and claimNext use the immutable canonical project', async () => {
+test('next and claimNext use authoritative global order regardless of legacy project hints', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'canonical membership', assignment: 'Agent', actor: 'mair' });
-  assert.equal(await f.store.next({ project: 'TWO', device: 'worker-one' }), null);
-  assert.equal((await f.store.claimNext({ project: 'ONE', device: 'worker-one' })).ticket.id, ticket.id);
+  assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
+  assert.equal((await claimNextWithSession(f.store, { project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
   await f.store.close();
 });
 
