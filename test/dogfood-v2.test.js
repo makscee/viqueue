@@ -44,11 +44,11 @@ test('one-project tickets reject legacy memberships and preserve claim authority
   await f.store.close();
 });
 
-test('project-scoped next and claimNext use the immutable canonical project', async () => {
+test('next and claimNext use authoritative global order regardless of legacy project hints', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'canonical membership', assignment: 'Agent', actor: 'mair' });
-  assert.equal(await f.store.next({ project: 'TWO', device: 'worker-one' }), null);
-  assert.equal((await f.store.claimNext({ project: 'ONE', device: 'worker-one' })).ticket.id, ticket.id);
+  assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
+  assert.equal((await f.store.claimNext({ project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
   await f.store.close();
 });
 

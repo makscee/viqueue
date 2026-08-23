@@ -23,10 +23,11 @@ run(){ local credential=$1; shift; printf '$ viq'; local redact=0 arg; for arg i
 {
   run "$coordinator" project create ABC
   run "$coordinator" ticket create ABC tracer --assignment Agent
-  claim="$(VIQ_DEVICE_TOKEN="$worker" "${viq[@]}" ticket claim-next --project ABC --server "$base")"
+  session='pi-session-e2e-00000001'
+  claim="$(VIQ_DEVICE_TOKEN="$worker" "${viq[@]}" ticket claim-next --session-id "$session" --server "$base")"
   jq 'del(.claim_token)' <<<"$claim"
   cid="$(jq -r .ticket.claim.claim_id<<<"$claim")"; token="$(jq -r .claim_token<<<"$claim")"
-  run "$worker" ticket submit ABC-1 --claim-id "$cid" --claim-token "$token" --generation 1 --reviewer maks --message complete
+  run "$worker" ticket submit ABC-1 --claim-id "$cid" --claim-token "$token" --generation 1 --session-id "$session" --reviewer maks --message complete
   run "$coordinator" ticket accept ABC-1 --message accepted
   echo E2E_OK
 } >"$out" 2>&1

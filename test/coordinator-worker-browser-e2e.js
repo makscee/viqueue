@@ -57,7 +57,7 @@ try {
   let actorCreate = page.locator('.actor-create-form'); await actorCreate.getByLabel('ID').fill('real-worker'); await actorCreate.getByLabel('Name').fill('Real Worker'); await actorCreate.getByRole('button', { name: 'Create actor' }).click();
   const pairing = page.locator('.pairing-code-form'); await pairing.getByLabel('Actor').selectOption('real-worker'); await pairing.getByLabel('Device ID').fill('real-worker'); await pairing.getByLabel('Device name').fill('Real Worker'); await pairing.getByLabel('Device kind').selectOption('worker'); await pairing.getByRole('button', { name: 'Issue code' }).click();
   const workerCode = await pairing.locator('.one-time-code').textContent(); assert.ok(workerCode);
-  const workerEnv = { ...process.env, VIQ_URL: base, XDG_STATE_HOME: stateHome, PI_CODING_AGENT_DIR: piAgentDir, VIQ_WORKER_ROOT: jobsRoot, VIQ_WORKER_UID: String(workerUid), VIQ_WORKER_GID: String(workerGid) };
+  const workerEnv = { ...process.env, VIQ_URL: base, XDG_CONFIG_HOME: stateHome, PI_CODING_AGENT_DIR: piAgentDir, VIQ_WORKER_ROOT: jobsRoot, VIQ_WORKER_UID: String(workerUid), VIQ_WORKER_GID: String(workerGid) };
   const workerCommand = (script) => workerUid === process.getuid() ? [process.execPath, [script, release]] : ['runuser', ['-u', workerUser, '--', process.execPath, script, release]];
   if (process.env.VIQ_PI_WORKER_PROOF === '1') {
     const [discoveryCommand, discoveryArgs] = workerCommand(discoveryHelper);
@@ -82,7 +82,7 @@ try {
   const membership = page.locator('.role-membership-form'); await membership.getByLabel('Paired device').selectOption('browser-coordinator'); await membership.getByLabel('Role').selectOption('reviewer'); await membership.getByRole('button', { name: 'Grant role' }).click();
   await page.getByText('Role granted').waitFor();
   await page.locator('.role-membership-form').getByLabel('Paired device').selectOption('real-worker'); await page.locator('.role-membership-form').getByLabel('Role').selectOption('reviewer'); await page.locator('.role-membership-form').getByRole('button', { name: 'Grant role' }).click();
-  await page.getByText('Role granted').waitFor(); await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByText('Role granted').waitFor(); await page.locator('#modal').getByRole('button', { name: 'Close' }).click(); await page.locator('#modal').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: '+ Project', exact: true }).click(); await page.getByLabel('Project key').fill('DOG'); await page.locator('#modal-content').getByRole('button', { name: 'Create project' }).click();
   await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Real lifecycle'); await page.getByLabel('Assignment').selectOption('Agent'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
   await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Must remain unassigned'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
