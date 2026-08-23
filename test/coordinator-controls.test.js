@@ -13,10 +13,10 @@ test('bounded coordinator controls remain coordinator-only at the API boundary',
   const base = `http://127.0.0.1:${app.address().port}`;
   const call = async (credential, method, route, body = {}) => fetch(`${base}${route}`, { method, headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   for (const [method, route, body] of [
-    ['POST', '/v1/pairing-codes', { intended_kind: 'worker' }], ['POST', '/v1/roles', { id: 'flat', name: 'Flat' }],
-    ['PUT', '/v1/devices/worker/roles/flat', {}], ['DELETE', '/v1/devices/worker/roles/flat', {}],
+    ['POST', '/v1/pairing-codes', { intended_kind: 'worker' }],
     ['POST', '/v1/tickets/NO-1/questions/q_missing/answer', { answer: 'no' }], ['POST', '/v1/tickets/NO-1/blocks/b_missing/resolve', {}]
   ]) { const response = await call(worker.credential, method, route, body); assert.equal(response.status, 403, `${method} ${route}`); assert.match((await response.json()).error.code, /coordinator_required|admin_required/); }
+  for (const [method, route] of [['POST','/v1/roles'],['PUT','/v1/devices/worker/roles/flat'],['DELETE','/v1/devices/worker/roles/flat']]) assert.equal((await call(worker.credential, method, route)).status, 404);
   assert.equal((await call(coordinator.credential, 'POST', '/v1/pairing-codes', { intended_kind: 'worker', actor_id: 'coord', device_id: 'issued-worker', device_name: 'Issued Worker' })).status, 201);
 });
 

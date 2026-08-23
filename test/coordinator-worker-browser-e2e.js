@@ -40,7 +40,8 @@ const storage = path.join(work, 'viqueue.sqlite');
 let store = new Store(storage); await store.init();
 const bootstrap = await store.bootstrapCoordinator({ id: 'bootstrap', name: 'Bootstrap' });
 const browserCode = await store.createPairingCode('bootstrap', { actor_id: 'bootstrap', intended_kind: 'coordinator', device_id: 'browser-coordinator', device_name: 'Browser Coordinator' });
-await store.close();
+const workerCode = (await store.createPairingCode('bootstrap', { intended_kind: 'worker', device_id: 'real-worker', device_name: 'Real Worker' })).code;
+await store.createProject('DOG'); await store.close();
 const socket = net.createServer(); await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise((resolve) => socket.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, ['src/server.js', `--port=${port}`, `--storage=${storage}`], { stdio: 'ignore' });
@@ -53,10 +54,7 @@ try {
   await page.goto(base);
   await page.getByLabel('One-time code').fill(browserCode.code); await page.getByLabel('Device ID').fill('browser-coordinator'); await page.getByLabel('Device name').fill('Browser Coordinator'); await page.getByRole('button', { name: 'Pair device' }).click();
   await page.locator('#app-shell').waitFor({ state: 'visible' }); assert.equal(await page.locator('#actor-select').inputValue(), 'bootstrap');
-  await page.getByRole('button', { name: 'Admin' }).click();
-  let actorCreate = page.locator('.actor-create-form'); await actorCreate.getByLabel('ID').fill('real-worker'); await actorCreate.getByLabel('Name').fill('Real Worker'); await actorCreate.getByRole('button', { name: 'Create actor' }).click();
-  const pairing = page.locator('.pairing-code-form'); await pairing.getByLabel('Actor').selectOption('real-worker'); await pairing.getByLabel('Device ID').fill('real-worker'); await pairing.getByLabel('Device name').fill('Real Worker'); await pairing.getByLabel('Device kind').selectOption('worker'); await pairing.getByRole('button', { name: 'Issue code' }).click();
-  const workerCode = await pairing.locator('.one-time-code').textContent(); assert.ok(workerCode);
+  assert.ok(workerCode);
   const workerEnv = { ...process.env, VIQ_URL: base, XDG_CONFIG_HOME: stateHome, PI_CODING_AGENT_DIR: piAgentDir, VIQ_WORKER_ROOT: jobsRoot, VIQ_WORKER_UID: String(workerUid), VIQ_WORKER_GID: String(workerGid) };
   const workerCommand = (script) => workerUid === process.getuid() ? [process.execPath, [script, release]] : ['runuser', ['-u', workerUser, '--', process.execPath, script, release]];
   if (process.env.VIQ_PI_WORKER_PROOF === '1') {
@@ -75,15 +73,7 @@ try {
   const lines = createInterface({ input: worker.stdout }); const queue = []; const waiters = []; lines.on('line', (line) => { const waiter = waiters.shift(); if (waiter) waiter(line); else queue.push(line); });
   const nextLine = () => queue.length ? Promise.resolve(queue.shift()) : Promise.race([new Promise((resolve) => waiters.push(resolve)), new Promise((_, reject) => setTimeout(() => reject(new Error(`worker response timeout: ${workerError.slice(-2000)}`)), 15000))]);
   worker.stdin.write(`${workerCode}\n`); assert.equal(await nextLine(), 'PAIRED_AND_DENIED');
-  await pairing.getByRole('button', { name: 'Clear code' }).click();
   assert.equal(await page.evaluate((code) => document.body.innerText.includes(code) || location.href.includes(code), workerCode), false);
-  const role = page.locator('.role-create-form'); await role.getByLabel('Role ID').fill('reviewer'); await role.getByLabel('Role name').fill('Reviewer'); await role.getByRole('button', { name: 'Create role' }).click();
-  await page.getByText('Role created').waitFor();
-  const membership = page.locator('.role-membership-form'); await membership.getByLabel('Paired device').selectOption('browser-coordinator'); await membership.getByLabel('Role').selectOption('reviewer'); await membership.getByRole('button', { name: 'Grant role' }).click();
-  await page.getByText('Role granted').waitFor();
-  await page.locator('.role-membership-form').getByLabel('Paired device').selectOption('real-worker'); await page.locator('.role-membership-form').getByLabel('Role').selectOption('reviewer'); await page.locator('.role-membership-form').getByRole('button', { name: 'Grant role' }).click();
-  await page.getByText('Role granted').waitFor(); await page.locator('#modal').getByRole('button', { name: 'Close' }).click(); await page.locator('#modal').waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: '+ Project', exact: true }).click(); await page.getByLabel('Project key').fill('DOG'); await page.locator('#modal-content').getByRole('button', { name: 'Create project' }).click();
   await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Real lifecycle'); await page.getByLabel('Assignment').selectOption('Agent'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
   await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.locator('#modal-content select[name="project"]').selectOption('DOG'); await page.getByLabel('Ticket title').fill('Must remain unassigned'); await page.locator('#modal-content').getByRole('button', { name: 'Create ticket' }).click();
   worker.stdin.write('start\n'); assert.equal(await nextLine(), 'CLAIMED'); assert.equal(await nextLine(), 'BLOCKED'); await page.getByRole('button', { name: 'Refresh' }).click();
@@ -94,7 +84,6 @@ try {
   await page.locator('[data-tab="done"]').evaluate((element) => element.click()); await page.locator('[data-column="done"] .ticket-card[data-id="DOG-1"]').waitFor();
   store = new Store(storage); await store.init(); const unassigned = await store.getTicket('DOG-2'); await store.close(); assert.equal(unassigned.assignment, 'Unassigned'); assert.equal(unassigned.claim, null);
   assert.deepEqual(page.viewportSize(), { width: 1280, height: 900 }); assert.equal(await page.locator('.surface').count(), 5); await page.setViewportSize({ width: 390, height: 844 }); await page.locator('#state-tabs [data-tab="Activity"]').click(); assert.equal(await page.locator('.surface:visible').count(), 1); assert.equal(await page.locator('[data-surface="Activity"]:visible').count(), 1); assert.equal(await page.locator('#state-tabs button').count(), 5); await page.setViewportSize({ width: 1280, height: 900 });
-  await page.getByRole('button', { name: 'Admin' }).click(); await page.locator('.role-membership-form').getByLabel('Paired device').selectOption('real-worker'); await page.locator('.role-membership-form').getByLabel('Role').selectOption('reviewer'); await page.locator('.role-membership-form').getByRole('button', { name: 'Revoke role' }).click(); await page.getByText('Role revoked').waitFor();
   assert.equal(consoleMessages.some((message) => message.includes(workerCode) || message.includes(browserCode.code) || message.includes(bootstrap.credential)), false);
   assert.equal(await page.evaluate(() => { const secret = localStorage.getItem('viq.deviceCredential'); return Boolean(secret) && !document.body.innerText.includes(secret) && !location.href.includes(secret); }), true);
   console.log('COORDINATOR_WORKER_BROWSER_E2E_OK');
