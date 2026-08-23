@@ -232,7 +232,7 @@ test('archived tickets are immutable and leave inboxes until restored', async ()
 test('archive and delete checks remain correct when the clock returns zero', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'viq-zero-time-'));
   const store = new Store(path.join(dir, 'data.sqlite'), { now: () => 0 });
-  await store.init(); await store.createProject('ABC'); await store.createActor({ id: 'maks', name: 'Maks', kind: 'human' });
+  await store.init(); await store.createProject('ABC'); await store.bootstrapCoordinator({ id: 'maks', name: 'Maks' });
   const archivedTicket = await store.createTicket({ project: 'ABC', title: 'Archived at epoch' });
   const archived = await store.archiveTicket(archivedTicket.id, { actor: 'maks' });
   assert.equal(archived.archived_at, 0);
