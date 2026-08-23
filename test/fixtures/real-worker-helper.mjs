@@ -23,15 +23,16 @@ saveCredential(credential);
 assert.equal((await stat(defaultCredentialPath())).mode & 0o777, 0o600);
 for (const [method, route, body] of [
   ['POST', '/v1/pairing-codes', { intended_kind: 'worker' }],
-  ['POST', '/v1/roles', { id: 'denied', name: 'Denied' }],
-  ['PUT', '/v1/devices/real-worker/roles/denied', {}],
-  ['DELETE', '/v1/devices/real-worker/roles/denied', {}],
   ['POST', '/v1/tickets/NO-1/questions/q_missing/answer', { answer: 'no' }],
   ['POST', '/v1/tickets/NO-1/blocks/b_missing/resolve', {}],
 ]) {
   const response = await fetch(`${process.env.VIQ_URL}${route}`, { method, headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal(response.status, 403, `${method} ${route}`);
   assert.match((await response.json()).error.code, /admin_required/);
+}
+for (const [method, route] of [['POST', '/v1/roles'], ['PUT', '/v1/devices/real-worker/roles/denied'], ['DELETE', '/v1/devices/real-worker/roles/denied']]) {
+  const response = await fetch(`${process.env.VIQ_URL}${route}`, { method, headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: '{}' });
+  assert.equal(response.status, 404, `${method} ${route}`); assert.equal((await response.json()).error.code, 'route_not_found');
 }
 process.stdout.write('PAIRED_AND_DENIED\n');
 assert.equal((await iterator.next()).value, 'start');

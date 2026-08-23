@@ -32,14 +32,10 @@ test('VIQ-15 immutable detail, shared factual-event provenance, stable history, 
   assert.equal(immutable.status, 400); assert.equal(immutable.body.error.code, 'immutable_project');
   const edited = await call(f, f.coordinator, 'PATCH', '/v1/tickets/ABC-1', { title: 'Edited', description: 'New body', assignment: 'Agent' });
   assert.deepEqual([edited.body.ticket.id, edited.body.ticket.project, edited.body.ticket.state], ['ABC-1', 'ABC', 'Open']);
-  await call(f, f.coordinator, 'POST', '/v1/roles', { id: 'historian', name: 'Historian' });
-  await call(f, f.coordinator, 'PUT', '/v1/devices/coord/roles/historian', {});
   const human = await call(f, f.coordinator, 'POST', '/v1/tickets/ABC-1/notes', { message: 'human fact', actor_role: 'spoof', machine: 'spoof' });
-  assert.equal(human.body.event.actor, 'coord'); assert.equal(human.body.event.machine, 'Coordinator'); assert.equal(human.body.event.actor_role, 'historian');
-  await call(f, f.coordinator, 'PATCH', '/v1/devices/coord', { name: 'Renamed coordinator' });
-  await call(f, f.coordinator, 'DELETE', '/v1/devices/coord/roles/historian', {});
+  assert.equal(human.body.event.actor, 'coord'); assert.equal(human.body.event.machine, 'Coordinator'); assert.equal(human.body.event.actor_role, null);
   const stableHuman = (await call(f, f.coordinator, 'GET', '/v1/tickets/ABC-1/history?limit=100')).body.events.find((event) => event.cursor === human.body.event.cursor);
-  assert.equal(stableHuman.machine, 'Coordinator'); assert.equal(stableHuman.actor_role, 'historian');
+  assert.equal(stableHuman.machine, 'Coordinator'); assert.equal(stableHuman.actor_role, null);
   const session = await call(f, f.worker, 'POST', '/v1/sessions', {});
   const claimed = await call(f, f.worker, 'POST', '/v1/tickets/ABC-1/claim', {}, session.body.session_capability);
   const fence = { claim_id: claimed.body.ticket.claim.claim_id, generation: claimed.body.ticket.claim.generation, claim_token: claimed.body.claim_token };
@@ -73,7 +69,7 @@ test('VIQ-15 immutable detail, shared factual-event provenance, stable history, 
   }
   const afterDelete = await call(f, f.coordinator, 'GET', '/v1/events?after=0');
   assert.ok(afterDelete.body.events.some((event) => event.cursor === unrelated.body.event.cursor));
-  assert.ok(afterDelete.body.events.some((event) => event.ticket_id === null && event.type === 'role_created'));
+  assert.ok(afterDelete.body.events.some((event) => event.ticket_id === null && event.type === 'device_bootstrapped'));
   await new Promise((resolve) => f.app.close(resolve));
   const db = new DatabaseSync(f.file, { readOnly: true });
   assert.equal(db.prepare('SELECT COUNT(*) n FROM ticket_tombstones WHERE ticket_id=?').get('ABC-1').n, 1);
