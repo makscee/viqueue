@@ -207,7 +207,8 @@ test('archive is reversible while confirmed delete tombstones without erasing hi
   }
   const deleted = await store.deleteTicket(ticket.id, { actor: 'maks', confirmed: true }); assert.ok(deleted.deleted_at);
   assert.deepEqual(await store.listTickets('ABC', { includeArchived: true }), []);
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.slice(-3).map((event) => event.type), ['archived', 'restored', 'deleted']);
+  await assert.rejects(store.listEvents({ ticket: ticket.id }), (error) => error.code === 'ticket_not_found');
+  assert.deepEqual((await store.auditDeletedTicket(ticket.id)).events.slice(-3).map((event) => event.type), ['archived', 'restored', 'deleted']);
 });
 
 test('archived tickets are immutable and leave inboxes until restored', async () => {
@@ -256,7 +257,8 @@ test('deleted tombstones reject subsequent human mutations', async () => {
     () => store.accept(ticket.id, { actor: 'maks' }),
     () => store.reopen(ticket.id, { actor: 'maks' })
   ]) await assert.rejects(operation(), (error) => error.code === 'ticket_deleted');
-  assert.deepEqual((await store.listEvents({ ticket: ticket.id })).events.map((event) => event.type), ['ticket_created', 'deleted']);
+  await assert.rejects(store.listEvents({ ticket: ticket.id }), (error) => error.code === 'ticket_not_found');
+  assert.deepEqual((await store.auditDeletedTicket(ticket.id)).events.map((event) => event.type), ['ticket_created', 'deleted']);
 });
 
 test('ticket edit and assignment retain the minimal canonical fields and record events', async () => {

@@ -51,18 +51,22 @@ export function reconcileProjectSelection(projectsOrPrevious, projectsOrSelected
 }
 
 export function createModalController(dialog, { requestClose } = {}) {
-  let trigger = null;
+  let trigger = null; let generation = 0;
+  const invalidate = () => ++generation;
   const close = () => { if (dialog.open && !requestClose?.()) dialog.close(); };
   dialog.addEventListener('click', (event) => { if (event.target === event.currentTarget) close(); });
   dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); close(); } });
-  dialog.addEventListener('close', () => { const previous = trigger; trigger = null; previous?.focus(); });
+  dialog.addEventListener('close', () => { invalidate(); const previous = trigger; trigger = null; previous?.focus(); });
   return {
-    open({ trigger: nextTrigger = null, initialFocus = null } = {}) {
+    begin: invalidate,
+    isActive(intent) { return intent === generation; },
+    open({ trigger: nextTrigger = null, initialFocus = null, intent = invalidate() } = {}) {
+      if (intent !== generation) return false;
       if (!dialog.open) { trigger = nextTrigger; dialog.showModal(); }
-      initialFocus?.focus();
+      initialFocus?.focus(); return true;
     },
     close,
-    dismiss() { if (dialog.open) dialog.close(); }
+    dismiss() { if (dialog.open) dialog.close(); else invalidate(); }
   };
 }
 
