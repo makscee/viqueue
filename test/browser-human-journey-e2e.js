@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import net from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { chromium } from 'playwright';
+import { Store } from '../src/store.js';
+
+const work = await mkdtemp(path.join(tmpdir(), 'viq-human-journey-'));
+const storage = path.join(work, 'blank.sqlite');
+const store = new Store(storage); await store.init();
+const coordinator = await store.bootstrapCoordinator({ id: 'journey-owner', name: 'Journey owner' });
+await store.close();
+const socket = net.createServer(); await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
+const port = socket.address().port; await new Promise((resolve) => socket.close(resolve));
+const base = `http://127.0.0.1:${port}`;
+const server = spawn(process.execPath, ['src/server.js', `--port=${port}`, `--storage=${storage}`], { stdio: 'ignore' });
+for (let i = 0; i < 100; i += 1) { try { if ((await fetch(`${base}/health`)).ok) break; } catch {} await new Promise((resolve) => setTimeout(resolve, 20)); }
+const api = async (method, route, body, credential = coordinator.credential) => { const response = await fetch(`${base}${route}`, { method, headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }); const value = await response.json(); assert.ok(response.ok, `${method} ${route}: ${JSON.stringify(value)}`); return value; };
+const browser = await chromium.launch({ headless: true });
+const evidence = path.resolve(process.env.VIQ_EVIDENCE_DIR || path.join(work, 'evidence')); await mkdir(evidence, { recursive: true });
+const consoleErrors = [], pageErrors = [], screenshots = [];
+try {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); }); page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.addInitScript((credential) => localStorage.setItem('viq.deviceCredential', credential), coordinator.credential);
+  await page.goto(base); await page.locator('#app-shell').waitFor({ state: 'visible' });
+  const firstProject = page.getByRole('button', { name: 'Create your first project', exact: true });
+  assert.equal(await firstProject.isVisible(), true, 'blank Board must expose a prominent project creation CTA');
+  assert.equal(await page.getByRole('button', { name: '+ Ticket', exact: true }).isDisabled(), true);
+  await firstProject.click(); await page.getByLabel('Project key').fill('home'); await page.getByRole('button', { name: 'Create project', exact: true }).click();
+  await page.getByText('Project HOME created. Create its first ticket.').waitFor();
+  assert.equal(await page.locator('#modal[open]').isVisible(), true); assert.equal(await page.locator('#modal-content select[name="project"]').inputValue(), 'HOME');
+  await page.getByLabel('Ticket title').fill('First human ticket'); await page.getByLabel('Description (optional)').fill('Created entirely through the blank Board UI.'); await page.locator('#modal-content select[name="assignment"]').selectOption('Human'); await page.getByRole('button', { name: 'Create ticket' }).click(); await page.getByText('1 tickets shown').waitFor();
+  await page.getByRole('button', { name: '+ Ticket', exact: true }).click(); await page.getByLabel('Ticket title').fill('Disposable ticket'); await page.locator('#modal-content select[name="assignment"]').selectOption('Human'); await page.getByRole('button', { name: 'Create ticket' }).click(); await page.getByText('2 tickets shown').waitFor();
+  await page.locator('.ticket-card[data-id="HOME-1"]').dragTo(page.locator('[data-surface="Working"] .card-stack')); await page.getByText(/HOME-1 moved to Working/).waitFor();
+  await page.getByRole('button', { name: 'Human', exact: true }).click(); assert.equal(await page.locator('.ticket-card').count(), 2); await page.getByRole('button', { name: 'Human', exact: true }).click();
+  await page.locator('.ticket-card[data-id="HOME-1"] .ticket-open').click(); await page.getByRole('heading', { name: 'Complete history' }).waitFor(); assert.match(await page.locator('.event-timeline').innerText(), /Ticket created|State changed/);
+  await page.locator('.manual-event-composer textarea').fill('Owner verified the first human journey.'); await page.getByRole('button', { name: 'Add event' }).click(); await page.getByText('Factual event added').waitFor(); assert.match(await page.locator('.event-timeline').innerText(), /Owner verified the first human journey/); await page.getByRole('button', { name: 'Close' }).click();
+  await page.locator('.ticket-card[data-id="HOME-2"] .ticket-open').click(); assert.match(await page.locator('.danger-zone').innerText(), /non-restorable|cannot be restored/i); await page.getByRole('button', { name: 'Delete ticket…' }).click(); await page.getByRole('button', { name: 'Cancel' }).click(); assert.equal(await page.locator('.reveal-delete').isVisible(), true); await page.getByRole('button', { name: 'Delete ticket…' }).click(); await page.getByLabel(/cannot be restored/).check(); await page.getByRole('button', { name: 'Confirm permanent delete' }).click(); await page.getByText('Ticket permanently deleted').waitFor(); assert.equal(await page.locator('.ticket-card[data-id="HOME-2"]').count(), 0);
+  await page.getByRole('button', { name: 'Machines', exact: true }).click(); await page.locator('.machine-pair-form').getByLabel('Role').selectOption('Agent'); await page.locator('.machine-pair-form').getByLabel('Name').fill('Disposable journey worker'); const issuedResponse = page.waitForResponse((response) => response.url().endsWith('/v1/machines/pairing-codes')); await page.getByRole('button', { name: 'Generate one-time code' }).click(); const issued = await (await issuedResponse).json(); const code = await page.locator('.one-time-code').textContent();
+  const pairedResponse = await fetch(`${base}/v1/devices/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, id: issued.id, name: issued.name }) }); assert.equal(pairedResponse.status, 201); const paired = await pairedResponse.json(); await page.getByRole('button', { name: 'Clear code' }).click(); await page.getByRole('button', { name: 'Close' }).click(); await page.getByRole('button', { name: 'Refresh' }).click(); await page.getByRole('button', { name: 'Machines', exact: true }).click(); const row = page.locator('.machine-row', { hasText: issued.name }); await row.getByRole('button', { name: 'Revoke' }).click(); await row.getByRole('button', { name: 'Confirm revoke' }).click(); await page.getByText('Machine revoked').waitFor(); assert.equal((await fetch(`${base}/v1/devices/me`, { headers: { authorization: `Bearer ${paired.credential}` } })).status, 401); await page.getByRole('button', { name: 'Close' }).click();
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 800 }]) { await page.setViewportSize(viewport); await page.getByRole('tab', { name: /Open/ }).click().catch(() => {}); const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth); assert.equal(overflow, false, `${viewport.width} has horizontal overflow`); const file = `human-journey-${viewport.width}x${viewport.height}.png`; await page.screenshot({ path: path.join(evidence, file), fullPage: false }); screenshots.push({ path: file, ...viewport }); }
+  assert.deepEqual(consoleErrors, []); assert.deepEqual(pageErrors, []); await writeFile(path.join(evidence, 'human-journey-status.json'), `${JSON.stringify({ passed: true, blankState: true, projectCreatedThroughUI: true, ticketCreatedThroughUI: true, movement: true, filters: true, detailHistory: true, factualEvent: true, deletionCancelConfirm: true, machinesPairRevoke: true, viewports: screenshots, consoleErrors, pageErrors }, null, 2)}\n`); console.log(`HUMAN_JOURNEY_E2E_OK evidence=${evidence}`);
+} finally { await browser.close(); server.kill(); await rm(work, { recursive: true, force: true }); }

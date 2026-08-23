@@ -20,7 +20,7 @@ async function fixture(t) {
 test('Machines is the only routine provenance administration surface', async (t) => {
   const { base } = await fixture(t); const html = await (await fetch(base)).text(); const js = await (await fetch(`${base}/app.js`)).text();
   assert.match(html, />Machines</); assert.match(js, /openMachines/); assert.match(js, /Human.*Agent/s);
-  assert.doesNotMatch(`${html}\n${js}`, />Admin<|\+ Project|Create actor|Create assignment role|role-membership|actor-create|machine filter/i);
+  assert.doesNotMatch(`${html}\n${js}`, />Admin<|Create actor|Create assignment role|role-membership|actor-create|machine filter/i);
   assert.doesNotMatch(js, /\/v1\/(actors|roles)/); assert.match(js, /\/v1\/machines/);
 });
 

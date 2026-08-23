@@ -28,7 +28,8 @@ function showBoard() { $('#pairing').hidden = true; $('#app-shell').hidden = fal
 function chip(label, pressed, action) { const button = document.createElement('button'); button.type = 'button'; button.className = 'filter-chip'; button.textContent = label; button.setAttribute('aria-pressed', String(pressed)); button.addEventListener('click', action); return button; }
 function renderFilters() {
   const keys = state.projects.map(({ key }) => key); const projects = $('#project-chips'); projects.replaceChildren();
-  projects.append(chip('All', state.allProjects, () => { state.allProjects = true; state.selectedProjects = new Set(keys); renderFilters(); renderBoard(); }));
+  if (!keys.length) projects.append(Object.assign(document.createElement('span'), { className: 'empty', textContent: 'Create a project to organize your tickets.' }));
+  else projects.append(chip('All', state.allProjects, () => { state.allProjects = true; state.selectedProjects = new Set(keys); renderFilters(); renderBoard(); }));
   for (const key of keys) projects.append(chip(key, state.selectedProjects.has(key), () => { state.allProjects = false; state.selectedProjects.has(key) ? state.selectedProjects.delete(key) : state.selectedProjects.add(key); if (state.selectedProjects.size === keys.length) state.allProjects = true; renderFilters(); renderBoard(); }));
   const roles = $('#role-chips'); roles.replaceChildren();
   for (const role of ['Human', 'Agent']) roles.append(chip(role, state.selectedRoles.has(role), () => { state.selectedRoles.has(role) ? state.selectedRoles.delete(role) : state.selectedRoles.add(role); renderFilters(); renderBoard(); }));
@@ -85,7 +86,11 @@ function activitySurface(events, questions) {
 }
 function renderBoard(focusId = null) {
   const visible = visibleTickets(); const board = $('#board'); board.replaceChildren(); const events = filteredEvents(visible); const questions = visibleQuestions(visible);
-  board.append(activitySurface(events, questions)); for (const lane of lanes) board.append(laneSurface(lane, visible.filter((ticket) => ticket.state === lane)));
+  if (!state.projects.length) {
+    const welcome = document.createElement('section'); welcome.className = 'first-project-empty'; welcome.innerHTML = '<p class="eyebrow">Start your board</p><h2>Create your first project</h2><p>Projects keep related tickets together. Choose a short key such as HOME or APP.</p><button type="button">Create your first project</button>';
+    welcome.querySelector('button').addEventListener('click', (event) => openProjectCreate(event.currentTarget)); board.append(welcome); $('#filter-empty').hidden = true; $('#state-tabs').hidden = true; return;
+  }
+  $('#state-tabs').hidden = false; board.append(activitySurface(events, questions)); for (const lane of lanes) board.append(laneSurface(lane, visible.filter((ticket) => ticket.state === lane)));
   $('#filter-empty').hidden = visible.length !== 0; document.querySelectorAll('#state-tabs [data-tab]').forEach((tab) => { const name = tab.dataset.tab; tab.querySelector('span').textContent = name === 'Activity' ? events.length + questions.length : visible.filter((ticket) => ticket.state === name).length; tab.setAttribute('aria-selected', String(name === state.active)); });
   const narrow = matchMedia('(max-width:600px)').matches; board.querySelectorAll('.surface').forEach((surface) => { surface.hidden = narrow && surface.dataset.surface !== state.active; });
   if (focusId) board.querySelector(`[data-id="${CSS.escape(focusId)}"]`)?.focus();
@@ -95,7 +100,8 @@ async function refresh(focusId = null) {
   const [projects, board, activity, questions, machines] = await Promise.all([request('/v1/projects'), request('/v1/board'), request('/v1/events?after=0'), request('/v1/questions'), request('/v1/machines')]);
   state.projects = projects.projects; state.tickets = board.tickets; state.events = activity.events; state.questions = questions.questions; state.machines = machines.machines;
   state.selectedProjects = reconcileProjectSelection(previous, state.projects.map(({ key }) => key), state.selectedProjects, null); if (!previous.length) { state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.allProjects = true; }
-  renderFilters(); renderBoard(focusId); announce(`${visibleTickets().length} tickets shown`);
+  $('#open-ticket-create').disabled = !state.projects.length; $('#open-ticket-create').title = state.projects.length ? '' : 'Create a project first';
+  renderFilters(); renderBoard(focusId); announce(state.projects.length ? `${visibleTickets().length} tickets shown` : 'No projects yet. Create your first project to begin.');
 }
 function questionCard(question, { compact = false, afterAnswer = null } = {}) {
   const ticket = state.tickets.find((item) => item.id === question.ticket_id); const article = document.createElement('article'); article.className = `question-card${question.blocking ? ' blocking' : ' non-blocking'}`; article.dataset.question = question.id;
@@ -159,16 +165,24 @@ function openMachines(trigger) {
 
 
 
-function openTicketCreate(trigger) {
+function openProjectCreate(trigger) {
+  const form = document.createElement('form'); form.className = 'modal-form project-create-form'; form.innerHTML = '<p>Use a short key that is easy to recognize on every ticket.</p><label>Project key<input name="key" required minlength="2" maxlength="10" pattern="[A-Za-z][A-Za-z0-9]{1,9}" placeholder="HOME" autocomplete="off" aria-describedby="project-key-help"></label><small id="project-key-help">2–10 letters or numbers, starting with a letter.</small><button>Create project</button>';
+  form.elements.key.addEventListener('input', () => { form.elements.key.value = form.elements.key.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10); });
+  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const key = form.elements.key.value.trim().toUpperCase(); const result = await request('/v1/projects', { method: 'POST', body: JSON.stringify({ key }) }); state.allProjects = false; state.selectedProjects = new Set([result.project.key]); modal.dismiss(); await refresh(); state.allProjects = false; state.selectedProjects = new Set([result.project.key]); state.active = 'Open'; renderFilters(); renderBoard(); announce(`Project ${result.project.key} created. Create its first ticket.`); openTicketCreate($('#open-ticket-create'), result.project.key); }));
+  openModal({ title: state.projects.length ? 'Create project' : 'Create your first project', eyebrow: 'New project', content: form, trigger, initialFocus: form.elements.key });
+}
+
+function openTicketCreate(trigger, projectKey = null) {
+  if (!state.projects.length) return openProjectCreate(trigger);
   const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Project<select name="project" required></select></label><label>Ticket title<input name="title" required></label><label>Description (optional)<textarea name="description" rows="4"></textarea></label><label>Assignment<select name="assignment"><option>Unassigned</option><option>Human</option><option>Agent</option></select></label><button>Create ticket</button>';
-  form.elements.project.replaceChildren(new Option('Choose a project', ''), ...state.projects.map(({ key }) => new Option(key, key))); const selected = [...state.selectedProjects]; if (selected.length === 1) form.elements.project.value = selected[0];
+  form.elements.project.replaceChildren(new Option('Choose a project', ''), ...state.projects.map(({ key }) => new Option(key, key))); const selected = projectKey ? [projectKey] : [...state.selectedProjects]; if (selected.length === 1) form.elements.project.value = selected[0];
   form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); const result = await request('/v1/tickets', { method: 'POST', body: JSON.stringify(data) }); modal.dismiss(); await refresh(result.ticket.id); }));
   $('#modal-title').textContent = 'Create ticket'; $('#modal-eyebrow').textContent = 'Quick capture'; $('#modal-content').replaceChildren(form); modal.open({ trigger, initialFocus: selected.length === 1 ? form.elements.title : form.elements.project });
 }
 $('#pairing-form').addEventListener('submit', async (event) => { event.preventDefault(); const form = event.currentTarget; $('#pairing-status').textContent = 'Pairing…'; try { const response = await fetch('/v1/devices/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(form))) }); const body = await response.json(); if (!response.ok) throw new Error(body?.error?.message || 'Pairing failed'); localStorage.setItem(credentialKey, body.credential); const identity = await request('/v1/devices/me'); if (!identity.actor.admin) throw new Error('The board requires an admin actor.'); $('#actor-select').replaceChildren(new Option(identity.actor.name, identity.actor.id)); showBoard(); await refresh(); } catch (error) { localStorage.removeItem(credentialKey); showPairing(error.message); } });
 $('#disconnect-device').addEventListener('click', () => { localStorage.removeItem(credentialKey); showPairing('This browser is disconnected. The server-side device was not revoked.'); });
 $('#refresh').addEventListener('click', safely(async () => refresh())); $('#close-modal').addEventListener('click', () => modal.close());
-$('#open-machines').addEventListener('click', (event) => openMachines(event.currentTarget)); $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
+$('#open-machines').addEventListener('click', (event) => openMachines(event.currentTarget)); $('#open-project-create').addEventListener('click', (event) => openProjectCreate(event.currentTarget)); $('#open-ticket-create').addEventListener('click', (event) => openTicketCreate(event.currentTarget));
 $('#reset-filters').addEventListener('click', () => { state.allProjects = true; state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.selectedRoles.clear(); renderFilters(); renderBoard(); });
 $('#state-tabs').addEventListener('click', (event) => { const tab = event.target.closest('[data-tab]'); if (!tab) return; state.active = tab.dataset.tab; renderBoard(); });
 addEventListener('resize', () => { if (!$('#modal').open) renderBoard(document.activeElement?.closest?.('.ticket-card')?.dataset.id || null); }); addEventListener('keydown', (event) => { if (event.key === 'Escape' && state.drag) { const previous = state.drag; state.drag = null; announce(`Move cancelled. ${previous.id} remains in ${previous.state}, position ${previous.index + 1}.`); renderBoard(previous.id); } });
