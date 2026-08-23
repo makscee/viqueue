@@ -8,10 +8,23 @@ const inlineMarkdown = (value) => escapeHtml(value)
   .replace(/\*([^*]+)\*/g, '<em>$1</em>')
   .replace(/\[([^\]]+)]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="noreferrer noopener" target="_blank">$1</a>');
 
-export function applyTicketFilters(tickets, selectedProjects, selectedAssignees) {
-  return tickets.filter((ticket) => (ticket.projects ?? [ticket.project]).some((project) => selectedProjects.has(project)) && (
-    selectedAssignees.size === 0 || selectedAssignees.has(ticket.assignee ? `${ticket.assignee.type}:${ticket.assignee.id}` : 'none')
+export function applyTicketFilters(tickets, selectedProjects, selectedRoles) {
+  return tickets.filter((ticket) => selectedProjects.has(ticket.project) && (
+    selectedRoles.size === 0 || selectedRoles.has(ticket.assignment)
   ));
+}
+
+export function applyActivityFilters(events, visibleTickets, selectedProjects, selectedRoles, allProjectKeys) {
+  const scoped = selectedRoles.size > 0 || selectedProjects.size !== allProjectKeys.length || allProjectKeys.some((key) => !selectedProjects.has(key));
+  if (!scoped) return events;
+  const visibleIds = new Set(visibleTickets.map(({ id }) => id));
+  return events.filter((event) => event.ticket_id === null || visibleIds.has(event.ticket_id));
+}
+
+export function activityFact(event) {
+  const subject = event.ticket_id || (event.project ? `Project ${event.project}` : 'System');
+  const action = ({ role_created: 'assignment group created', role_granted: 'role membership added', role_revoked: 'role membership removed' })[event.type] || String(event.type).replaceAll('_', ' ');
+  return { heading: `${subject} · ${action}`, detail: event.actor ? `Actor: ${event.actor}` : 'Actor: system' };
 }
 
 export function selectProject(projects, selected, project) {
@@ -22,7 +35,7 @@ export const boardProjection = (ticket) => {
   const state = ticket.state.toLowerCase();
   return state === 'open' ? (ticket.claim ? 'working' : 'todo') : state === 'waiting' ? 'review' : state;
 };
-export const boardColumns = [['todo', 'To do'], ['working', 'Working'], ['review', 'Review'], ['done', 'Done']];
+export const boardColumns = [['open', 'Open'], ['working', 'Working'], ['waiting', 'Waiting'], ['done', 'Done'], ['activity', 'Activity']];
 export function dedupeTickets(tickets) { return [...new Map(tickets.map((ticket) => [ticket.id, ticket])).values()]; }
 
 export function reconcileProjectSelection(projectsOrPrevious, projectsOrSelected, selectedOrAll, preferred = null) {
