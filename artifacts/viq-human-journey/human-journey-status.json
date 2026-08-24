@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "blankState": true,
+  "projectCreatedThroughUI": true,
+  "ticketCreatedThroughUI": true,
+  "movement": true,
+  "filters": true,
+  "detailHistory": true,
+  "factualEvent": true,
+  "deletionCancelConfirm": true,
+  "machinesPairRevoke": true,
+  "blankViewports": [
+    {
+      "path": "blank-first-use-1280x900.png",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "path": "blank-first-use-390x844.png",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "path": "blank-first-use-320x800.png",
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "viewports": [
+    {
+      "path": "human-journey-1280x900.png",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "path": "human-journey-390x844.png",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "path": "human-journey-320x800.png",
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": []
+}
