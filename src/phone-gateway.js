@@ -4,8 +4,8 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
-import { realpathSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { constants as fsConstants, realpathSync } from 'node:fs';
+import { open, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AuthStore } from './phone-auth-store.js';
@@ -13,7 +13,21 @@ import { AuthStore } from './phone-auth-store.js';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 const PUBLIC=new Set(['/','/favicon.ico','/phone-bootstrap.js','/app.css','/app.js','/ui-core.js','/health']);
 const DEVICE_ID=/^[A-Za-z0-9_-]{16,100}$/;
-const DNS_TIMEOUT_MS=3000,CONNECT_TIMEOUT_MS=5000,REQUEST_TIMEOUT_MS=15000,MAX_DNS_ANSWERS=16;
+const DNS_TIMEOUT_MS=3000,CONNECT_TIMEOUT_MS=5000,REQUEST_TIMEOUT_MS=15000,MAX_DNS_ANSWERS=16,MAX_AUTHORIZATION_FILE_BYTES=513;
+const unsafeCredential=()=>new Error('unsafe upstream authorization credential file');
+export async function loadUpstreamAuthorization(file,{expectedUid=process.geteuid?.(),afterOpen}={}){
+ if(typeof file!=='string'||!file||!Number.isInteger(expectedUid)||fsConstants.O_NOFOLLOW===undefined)throw unsafeCredential();
+ const flags=fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW|(fsConstants.O_CLOEXEC??0)|(fsConstants.O_NONBLOCK??0);let handle;
+ try{
+  handle=await open(file,flags);const before=await handle.stat({bigint:true});
+  if(!before.isFile()||before.nlink!==1n||before.uid!==BigInt(expectedUid)||(before.mode&0o77n)!==0n||before.size<1n||before.size>BigInt(MAX_AUTHORIZATION_FILE_BYTES))throw unsafeCredential();
+  if(afterOpen)await afterOpen();
+  const bytes=await handle.readFile();const after=await handle.stat({bigint:true});
+  if(before.dev!==after.dev||before.ino!==after.ino||before.nlink!==after.nlink||before.uid!==after.uid||before.mode!==after.mode||before.size!==after.size||before.mtimeNs!==after.mtimeNs||before.ctimeNs!==after.ctimeNs||BigInt(bytes.length)!==before.size)throw unsafeCredential();
+  if(bytes.includes(0))throw unsafeCredential();let value=bytes.toString('utf8');if(value.endsWith('\n'))value=value.slice(0,-1);
+  if(!/^[\x21-\x7e]{16,512}$/.test(value)||value.includes('\r')||value.includes('\n'))throw unsafeCredential();return value;
+ }catch(error){if(error?.message==='unsafe upstream authorization credential file')throw error;throw unsafeCredential()}finally{await handle?.close().catch(()=>{})}
+}
 const json=(res,status,value)=>{if(res.headersSent)return res.destroy();res.statusCode=status;res.setHeader('content-type','application/json');res.end(JSON.stringify(value)+'\n')};
 const secure=(res)=>{res.setHeader('content-security-policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");res.setHeader('x-frame-options','DENY');res.setHeader('x-content-type-options','nosniff');res.setHeader('referrer-policy','no-referrer');res.setHeader('cache-control','no-store')};
 async function body(req,limit){const chunks=[];let n=0;for await(const c of req){n+=c.length;if(n>limit)throw Object.assign(new Error('too large'),{status:413,limit});chunks.push(c)}return Buffer.concat(chunks)}
@@ -106,5 +120,5 @@ const gatewayHelp=`Usage: viqueue-phone-gateway --auth-db=PATH --origin=https://
 if(process.argv[1]&&fileURLToPath(import.meta.url)===realpathSync(process.argv[1])){
  if(process.argv.slice(2).includes('--help')){process.stdout.write(gatewayHelp);process.exit(0)}
  const a=Object.fromEntries(process.argv.slice(2).map(x=>{const[k,...v]=x.replace(/^--/,'').split('=');return[k.replaceAll('-','_'),v.join('=')]}));
- await runPhoneGateway({authDb:a.auth_db,origin:a.origin,upstream:a.upstream,upstreamAddressPolicy:a.upstream_address_policy,upstreamAuthorization:a.upstream_authorization_file?(await readFile(a.upstream_authorization_file,'utf8')).trim():undefined,cert:a.cert?await readFile(a.cert):null,key:a.key?await readFile(a.key):null,port:a.port,tlsTerminated:a.tls_terminated==='true'});
+ await runPhoneGateway({authDb:a.auth_db,origin:a.origin,upstream:a.upstream,upstreamAddressPolicy:a.upstream_address_policy,upstreamAuthorization:a.upstream_authorization_file?await loadUpstreamAuthorization(a.upstream_authorization_file):undefined,cert:a.cert?await readFile(a.cert):null,key:a.key?await readFile(a.key):null,port:a.port,tlsTerminated:a.tls_terminated==='true'});
 }
