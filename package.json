@@ -8,7 +8,10 @@
     "viq-bootstrap": "bin/viq-bootstrap.js",
     "viq-mcp": "src/mcp-server.js",
     "viqueue-mcp": "src/mcp-server.js",
-    "viq-import": "bin/viq-import.js"
+    "viq-import": "bin/viq-import.js",
+    "viq-phone-auth": "bin/viq-phone-auth.js",
+    "viq-trace-tailscale-upstream": "bin/viq-trace-tailscale-upstream.js",
+    "viqueue-phone-gateway": "src/phone-gateway.js"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
@@ -19,6 +22,7 @@
     "e2e": "VIQ_EVIDENCE_DIR=${VIQ_EVIDENCE_DIR:-$(mktemp -d)} bash test/e2e-all.sh",
     "e2e:browser": "node test/browser-e2e.js",
     "e2e:browser-pairing": "node test/browser-pairing-e2e.js",
+    "e2e:phone": "node test/phone-auth-e2e.js",
     "e2e:coordinator-worker": "node test/coordinator-worker-browser-e2e.js",
     "e2e:coordinator-worker:hermetic": "bash scripts/run-coordinator-worker-browser-e2e.sh"
   },

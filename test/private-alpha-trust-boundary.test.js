@@ -30,8 +30,11 @@ test('accepted private-alpha trust boundary is explicit and mapped to enforced i
   assert.match(server, /authenticateDevice\(bearer\(request\)\)/);
   assert.match(server, /requireAdmin\(device\)/);
   assert.doesNotMatch(mcp, /claim_token|ticket_claim|claim_verify|claim_release/);
-  await assert.rejects(access('src/phone-gateway.js'));
-  await assert.rejects(access('src/phone-auth-store.js'));
+  await assert.doesNotReject(access('src/phone-gateway.js'));
+  await assert.doesNotReject(access('src/phone-auth-store.js'));
+  const phoneGateway = await readFile('src/phone-gateway.js', 'utf8');
+  assert.match(phoneGateway, /if\(!upstreamAuthorization\)throw new Error/);
+  assert.match(phoneGateway, /headers\.authorization=`Bearer \$\{upstreamAuthorization\}`/);
   assert.match(app, /const credentialKey = 'viq\.deviceCredential'/); assert.match(app, /localStorage\.getItem\(credentialKey\)/);
 });
 
