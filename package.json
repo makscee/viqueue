@@ -6,6 +6,7 @@
   "bin": {
     "viq": "bin/viq.js",
     "viq-bootstrap": "bin/viq-bootstrap.js",
+    "viq-recover-coordinator": "bin/viq-recover-coordinator.js",
     "viq-mcp": "src/mcp-server.js",
     "viqueue-mcp": "src/mcp-server.js",
     "viq-import": "bin/viq-import.js",

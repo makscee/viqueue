@@ -21,7 +21,7 @@ const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }
 if (revision.status !== 0 || tree.status !== 0 || !/^[0-9a-f]{40}\n?$/.test(revision.stdout) || !/^[0-9a-f]{40}\n?$/.test(tree.stdout)) throw new Error(revision.stderr || tree.stderr || 'cannot determine source identity');
 await writeFile(path.join(stage, 'SOURCE_COMMIT'), `${revision.stdout.trim()}\n`);
 await writeFile(path.join(stage, 'SOURCE_TREE'), `${tree.stdout.trim()}\n`);
-for (const file of ['bin/viq.js', 'bin/viq-bootstrap.js', 'bin/viq-import.js', 'src/server.js', 'src/store.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
+for (const file of ['bin/viq.js', 'bin/viq-bootstrap.js', 'bin/viq-recover-coordinator.js', 'bin/viq-import.js', 'src/server.js', 'src/store.js', 'src/local-coordinator-recovery.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
   await cp(path.join('dist', file), path.join(stage, file));
 }
 await cp('dist/web', path.join(stage, 'web'), { recursive: true });
