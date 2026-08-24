@@ -1,0 +1,17 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pairPersisted": true,
+  "keyIsCryptoKey": true,
+  "keyNonExtractable": true,
+  "keySignUsage": true,
+  "firstSignedUiRequest2xx": true,
+  "sameContextReloadAuthorized": true,
+  "replayDenied": true,
+  "copiedCookieDenied": true,
+  "revokedDenied": true,
+  "faviconStatus": 204,
+  "consoleErrors": 0
+}

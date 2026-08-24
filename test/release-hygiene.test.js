@@ -21,9 +21,10 @@ test('public-source metadata and canonical Apache-2.0 license are consistent', (
   assert.equal(readFileSync('.github/workflows/ci.yml', 'utf8').includes('publish'), false);
 });
 
-test('packed npm surface excludes superseded phone authentication ledger and gateway', () => {
+test('packed npm surface includes the signed phone gateway and its operator CLIs', () => {
   const pack = JSON.parse(execFileSync('npm', ['pack', '--json', '--dry-run'], { encoding: 'utf8' }))[0];
-  const names = pack.files.map((file) => file.path);
-  assert.equal(names.some((name) => /phone-auth|phone-gateway|phone-bootstrap|phone-index|tailscale-upstream/.test(name)), false);
-  assert.equal(Object.keys(packageJson.bin).some((name) => /phone|tailscale/.test(name)), false);
+  const names = new Set(pack.files.map((file) => file.path));
+  for (const name of ['src/phone-auth-store.js', 'src/phone-gateway.js', 'web/phone-bootstrap.js', 'web/phone-index.html', 'bin/viq-phone-auth.js', 'bin/viq-trace-tailscale-upstream.js']) assert.equal(names.has(name), true, name);
+  assert.equal(packageJson.bin['viq-phone-auth'], 'bin/viq-phone-auth.js');
+  assert.equal(packageJson.bin['viqueue-phone-gateway'], 'src/phone-gateway.js');
 });
