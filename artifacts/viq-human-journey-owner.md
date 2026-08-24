@@ -6,7 +6,8 @@
 - Base: `origin/main` at `2ca2a60bb5c1907167a8262d2be186867b96fdac`
 - Tested source HEAD: `68ecdbcee6ccf77e103dc7c6e5955f6ef4eda59c`
 - Tested source tree: `03d31be9d45b360cbdbc2b16a853c2d7e710a1a8`
-- The final evidence commit is an evidence-only child of that tested source commit; no product source changed after the full test/build/E2E run.
+- The original closure source commit is followed by bounded responsive repair source HEAD `14689bb2a1b7265b4ef79333249d774fc909beb8` (tree `fcffa30f9fd7b543a6121372bc597736be7d9ad8`).
+- The final evidence commit is an evidence-only child of the tested repair source commit; no product source changed after the final full test/build/E2E run.
 - Worktree: `/root/work/viqueue-viq-human-journey` (isolated; canonical checkout untouched)
 - Runtime model verified from active Pi footer/model metadata: `void-codex/gpt-5.6-sol` (`PI_*` environment did not expose a model variable).
 
@@ -40,9 +41,21 @@ The test `test/browser-human-journey-e2e.js` starts with a new SQLite database c
 | Empty/error/loading | first-project onboarding, filter empty, request/pairing status | Blank onboarding and existing pairing/error tests passed; unreachable target message names target and `VIQ_URL` |
 | Desktop/mobile/narrow | responsive board/dialog/Machines | 1280×900, 390×844, 320×800; no horizontal overflow; console errors 0; page errors 0 |
 
+## Bounded responsive repair
+
+Independent review found the 320/390 masthead overloaded, state tabs too dense, and no photographed blank first-use state. The bounded repair:
+
+- places mobile branding and canonical actions on deliberate rows;
+- uses the concise visible label “Disconnect” while preserving the accessible name “Disconnect this device”;
+- prevents masthead labels from wrapping;
+- raises mobile masthead actions and state tabs to a deterministic minimum 44px height;
+- captures the actual blank CTA before project creation at every required viewport.
+
+Focused RED on exact pre-repair candidate `a07b3a2`: `AssertionError: 390 masthead title wraps` (the first deterministic unmet responsive assertion). Focused GREEN on repair source: `HUMAN_JOURNEY_E2E_OK`.
+
 ## Final regression commands
 
-Executed on committed tested source HEAD `68ecdbcee6ccf77e103dc7c6e5955f6ef4eda59c`:
+Executed on committed responsive repair source HEAD `14689bb2a1b7265b4ef79333249d774fc909beb8`:
 
 - `npm test` — PASS: 155 tests, 149 passed, 0 failed, 6 skipped.
 - `npm run build` — PASS: `built dist/`.
@@ -57,6 +70,14 @@ Executed on committed tested source HEAD `68ecdbcee6ccf77e103dc7c6e5955f6ef4eda5
 Normal E2E used temporary databases/directories and left no source-tree residue.
 
 ## Screenshots and dimensions
+
+Before action (blank database, visible first-project CTA):
+
+- `artifacts/viq-human-journey/blank-first-use-1280x900.png` — 1280×900
+- `artifacts/viq-human-journey/blank-first-use-390x844.png` — 390×844
+- `artifacts/viq-human-journey/blank-first-use-320x800.png` — 320×800
+
+After action:
 
 - `artifacts/viq-human-journey/human-journey-1280x900.png` — 1280×900
 - `artifacts/viq-human-journey/human-journey-390x844.png` — 390×844
