@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { closeSync, linkSync, openSync, readFileSync, writeFileSync } from 'node:fs';
-import { chmod, chown, mkdir, mkdtemp, readFile } from 'node:fs/promises';
+import { chmod, chown, lstat, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -96,6 +96,27 @@ test('recovery rejects actor, bootstrap, acknowledgement, TTL, and unknown argum
   }
 });
 
+test('recovery storage preflight is read-only and rejects typo, unsafe, empty, non-SQLite, and non-Viq targets', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'viq-recover-storage-'));
+  const cases = [];
+  const missing = path.join(root, 'typo.sqlite'); cases.push({ name: 'missing', db: missing, before: null });
+  const empty = path.join(root, 'empty.sqlite'); await writeFile(empty, Buffer.alloc(0)); cases.push({ name: 'empty', db: empty, before: await readFile(empty) });
+  const bootstrap = path.join(root, 'bootstrap.sqlite'); { const store = new Store(bootstrap); await store.init(); await store.close(); } cases.push({ name: 'empty-bootstrap', db: bootstrap, before: await readFile(bootstrap) });
+  const text = path.join(root, 'text.sqlite'); await writeFile(text, 'not sqlite'); cases.push({ name: 'non-sqlite', db: text, before: await readFile(text) });
+  const wrong = path.join(root, 'wrong.sqlite'); { const db = new DatabaseSync(wrong); db.exec('CREATE TABLE unrelated(id TEXT PRIMARY KEY) STRICT'); db.close(); } cases.push({ name: 'wrong-schema', db: wrong, before: await readFile(wrong) });
+  const directory = path.join(root, 'directory'); await mkdir(directory); cases.push({ name: 'directory', db: directory, before: null });
+  const valid = await populatedFixture(), link = path.join(root, 'linked.sqlite'); await symlink(valid.db, link); cases.push({ name: 'symlink', db: link, before: null, target: valid.db, targetBefore: await readFile(valid.db) });
+  for (const item of cases) {
+    const out = path.join(root, `out-${item.name}`), fd = openSync(out, 'wx', 0o600), fixture = { db: item.db };
+    const result = spawnSync(process.execPath, [command.pathname, ...commandArgs(fixture)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe', fd] }); closeSync(fd);
+    assert.notEqual(result.status, 0, item.name); assert.equal(readFileSync(out, 'utf8'), '', item.name);
+    if (item.name === 'missing') await assert.rejects(lstat(item.db));
+    if (item.before) assert.deepEqual(await readFile(item.db), item.before, item.name);
+    if (item.target) assert.deepEqual(await readFile(item.target), item.targetBefore, item.name);
+    for (const suffix of ['-wal', '-shm']) await assert.rejects(lstat(`${item.db}${suffix}`), `${item.name}${suffix}`);
+  }
+});
+
 test('recovery accepts only a pre-opened empty owner 0600 single-link regular fd above stderr', async () => {
   const cases = [];
   for (const fd of [0, 1, 2]) cases.push({ name: `stdio-${fd}`, fd });
@@ -147,10 +168,12 @@ test('recovery codes expire, concurrent invocations are unique, and device kind 
   });
   const codes = await Promise.all([launch(0), launch(1)]);
   assert.equal(new Set(codes).size, 2);
-  const db = new DatabaseSync(f.db); db.prepare('UPDATE pairing_codes SET expires_at=0 WHERE code_hash=(SELECT code_hash FROM pairing_codes WHERE device_id=?)').run('replacement-0'); db.close();
   const store = new Store(f.db); await store.init();
-  await assert.rejects(store.pairDevice({ code: codes[0], id: 'substitute', name: 'Worker' }), /expired/);
+  await assert.rejects(store.pairDevice({ code: codes[0], id: 'substitute', name: 'Worker' }), (error) => error.code === 'pairing_device_mismatch');
+  const db = new DatabaseSync(f.db); db.prepare('UPDATE pairing_codes SET expires_at=0 WHERE code_hash=(SELECT code_hash FROM pairing_codes WHERE device_id=?)').run('replacement-0'); db.close();
+  await assert.rejects(store.pairDevice({ code: codes[0] }), (error) => error.code === 'pairing_code_expired');
   const paired = await store.pairDevice({ code: codes[1] }); assert.equal(paired.device.kind, 'coordinator');
+  await assert.rejects(store.pairDevice({ code: codes[1] }), (error) => error.code === 'pairing_code_used_or_invalid');
   await store.close();
 });
 

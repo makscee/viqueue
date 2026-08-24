@@ -1,4 +1,7 @@
-import { fstatSync, fsyncSync, ftruncateSync, writeSync } from 'node:fs';
+import { closeSync, constants, cpSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Store } from './store.js';
 
 export const RECOVERY_ACK = '--ack-backend-stopped-and-backup-ready';
@@ -31,6 +34,34 @@ export function verifyRecoveryOutput(fd) {
   if (!info.isFile() || info.uid !== process.getuid() || (info.mode & 0o777) !== 0o600 || info.nlink !== 1 || info.size !== 0) throw new Error('unsafe_output_fd');
 }
 
+export function verifyRecoveryStorage(file) {
+  let pathInfo, fd;
+  try {
+    pathInfo = lstatSync(file);
+    if (!pathInfo.isFile() || pathInfo.isSymbolicLink() || pathInfo.uid !== process.getuid() || pathInfo.nlink !== 1 || pathInfo.size < 100) throw new Error('unsafe_recovery_storage');
+    fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const opened = fstatSync(fd), header = Buffer.alloc(16);
+    if (opened.dev !== pathInfo.dev || opened.ino !== pathInfo.ino || readSync(fd, header, 0, header.length, 0) !== header.length || !header.equals(Buffer.from('SQLite format 3\0'))) throw new Error('unsafe_recovery_storage');
+  } catch { throw new Error('unsafe_recovery_storage'); }
+  finally { if (fd !== undefined) closeSync(fd); }
+  let db, validationDir;
+  try {
+    validationDir = mkdtempSync(path.join(tmpdir(), 'viq-recovery-preflight-'));
+    const copy = path.join(validationDir, 'database.sqlite');
+    cpSync(file, copy);
+    for (const suffix of ['-wal', '-shm']) {
+      try { const sidecar = lstatSync(`${file}${suffix}`); if (!sidecar.isFile() || sidecar.isSymbolicLink()) throw new Error('unsafe_recovery_storage'); cpSync(`${file}${suffix}`, `${copy}${suffix}`); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    db = new DatabaseSync(copy, { readOnly: true });
+    db.exec('PRAGMA query_only=ON');
+    const required = ['actors', 'devices', 'events', 'pairing_codes', 'projects', 'tickets'];
+    const tables = new Set(db.prepare("SELECT name FROM sqlite_schema WHERE type='table'").all().map((row) => row.name));
+    if (required.some((name) => !tables.has(name)) || !db.prepare('SELECT 1 FROM devices LIMIT 1').get()) throw new Error('invalid_recovery_storage');
+  } catch { throw new Error('invalid_recovery_storage'); }
+  finally { db?.close(); if (validationDir) rmSync(validationDir, { recursive: true, force: true }); }
+}
+
 function deliverToFd(fd, code) {
   const material = Buffer.from(`${code}\n`, 'utf8');
   let offset = 0;
@@ -46,7 +77,8 @@ function deliverToFd(fd, code) {
 
 export async function runLocalCoordinatorRecovery(argv) {
   const options = parseRecoveryArgs(argv);
-  verifyRecoveryOutput(options.outFd); // Every output/argument failure precedes Store.init or a transaction.
+  verifyRecoveryOutput(options.outFd);
+  verifyRecoveryStorage(options.storage); // Read-only, must-exist preflight precedes writable Store construction.
   const store = new Store(options.storage);
   await store.init();
   try {

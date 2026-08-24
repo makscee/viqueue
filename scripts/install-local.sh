@@ -30,6 +30,7 @@ mv "$stage" "$release"
 app="$root/current"
 ln -sfn "$app/bin/viq.js" "$bin/viq"
 ln -sfn "$app/bin/viq-bootstrap.js" "$bin/viq-bootstrap"
+ln -sfn "$app/bin/viq-recover-coordinator.js" "$bin/viq-recover-coordinator"
 ln -sfn "$app/bin/viq-import.js" "$bin/viq-import"
 rm -f "$bin/viq-phone-auth" "$bin/viq-trace-tailscale-upstream" "$bin/viqueue-phone-gateway"
 cat >"$bin/viqueue-server" <<EOF
@@ -43,7 +44,7 @@ app=\$(readlink -f "$root/current")
 exec node "\$app/src/mcp-server.js" "\$@"
 EOF
 ln -sfn viq-mcp "$bin/viqueue-mcp"
-chmod +x "$release/bin/viq.js" "$release/bin/viq-bootstrap.js" "$release/bin/viq-import.js" "$bin/viqueue-server" "$bin/viq-mcp"
+chmod +x "$release/bin/viq.js" "$release/bin/viq-bootstrap.js" "$release/bin/viq-recover-coordinator.js" "$release/bin/viq-import.js" "$bin/viqueue-server" "$bin/viq-mcp"
 old=$(readlink -f "$root/current" 2>/dev/null || true)
 if [[ -n "$old" && "$old" != "$release" ]]; then ln -sfn "$old" "$root/previous.tmp"; mv -Tf "$root/previous.tmp" "$root/previous"; fi
 ln -sfn "$release" "$root/current.tmp"; mv -Tf "$root/current.tmp" "$root/current"
