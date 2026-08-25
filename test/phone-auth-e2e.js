@@ -12,7 +12,7 @@ const freePort=async()=>{const server=net.createServer();await new Promise(resol
 const listen=(server,port)=>new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
 const close=server=>new Promise(resolve=>server.close(resolve));
 const work=await mkdtemp(path.join(tmpdir(),'viq-browser-code-pairing-'));
-const profile=path.join(work,'persistent-profile');
+const profile=path.join(work,'persistent-profile-a'),profileB=path.join(work,'persistent-profile-b');
 const upstreamPort=await freePort(),gatewayPort=await freePort(),origin=`https://127.0.0.1:${gatewayPort}`;
 const key=path.join(work,'key.pem'),cert=path.join(work,'cert.pem'),appDb=path.join(work,'app.sqlite');
 execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1','-keyout',key,'-out',cert],{stdio:'ignore'});
@@ -24,7 +24,7 @@ await listen(gateway,gatewayPort);
 const browserLogs=[],networkEvidence=[];
 const observe=page=>{page.on('console',message=>browserLogs.push(message.text()));page.on('pageerror',error=>browserLogs.push(error.message));page.on('request',request=>networkEvidence.push(`${request.url()}\n${request.headers().referer||''}\n${request.postData()||''}`))};
 const assertSecretAbsent=async(page,secrets)=>{const state=await page.evaluate(()=>({url:location.href,body:document.body.innerText,localStorage:{...localStorage}}));for(const secret of secrets){assert.equal(state.url.includes(secret),false);assert.equal(state.body.includes(secret),false);assert.equal(JSON.stringify(state.localStorage).includes(secret),false);assert.equal(browserLogs.some(line=>line.includes(secret)),false);assert.equal(networkEvidence.some(line=>line.includes(secret)),false)}};
-let context;
+let context,contextB;
 try{
   const expired=gateway.authStore.createPair({deviceId:'browser_expired_0001',actorId:'browser-e2e-coordinator',admin:true,label:'Expired browser'});clock=expired.expires;
   context=await chromium.launchPersistentContext(profile,{headless:true,ignoreHTTPSErrors:true,viewport:{width:1280,height:900}});
@@ -46,19 +46,12 @@ try{
   page=context.pages()[0]||await context.newPage();observe(page);await page.goto(origin);await page.locator('#app-shell').waitFor({state:'visible'});
   assert.equal((await page.evaluate(()=>fetch('/v1/devices/me').then(response=>response.status))),200);
   const replay=await chromium.launch({headless:true});const replayContext=await replay.newContext({ignoreHTTPSErrors:true});const replayPage=await replayContext.newPage();observe(replayPage);await replayPage.goto(origin);await replayPage.locator('#phone-auth').getByLabel('Pairing code').fill(fresh.code);await replayPage.getByRole('button',{name:'Pair browser'}).click();await replayPage.getByText(/already used|invalid/i).waitFor();await replay.close();
-  gateway.authStore.revoke();
-  await page.getByRole('button',{name:'Refresh'}).click();
-  await page.getByRole('heading',{name:'Pair this browser'}).waitFor();
-  await page.locator('#phone-auth').getByText(/revoked|no longer authorized/i).waitFor();
-  const replacement=gateway.authStore.createPair({deviceId:'browser_repaired_001',actorId:'browser-e2e-coordinator',admin:true,label:'Repaired browser'});
-  await submit(replacement.code);
-  await page.locator('#phone-app').waitFor({state:'visible'});
-  await page.locator('#app-shell').waitFor({state:'visible'});
-  assert.equal((await page.evaluate(()=>fetch('/v1/devices/me').then(response=>response.status))),200);
-  await page.locator('#status').filter({hasText:/tickets shown|No projects yet/}).waitFor();
-  assert.equal(gateway.authStore.active().id,'browser_repaired_001');
+  const second=gateway.authStore.createPair({deviceId:'browser_secondary_01',actorId:'browser-e2e-coordinator',admin:true,label:'Secondary browser'});contextB=await chromium.launchPersistentContext(profileB,{headless:true,ignoreHTTPSErrors:true,viewport:{width:1280,height:900}});let pageB=contextB.pages()[0]||await contextB.newPage();observe(pageB);await pageB.goto(origin);await pageB.locator('#phone-auth').getByLabel('Pairing code').fill(second.code);await pageB.getByRole('button',{name:'Pair browser'}).click();await pageB.locator('#app-shell').waitFor({state:'visible'});assert.equal(await pageB.evaluate(()=>fetch('/v1/devices/me').then(r=>r.status)),200);assert.equal(await pageB.evaluate(()=>fetch('/v1/projects').then(r=>r.status)),200);assert.equal(await page.evaluate(()=>fetch('/v1/devices/me').then(r=>r.status)),200);
+  await context.close();context=null;await contextB.close();contextB=null;context=await chromium.launchPersistentContext(profile,{headless:true,ignoreHTTPSErrors:true});page=context.pages()[0]||await context.newPage();observe(page);await page.goto(origin);await page.locator('#app-shell').waitFor({state:'visible'});contextB=await chromium.launchPersistentContext(profileB,{headless:true,ignoreHTTPSErrors:true});pageB=contextB.pages()[0]||await contextB.newPage();observe(pageB);await pageB.goto(origin);await pageB.locator('#app-shell').waitFor({state:'visible'});assert.equal(await page.evaluate(()=>fetch('/v1/devices/me').then(r=>r.status)),200);assert.equal(await pageB.evaluate(()=>fetch('/v1/devices/me').then(r=>r.status)),200);
+  gateway.authStore.revoke('browser_secondary_01');await pageB.getByRole('button',{name:'Refresh'}).click();await pageB.getByRole('heading',{name:'Pair this browser'}).waitFor();await pageB.locator('#phone-auth').getByText(/revoked|no longer authorized/i).waitFor();assert.equal(await page.evaluate(()=>fetch('/v1/devices/me').then(r=>r.status)),200);assert.equal(await page.evaluate(()=>fetch('/v1/projects').then(r=>r.status)),200);
+  const replacement=gateway.authStore.createPair({deviceId:'browser_repaired_001',actorId:'browser-e2e-coordinator',admin:true,label:'Repaired browser'});await pageB.locator('#phone-auth').getByLabel('Pairing code').fill(replacement.code);await pageB.getByRole('button',{name:'Pair browser'}).click();await pageB.locator('#phone-app').waitFor({state:'visible'});await pageB.locator('#app-shell').waitFor({state:'visible'});assert.equal(await pageB.evaluate(()=>fetch('/v1/devices/me').then(response=>response.status)),200);await pageB.locator('#status').filter({hasText:/tickets shown|No projects yet/}).waitFor();assert.deepEqual(gateway.authStore.status().devices.map(d=>d.id).sort(),['browser_primary_0001','browser_repaired_001']);
   await assertSecretAbsent(page,[expired.code,fresh.code,replacement.code]);
   assert.equal(networkEvidence.some(line=>/authorization:/i.test(line)),false);
   const audit=JSON.stringify(gateway.authStore.status().audit);assert.equal([expired.code,fresh.code,replacement.code].some(code=>audit.includes(code)),false);
   console.log('BROWSER_CODE_PAIRING_E2E_OK persistent-relaunch wrong expired reused revoked secret-confinement');
-}finally{await context?.close();await close(gateway);await close(app);await rm(work,{recursive:true,force:true})}
+}finally{await context?.close();await contextB?.close();await close(gateway);await close(app);await rm(work,{recursive:true,force:true})}
