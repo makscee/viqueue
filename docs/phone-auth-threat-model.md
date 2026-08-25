@@ -4,7 +4,7 @@ This gateway binds one browser profile to staging API access. It is **not** hard
 
 ## Browser and request boundary
 
-The operator creates a five-minute intent locally. Only a domain-separated SHA-256 verifier is stored; the fragment secret is erased from visible history before another browser request and is never sent over HTTP. A domain-separated HMAC binds pairing to the configured HTTPS phone origin, intent, device, and public coordinates. Exactly one active device is enforced until local revocation.
+The operator creates a five-minute intent locally and gives the browser one entered code. Only a domain-separated SHA-256 verifier is stored; the code is never placed in a URL, localStorage, logs, or an HTTP body. The intent stores the server-bound device ID, actor label, admin scope, and device label, so the browser cannot substitute them. A domain-separated HMAC binds possession of the code to the configured HTTPS origin, intent, and browser-generated public coordinates. Exactly one active device is enforced until local revocation.
 
 Every `/v1/*` call obtains a 32-byte, 30-second, one-use challenge bound to active device epoch, method, exact raw request-target, and hash of the exact (at most 1 MiB) body. Absolute-form, network-path, backslash/control, encoded traversal, and ambiguous targets are rejected before routing. Auth JSON is limited to 8 KiB. ECDSA P-256 signs a length-prefixed record that also binds origin/audience. Authorization and challenge consumption run under `BEGIN IMMEDIATE`; revocation changes the active epoch boundary before future authorization can commit. Cookies confer no identity.
 
