@@ -46,9 +46,19 @@ try{
   page=context.pages()[0]||await context.newPage();observe(page);await page.goto(origin);await page.locator('#app-shell').waitFor({state:'visible'});
   assert.equal((await page.evaluate(()=>fetch('/v1/devices/me').then(response=>response.status))),200);
   const replay=await chromium.launch({headless:true});const replayContext=await replay.newContext({ignoreHTTPSErrors:true});const replayPage=await replayContext.newPage();observe(replayPage);await replayPage.goto(origin);await replayPage.locator('#phone-auth').getByLabel('Pairing code').fill(fresh.code);await replayPage.getByRole('button',{name:'Pair browser'}).click();await replayPage.getByText(/already used|invalid/i).waitFor();await replay.close();
-  gateway.authStore.revoke();assert.equal(await page.evaluate(()=>fetch('/v1/devices/me').then(response=>response.status).catch(()=>403)),403);await page.reload();await page.getByText(/revoked|no longer authorized/i).waitFor();
-  await assertSecretAbsent(page,[expired.code,fresh.code]);
+  gateway.authStore.revoke();
+  await page.getByRole('button',{name:'Refresh'}).click();
+  await page.getByRole('heading',{name:'Pair this browser'}).waitFor();
+  await page.locator('#phone-auth').getByText(/revoked|no longer authorized/i).waitFor();
+  const replacement=gateway.authStore.createPair({deviceId:'browser_repaired_001',actorId:'browser-e2e-coordinator',admin:true,label:'Repaired browser'});
+  await submit(replacement.code);
+  await page.locator('#phone-app').waitFor({state:'visible'});
+  await page.locator('#app-shell').waitFor({state:'visible'});
+  assert.equal((await page.evaluate(()=>fetch('/v1/devices/me').then(response=>response.status))),200);
+  await page.locator('#status').filter({hasText:/tickets shown|No projects yet/}).waitFor();
+  assert.equal(gateway.authStore.active().id,'browser_repaired_001');
+  await assertSecretAbsent(page,[expired.code,fresh.code,replacement.code]);
   assert.equal(networkEvidence.some(line=>/authorization:/i.test(line)),false);
-  const audit=JSON.stringify(gateway.authStore.status().audit);assert.equal(audit.includes(expired.code)||audit.includes(fresh.code),false);
+  const audit=JSON.stringify(gateway.authStore.status().audit);assert.equal([expired.code,fresh.code,replacement.code].some(code=>audit.includes(code)),false);
   console.log('BROWSER_CODE_PAIRING_E2E_OK persistent-relaunch wrong expired reused revoked secret-confinement');
 }finally{await context?.close();await close(gateway);await close(app);await rm(work,{recursive:true,force:true})}
