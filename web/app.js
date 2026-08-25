@@ -3,7 +3,7 @@ import { activityFact, applyActivityFilters, applyTicketFilters, createModalCont
 const $ = (selector) => document.querySelector(selector);
 const credentialKey = 'viq.deviceCredential';
 const lanes = ['Open', 'Working', 'Waiting', 'Done'];
-const state = { projects: [], tickets: [], events: [], questions: [], machines: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null };
+const state = { projects: [], tickets: [], events: [], questions: [], machines: [], actors: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null };
 const modal = createModalController($('#modal'));
 const request = async (path, options = {}) => {
   const credential = localStorage.getItem(credentialKey);
@@ -144,7 +144,8 @@ async function showDetail(id, trigger, intent = modal.begin()) {
   modal.open({ title: ticket.title, content, trigger: focusReturn, initialFocus: edit.elements.title, intent });
 }
 
-function openMachines(trigger) {
+async function openMachines(trigger) {
+  state.actors = (await request('/v1/machines/actors')).actors;
   const panel = document.createElement('div'); panel.className = 'machines-panel';
   const list = document.createElement('section'); list.className = 'machine-list'; list.innerHTML = '<h3>Active machines</h3>';
   if (!state.machines.length) list.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: 'No active machines.' }));
@@ -158,9 +159,11 @@ function openMachines(trigger) {
     confirm.addEventListener('submit', safely(async (event) => { event.preventDefault(); await request(`/v1/machines/${encodeURIComponent(machine.id)}/revoke`, { method: 'POST', body: '{}' }); await refresh(); openMachines(trigger); announce('Machine revoked'); }));
     row.append(identity, revoke, confirm); list.append(row);
   }
-  const pairing = document.createElement('form'); pairing.className = 'modal-form machine-pair-form'; pairing.innerHTML = '<h3>Pair machine</h3><label>Role<select name="role"><option>Human</option><option>Agent</option></select></label><label>Name<input name="name" required maxlength="200" autocomplete="off"></label><button>Generate one-time code</button><div class="pairing-code-result" aria-live="polite"></div>';
-  pairing.addEventListener('submit', safely(async (event) => { event.preventDefault(); const issued = await request('/v1/machines/pairing-codes', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(pairing))) }); const result = pairing.querySelector('.pairing-code-result'); result.replaceChildren(); const label = document.createElement('p'); label.textContent = `One-time code for ${issued.name} (${issued.role})`; const code = Object.assign(document.createElement('output'), { className: 'one-time-code', textContent: issued.code }); const clear = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary', textContent: 'Clear code' }); clear.addEventListener('click', () => { result.replaceChildren(); pairing.reset(); pairing.elements.role.focus(); }); result.append(label, code, clear); }));
-  panel.append(list, pairing); openModal({ title: 'Machines', eyebrow: 'Execution provenance', content: panel, trigger, initialFocus: list.querySelector('button') || pairing.elements.role });
+  const pairing = document.createElement('form'); pairing.className = 'modal-form machine-pair-form'; pairing.innerHTML = '<h3>Pair device</h3><fieldset><legend>Device type</legend><label><input type="radio" name="type" value="browser" checked> Browser</label><label><input type="radio" name="type" value="worker"> Worker</label></fieldset><label>Name<input name="name" required maxlength="100" autocomplete="off"></label><label class="worker-actor" hidden>Actor<select name="actor_id"></select></label><button>Create code</button><div class="pairing-code-result" aria-live="polite"></div>';
+  const actorLabel = pairing.querySelector('.worker-actor'), actorSelect = pairing.elements.actor_id, workerRadio = pairing.querySelector('[value="worker"]'); actorSelect.replaceChildren(...state.actors.map((actor) => new Option(actor.name, actor.id))); workerRadio.disabled = state.actors.length === 0; workerRadio.title = state.actors.length ? '' : 'No active worker actors are available'; const updateType = () => { const worker = pairing.elements.type.value === 'worker'; actorLabel.hidden = !worker; actorSelect.required = worker; }; pairing.elements.type.forEach((radio) => radio.addEventListener('change', updateType)); updateType();
+  let expiryTimer; const clearCode = () => { clearTimeout(expiryTimer); pairing.querySelector('.pairing-code-result').replaceChildren(); }; $('#modal').addEventListener('close', clearCode, { once: true });
+  pairing.addEventListener('submit', safely(async (event) => { event.preventDefault(); clearCode(); const name = pairing.elements.name.value.trim(), worker = pairing.elements.type.value === 'worker'; const issued = worker ? await request('/v1/pairing-codes', { method: 'POST', body: JSON.stringify({ actor_id: actorSelect.value, intended_kind: 'worker', device_id: `worker-${crypto.randomUUID()}`, device_name: name }) }) : await request('/__phone/pairing-codes', { method: 'POST', body: JSON.stringify({ name }) }); const expires = issued.expires ?? issued.expires_at, result = pairing.querySelector('.pairing-code-result'); const code = Object.assign(document.createElement('output'), { className: 'one-time-code', textContent: issued.code }); const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary', textContent: 'Copy code' }); copy.addEventListener('click', () => navigator.clipboard.writeText(code.textContent)); const done = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary', textContent: 'Done' }); done.addEventListener('click', () => { clearCode(); modal.close(); }); const instruction = Object.assign(document.createElement('p'), { textContent: worker ? 'On the worker, run viq pair and enter this code.' : 'On the other browser, open VIQ and enter this code.' }); const expiry = Object.assign(document.createElement('time'), { dateTime: new Date(expires).toISOString(), textContent: `Expires ${new Date(expires).toLocaleTimeString()}` }); result.append(code, expiry, instruction, copy, done); expiryTimer = setTimeout(clearCode, Math.max(0, expires - Date.now())); }));
+  panel.append(list, pairing); openModal({ title: 'Machines', eyebrow: 'Execution provenance', content: panel, trigger, initialFocus: pairing.elements.type[0] });
 }
 
 
