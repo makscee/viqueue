@@ -427,7 +427,35 @@ export class Store {
       throw error;
     }
   }
-  async pairDevice({ code, id, name }) { return this.#transaction(() => { if (typeof code !== 'string' || !code) throw new DomainError(400, 'invalid_pairing_code', 'pairing code is required'); const row = this.#db.prepare("SELECT pc.* FROM pairing_codes pc JOIN devices issuer ON issuer.id=pc.created_by_device_id AND issuer.status='active' WHERE pc.code_hash=?").get(hash(code)); if (!row || row.used_at !== null) throw new DomainError(409, 'pairing_code_used_or_invalid', 'pairing code is invalid or already used'); if (row.expires_at <= this.#now()) throw new DomainError(409, 'pairing_code_expired', 'pairing code expired'); if (row.device_id && ((id != null && stableId(id) !== row.device_id) || (name != null && cleanOptional(name, 'name') !== row.device_name))) throw new DomainError(409, 'pairing_device_mismatch', 'pairing code is bound to a different device'); const selectedId = row.device_id ?? id, selectedName = row.device_name ?? name, key = stableId(selectedId); if (!key || !cleanOptional(selectedName, 'name')) throw new DomainError(400, 'invalid_device', 'legacy pairing code requires explicit device id and name'); const credential = `${key}.${randomBytes(32).toString('base64url')}`; let device; try { if (!row.actor_id) { const now = this.#now(); this.#db.prepare("INSERT OR IGNORE INTO actors(id,name,kind,machine,active,created_at,updated_at) VALUES(?,?,?,NULL,1,?,?)").run(key, cleanOptional(selectedName, 'name'), row.intended_kind === 'coordinator' ? 'human' : 'agent', now, now); } device = this.#insertDevice({ id: key, name: selectedName, kind: row.intended_kind, actor_id: row.actor_id ?? key }, credential); } catch (error) { if (error.code?.startsWith('ERR_SQLITE_CONSTRAINT')) throw new DomainError(409, 'device_exists', `device ${key} already exists`); throw error; } const used = this.#db.prepare('UPDATE pairing_codes SET used_at=? WHERE code_hash=? AND used_at IS NULL').run(this.#now(), hash(code)); if (used.changes !== 1) throw new DomainError(409, 'pairing_code_used_or_invalid', 'pairing code is invalid or already used'); this.#event(null, null, 'device_paired', row.created_by_device_id, null, { device_id: device.id, kind: device.kind }); return { device, credential }; }); }
+  async pairDevice({ code, id, name }) { return this.#transaction(() => {
+    if (typeof code !== 'string' || !code) throw new DomainError(400, 'invalid_pairing_code', 'pairing code is required');
+    const codeHash = hash(code), row = this.#db.prepare("SELECT pc.* FROM pairing_codes pc JOIN devices issuer ON issuer.id=pc.created_by_device_id AND issuer.status='active' WHERE pc.code_hash=?").get(codeHash);
+    if (!row || row.used_at !== null) throw new DomainError(409, 'pairing_code_used_or_invalid', 'pairing code is invalid or already used');
+    if (row.expires_at <= this.#now()) throw new DomainError(409, 'pairing_code_expired', 'pairing code expired');
+    if (row.device_id && ((id != null && stableId(id) !== row.device_id) || (name != null && cleanOptional(name, 'name') !== row.device_name))) throw new DomainError(409, 'pairing_device_mismatch', 'pairing code is bound to a different device');
+    const selectedId = row.device_id ?? id, selectedName = row.device_name ?? name, key = stableId(selectedId), label = cleanOptional(selectedName, 'name');
+    if (!key || !label) throw new DomainError(400, 'invalid_device', 'legacy pairing code requires explicit device id and name');
+    const existing = this.#db.prepare('SELECT id,name,kind,status,actor_id FROM devices WHERE id=?').get(key);
+    if (existing?.status === 'active') throw new DomainError(409, 'device_exists', `device ${key} already exists`);
+    const credential = `${key}.${randomBytes(32).toString('base64url')}`;
+    let device;
+    if (existing) {
+      // Reactivation is credential rotation, not takeover: every authority-bearing identity field must be server-bound and exact.
+      if (!row.device_id || !row.device_name || !row.actor_id || row.device_id !== existing.id || row.device_name !== existing.name || row.actor_id !== existing.actor_id || row.intended_kind !== existing.kind || label !== existing.name) throw new DomainError(409, 'pairing_device_mismatch', 'pairing code does not exactly match the revoked device');
+      const now = this.#now();
+      this.#db.prepare("UPDATE devices SET token_hash=?,name=?,kind=?,status='active',created_at=?,revoked_at=NULL,actor_id=? WHERE id=? AND status='revoked'").run(hash(credential), label, row.intended_kind, now, row.actor_id, key);
+      this.#db.prepare('UPDATE worker_sessions SET revoked_at=? WHERE device_id=? AND revoked_at IS NULL').run(now, key);
+      this.#db.prepare('DELETE FROM device_roles WHERE device_id=?').run(key);
+      device = this.#device(key);
+    } else {
+      if (!row.actor_id) { const now = this.#now(); this.#db.prepare("INSERT OR IGNORE INTO actors(id,name,kind,machine,active,created_at,updated_at) VALUES(?,?,?,NULL,1,?,?)").run(key, label, row.intended_kind === 'coordinator' ? 'human' : 'agent', now, now); }
+      device = this.#insertDevice({ id: key, name: label, kind: row.intended_kind, actor_id: row.actor_id ?? key }, credential);
+    }
+    const used = this.#db.prepare('UPDATE pairing_codes SET used_at=? WHERE code_hash=? AND used_at IS NULL').run(this.#now(), codeHash);
+    if (used.changes !== 1) throw new DomainError(409, 'pairing_code_used_or_invalid', 'pairing code is invalid or already used');
+    this.#event(null, null, 'device_paired', row.created_by_device_id, null, { device_id: device.id, kind: device.kind, repaired: Boolean(existing) });
+    return { device, credential };
+  }); }
   async listDevices() { return this.#db.prepare('SELECT d.id,d.name,d.kind,d.status,d.actor_id,a.name actor_name,a.role_id derived_role,d.created_at,d.revoked_at FROM devices d LEFT JOIN actors a ON a.id=d.actor_id ORDER BY d.id').all(); }
   async updateDevice(deviceId, { name, actor_id: actorId }, byDeviceId) { return this.#transaction(() => { const admin = this.#adminDevice(byDeviceId); const device = this.#device(deviceId, { active: false }); const label = name === undefined ? device.name : cleanOptional(name, 'name'); const actor = actorId === undefined ? this.#actor(device.actor_id, { active: false }) : this.#actor(actorId); if (!label) throw new DomainError(400, 'invalid_name', 'device name is required'); this.#db.prepare('UPDATE devices SET name=?,actor_id=? WHERE id=?').run(label, actor.id, device.id); this.#event(null, null, 'device_updated', admin.id, null, { device_id: device.id, actor_id: actor.id }); return this.#device(device.id, { active: false }); }); }
   async revokeDevice(deviceId, byDeviceId) { return this.#transaction(() => { const coordinator = this.#adminDevice(byDeviceId); const device = this.#device(deviceId, { active: false }); if (device.status === 'revoked') return device; const now = this.#now(); this.#db.prepare("UPDATE devices SET status='revoked',revoked_at=? WHERE id=?").run(now, device.id); this.#db.prepare('UPDATE pairing_codes SET used_at=? WHERE created_by_device_id=? AND used_at IS NULL').run(now, device.id); this.#event(null, null, 'device_revoked', coordinator.id, null, { device_id: device.id }); return this.#device(device.id, { active: false }); }); }
