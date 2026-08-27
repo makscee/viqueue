@@ -3,7 +3,7 @@ import { activityFact, applyActivityFilters, applyTicketFilters, createModalCont
 const $ = (selector) => document.querySelector(selector);
 const credentialKey = 'viq.deviceCredential';
 const lanes = ['Open', 'Working', 'Waiting', 'Done'];
-const state = { projects: [], tickets: [], events: [], questions: [], machines: [], actors: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null, admin: false };
+const state = { projects: [], tickets: [], events: [], questions: [], machines: [], actors: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null, admin: false, vcWriter: false };
 const modal = createModalController($('#modal'));
 const request = async (path, options = {}) => {
   const credential = localStorage.getItem(credentialKey);
@@ -24,7 +24,7 @@ function openModal({ title, eyebrow = '', content, trigger, initialFocus }) { $(
 const report = (error) => { $('#status').textContent = `Something went wrong: ${error.message}`; };
 const safely = (handler) => async (event) => { try { await handler(event); } catch (error) { report(error); } };
 function showPairing(message = '') { modal.dismiss(); $('#app-shell').hidden = true; $('#refresh').hidden = true; $('#disconnect-device').hidden = true; $('#pairing').hidden = false; $('#pairing-form').reset(); $('#pairing-status').textContent = message; $('#pairing-form').elements.code.focus(); }
-function showBoard(identity) { state.admin = Boolean(identity.actor.admin); $('#pairing').hidden = true; $('#app-shell').hidden = false; $('#refresh').hidden = false; $('#disconnect-device').hidden = false; for (const id of ['#open-machines', '#open-project-create', '#open-ticket-create']) $(id).hidden = !state.admin; }
+function showBoard(identity) { state.admin = Boolean(identity.actor.admin); state.vcWriter = !state.admin && identity.actor.id === 'artem' && identity.actor.active === true && identity.device.id === 'artems-macbook-pro' && identity.device.kind === 'coordinator' && identity.device.status === 'active'; $('#pairing').hidden = true; $('#app-shell').hidden = false; $('#refresh').hidden = false; $('#disconnect-device').hidden = false; for (const id of ['#open-machines', '#open-project-create', '#open-ticket-create']) $(id).hidden = !state.admin; }
 function chip(label, pressed, action) { const button = document.createElement('button'); button.type = 'button'; button.className = 'filter-chip'; button.textContent = label; button.setAttribute('aria-pressed', String(pressed)); button.addEventListener('click', action); return button; }
 function renderFilters() {
   const keys = state.projects.map(({ key }) => key); const projects = $('#project-chips'); projects.replaceChildren();
@@ -44,6 +44,7 @@ function cardFor(ticket, laneTickets, index) {
   const summary = card.querySelector('.ticket-open'); summary.dataset.id = ticket.id; summary.children[0].textContent = ticket.id; summary.children[1].textContent = ticket.title;
   summary.children[2].textContent = `${ticket.assignment}${ticket.open_questions ? ` · ${ticket.open_questions} open question${ticket.open_questions === 1 ? '' : 's'}` : ''}${ticket.claim?.device_id ? ` · active on ${ticket.claim.device_id}` : ''}`;
   summary.addEventListener('click', (event) => { event.stopPropagation(); showDetail(ticket.id, card).catch(report); });
+  if (state.vcWriter && ticket.project === 'VC' && /^VC-[1-5]$/.test(ticket.id)) { const control = document.createElement('select'); control.className = 'vc-state-control'; control.setAttribute('aria-label', `Change ${ticket.id} state`); for (const lane of lanes) control.append(new Option(lane, lane)); control.value = ticket.state; control.addEventListener('click', event => event.stopPropagation()); control.addEventListener('change', safely(async event => { event.stopPropagation(); control.disabled = true; await request(`/v1/tickets/${ticket.id}/state`, { method: 'POST', body: JSON.stringify({ state: control.value }) }); await refresh(ticket.id); announce(`${ticket.id} moved to ${control.value}.`); })); card.append(control); }
   card.addEventListener('click', (event) => { if (event.target === card) showDetail(ticket.id, card).catch(report); });
   card.addEventListener('dragstart', (event) => { state.drag = { id: ticket.id, state: ticket.state, index }; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', ticket.id); card.classList.add('dragging'); announce(`Moving ${ticket.id}. Drop in a lane, or press Escape to cancel.`); });
   card.addEventListener('dragend', () => { card.classList.remove('dragging'); if (state.drag) announce(`Move cancelled. ${ticket.id} remains in ${state.drag.state}, position ${state.drag.index + 1}.`); state.drag = null; document.querySelectorAll('.drop-target').forEach((node) => node.classList.remove('drop-target')); });
@@ -101,7 +102,7 @@ async function refresh(focusId = null) {
   state.projects = projects.projects; state.tickets = board.tickets; state.events = activity.events; state.questions = questions.questions; state.machines = machines.machines;
   state.selectedProjects = reconcileProjectSelection(previous, state.projects.map(({ key }) => key), state.selectedProjects, null); if (!previous.length) { state.selectedProjects = new Set(state.projects.map(({ key }) => key)); state.allProjects = true; }
   $('#open-ticket-create').disabled = !state.projects.length; $('#open-ticket-create').title = state.projects.length ? '' : 'Create a project first';
-  renderFilters(); renderBoard(focusId); announce(state.admin ? (state.projects.length ? `${visibleTickets().length} tickets shown` : 'No projects yet. Create your first project to begin.') : `${visibleTickets().length} tickets shown. This paired coordinator can read the board; administrative operations remain restricted.`);
+  renderFilters(); renderBoard(focusId); announce(state.admin ? (state.projects.length ? `${visibleTickets().length} tickets shown` : 'No projects yet. Create your first project to begin.') : state.vcWriter ? `${visibleTickets().length} tickets shown. State controls are limited to VC-1 through VC-5.` : `${visibleTickets().length} tickets shown. This paired coordinator can read the board; administrative operations remain restricted.`);
 }
 function questionCard(question, { compact = false, afterAnswer = null } = {}) {
   const ticket = state.tickets.find((item) => item.id === question.ticket_id); const article = document.createElement('article'); article.className = `question-card${question.blocking ? ' blocking' : ' non-blocking'}`; article.dataset.question = question.id;
