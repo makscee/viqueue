@@ -21,8 +21,17 @@ const replies = {
 };
 
 async function fixture() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-read-broker-')); let mutationHits = 0; const hits = [], upstreamRequests = []; let projectOverride = null;
-  const upstream = http.createServer(async (req, res) => { const chunks = []; for await (const chunk of req) chunks.push(chunk); const requestBody = Buffer.concat(chunks).toString(); hits.push(req.url); upstreamRequests.push({ method: req.method, url: req.url, authorization: req.headers.authorization, cookie: req.headers.cookie, body: requestBody }); if (req.method !== 'GET') mutationHits++; res.setHeader('content-type', 'application/json'); const ticketMatch = req.url.match(/^\/v1\/tickets\/(VC-[1-5])$/); const value = ticketMatch ? { ticket: { id: ticketMatch[1], project: projectOverride ?? 'VC', state: 'Open' } } : req.method === 'POST' && req.url.endsWith('/state') ? { ticket: { id: req.url.split('/')[3], project: 'VC', state: JSON.parse(requestBody).state } } : req.url === '/v1/devices/me' ? { actor: { id: 'upstream-admin', admin: true } } : (replies[req.url] ?? { ok: true }); res.end(JSON.stringify(value)); });
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-read-broker-')); let mutationHits = 0; const hits = [], upstreamRequests = []; let projectOverride = null, ticketIdOverride = null, lookupFails = false;
+  const bearerIdentities = new Map([
+    ['core_artem_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
+    ['wrong_actor_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'other', active: true, admin: false } }],
+    ['wrong_device_token', { device: { id: 'other-device', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
+    ['wrong_kind_token', { device: { id: 'artems-macbook-pro', kind: 'worker', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
+    ['inactive_device_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'revoked', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
+    ['inactive_actor_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: false, admin: false } }],
+    ['admin_token_value', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: true }, actor: { id: 'artem', active: true, admin: true } }]
+  ]);
+  const upstream = http.createServer(async (req, res) => { const chunks = []; for await (const chunk of req) chunks.push(chunk); const requestBody = Buffer.concat(chunks).toString(); hits.push(req.url); upstreamRequests.push({ method: req.method, url: req.url, authorization: req.headers.authorization, cookie: req.headers.cookie, body: requestBody }); if (req.method !== 'GET') mutationHits++; res.setHeader('content-type', 'application/json'); if (req.url === '/v1/devices/me' && req.headers.authorization !== 'Bearer test_upstream_admin_credential') { const identity = bearerIdentities.get(req.headers.authorization?.slice(7)); if (!identity) { res.statusCode = 401; return res.end(JSON.stringify({ error: { code: 'device_unauthorized' } })); } return res.end(JSON.stringify(identity)); } const ticketMatch = req.url.match(/^\/v1\/tickets\/(VC-[1-5])$/); if (ticketMatch && lookupFails) { res.statusCode = 503; return res.end(JSON.stringify({ error: { code: 'unavailable' } })); } const value = ticketMatch ? { ticket: { id: ticketIdOverride ?? ticketMatch[1], project: projectOverride ?? 'VC', state: 'Open' } } : req.method === 'POST' && req.url.endsWith('/state') ? { ticket: { id: req.url.split('/')[3], project: 'VC', state: JSON.parse(requestBody).state } } : req.url === '/v1/devices/me' ? { actor: { id: 'upstream-admin', admin: true } } : (replies[req.url] ?? { ok: true }); res.end(JSON.stringify(value)); });
   await listen(upstream); const origin = 'https://phone.test';
   const gateway = await createPhoneGateway({ authDb: path.join(dir, 'auth.sqlite'), origin, upstream: `http://127.0.0.1:${upstream.address().port}`, upstreamAuthorization: 'test_upstream_admin_credential', testMode: true }); await listen(gateway);
   const pair = ({ actorId, actorName, admin, kind = 'coordinator', actorActive = true, deviceId }) => {
@@ -34,7 +43,8 @@ async function fixture() {
     return { device, privateKey, privateJwk: privateKey.export({ format: 'jwk' }), epoch: paired.epoch };
   };
   const signed = async (identity, method, target, value) => { const body = value === undefined ? Buffer.alloc(0) : Buffer.from(JSON.stringify(value)); const challenge = gateway.authStore.challenge({ device_id: identity.device, method, target, body_hash: b64url(sha(body)) }); const record = proofRecord(origin, challenge.id, Buffer.from(challenge.nonce, 'base64url'), identity.device, challenge.epoch, method, target, sha(body)); const signature = sign(null, record, { key: identity.privateKey, dsaEncoding: 'ieee-p1363' }); return fetch(`http://127.0.0.1:${gateway.address().port}${target}`, { method, headers: { 'content-type': 'application/json', 'x-viq-device': identity.device, 'x-viq-challenge': challenge.id, 'x-viq-signature': b64url(signature), authorization: 'Bearer caller-must-not-pass', cookie: 'caller=must-not-pass' }, body: body.length ? body : undefined }); };
-  return { dir, upstream, gateway, base: `http://127.0.0.1:${gateway.address().port}`, pair, signed, hits, upstreamRequests, setProject(value) { projectOverride = value; }, get mutationHits() { return mutationHits; } };
+  const bearer = (token, target = '/v1/tickets/VC-1/state', value = { state: 'Done' }, authorization = token === undefined ? undefined : `Bearer ${token}`) => fetch(`http://127.0.0.1:${gateway.address().port}${target}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(authorization === undefined ? {} : { authorization }) }, body: JSON.stringify(value) });
+  return { dir, upstream, gateway, base: `http://127.0.0.1:${gateway.address().port}`, pair, signed, bearer, hits, upstreamRequests, setProject(value) { projectOverride = value; }, setTicketId(value) { ticketIdOverride = value; }, failLookup(value) { lookupFails = value; }, get mutationHits() { return mutationHits; } };
 }
 async function cleanup(f) { await close(f.gateway); await close(f.upstream); await rm(f.dir, { recursive: true, force: true }); }
 
@@ -54,6 +64,31 @@ test('exact Artem browser receives only the frozen VC state transition capabilit
   for (let n = 1; n <= 5; n++) for (const state of ['Open', 'Working', 'Waiting', 'Done']) { const response = await f.signed(artem, 'POST', `/v1/tickets/VC-${n}/state`, { state }); assert.equal(response.status, 200, `VC-${n} ${state}`); }
   assert.equal(f.mutationHits, 20); for (const request of f.upstreamRequests.filter(({ method }) => method === 'POST')) { assert.equal(request.authorization, 'Bearer test_upstream_admin_credential'); assert.equal(request.cookie, undefined); assert.deepEqual(JSON.parse(request.body), { state: JSON.parse(request.body).state }); }
   const audit = f.gateway.authStore.status().audit.filter(({ action }) => action === 'vc_state_changed'); assert.ok(audit.length > 0); assert.deepEqual(JSON.parse(audit[0].detail), { actor_id: 'artem', ticket_id: 'VC-5', state: 'Done', upstream_actor: 'maks', attribution: 'gateway-delegated via shared admin credential' });
+});
+
+test('exact core Artem Bearer delegates only the frozen VC state mutation', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  for (let n = 1; n <= 5; n++) for (const state of ['Open', 'Working', 'Waiting', 'Done']) assert.equal((await f.bearer('core_artem_token', `/v1/tickets/VC-${n}/state`, { state })).status, 200, `VC-${n} ${state}`);
+  assert.equal(f.mutationHits, 20);
+  const bearerRequests = f.upstreamRequests.filter(({ authorization }) => authorization === 'Bearer core_artem_token');
+  assert.equal(bearerRequests.length, 20); assert.ok(bearerRequests.every(({ method, url }) => method === 'GET' && url === '/v1/devices/me'));
+  const audit = f.gateway.authStore.status().audit.filter(({ action }) => action === 'vc_state_changed');
+  assert.deepEqual(JSON.parse(audit[0].detail), { auth_mode: 'bearer-delegation', actor_id: 'artem', device_id: 'artems-macbook-pro', ticket_id: 'VC-5', state: 'Done', upstream_actor: 'maks' });
+});
+
+test('Bearer VC delegation fails closed before admin mutation for every denied class', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  const denied = [
+    () => f.bearer(undefined), () => f.bearer('x', undefined, undefined, 'Basic nope'), () => f.bearer('invalid_token_value'),
+    ...['wrong_actor_token', 'wrong_device_token', 'wrong_kind_token', 'inactive_device_token', 'inactive_actor_token', 'admin_token_value'].map((token) => () => f.bearer(token)),
+    () => f.bearer('core_artem_token', '/v1/tickets/VC-1/state?x=1'), () => f.bearer('core_artem_token', '/v1/tickets/VC-6/state'),
+    () => f.bearer('core_artem_token', '/v1/tickets/VC-1/state', { state: 'Done', extra: true }), () => f.bearer('core_artem_token', '/v1/tickets/VC-1/state', {}), () => f.bearer('core_artem_token', '/v1/tickets/VC-1/state', { state: 'Review' })
+  ];
+  for (const attempt of denied) { const before = f.mutationHits; assert.notEqual((await attempt()).status, 200); assert.equal(f.mutationHits, before); }
+  f.setProject('OTHER'); let before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 403); assert.equal(f.mutationHits, before);
+  f.setProject(null); f.setTicketId('VC-2'); before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 403); assert.equal(f.mutationHits, before);
+  f.setTicketId(null); f.failLookup(true); before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 403); assert.equal(f.mutationHits, before);
+  assert.ok(f.upstreamRequests.filter(({ authorization }) => authorization === 'Bearer core_artem_token').every(({ url }) => url === '/v1/devices/me'));
 });
 
 test('VC state capability fails closed for identity, object, schema, and project mismatch', async (t) => {

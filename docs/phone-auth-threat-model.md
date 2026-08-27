@@ -10,6 +10,8 @@ Every `/v1/*` call obtains a 32-byte, 30-second, one-use challenge bound to acti
 
 The gateway strips browser-supplied credentials, cookies, client `Host`, forwarding, hop-by-hop, and proof headers. After browser proof succeeds, it injects only the configured confidential upstream bearer read from an operator-controlled file; without that credential every `/v1/*` request fails before upstream. It preserves only the exact accepted origin, method, raw path/query, and bounded body. Redirect responses are returned without being followed; they cannot select another upstream connection.
 
+One deliberately exportable core Bearer capability is accepted only for `POST /v1/tickets/VC-[1-5]/state` with no query and exact JSON `{"state":"Open|Working|Waiting|Done"}`. The gateway sends that Bearer only to upstream `GET /v1/devices/me`, requires the exact active non-admin `artem` / `artems-macbook-pro` coordinator identity, then uses its server-side admin credential to verify the exact VC ticket and perform the mutation. Rejections occur before admin mutation; the initiating Bearer is never included in the delegated request or audit record.
+
 ## Upstream address boundary
 
 The backward-compatible default is one fixed root-form loopback HTTP origin (`127.0.0.1`, `localhost`, or `::1`). Remote HTTP is always rejected.
