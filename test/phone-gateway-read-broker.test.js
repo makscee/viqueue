@@ -21,12 +21,12 @@ const replies = {
 };
 
 async function fixture() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-read-broker-')); let mutationHits = 0; const hits = [];
-  const upstream = http.createServer((req, res) => { hits.push(req.url); if (req.method !== 'GET') mutationHits++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(req.url === '/v1/devices/me' ? { actor: { id: 'upstream-admin', admin: true } } : (replies[req.url] ?? { ok: true }))); });
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-read-broker-')); let mutationHits = 0; const hits = [], upstreamRequests = []; let projectOverride = null;
+  const upstream = http.createServer(async (req, res) => { const chunks = []; for await (const chunk of req) chunks.push(chunk); const requestBody = Buffer.concat(chunks).toString(); hits.push(req.url); upstreamRequests.push({ method: req.method, url: req.url, authorization: req.headers.authorization, cookie: req.headers.cookie, body: requestBody }); if (req.method !== 'GET') mutationHits++; res.setHeader('content-type', 'application/json'); const ticketMatch = req.url.match(/^\/v1\/tickets\/(VC-[1-5])$/); const value = ticketMatch ? { ticket: { id: ticketMatch[1], project: projectOverride ?? 'VC', state: 'Open' } } : req.method === 'POST' && req.url.endsWith('/state') ? { ticket: { id: req.url.split('/')[3], project: 'VC', state: JSON.parse(requestBody).state } } : req.url === '/v1/devices/me' ? { actor: { id: 'upstream-admin', admin: true } } : (replies[req.url] ?? { ok: true }); res.end(JSON.stringify(value)); });
   await listen(upstream); const origin = 'https://phone.test';
   const gateway = await createPhoneGateway({ authDb: path.join(dir, 'auth.sqlite'), origin, upstream: `http://127.0.0.1:${upstream.address().port}`, upstreamAuthorization: 'test_upstream_admin_credential', testMode: true }); await listen(gateway);
-  const pair = ({ actorId, actorName, admin, kind = 'coordinator', actorActive = true }) => {
-    const device = `device_${crypto.randomUUID().replaceAll('-', '')}`; const intent = gateway.authStore.createPair({ deviceId: device, actorId, actorName, admin, kind, actorActive, label: `${actorName} browser` });
+  const pair = ({ actorId, actorName, admin, kind = 'coordinator', actorActive = true, deviceId }) => {
+    const device = deviceId ?? `device_${crypto.randomUUID().replaceAll('-', '')}`; const intent = gateway.authStore.createPair({ deviceId: device, actorId, actorName, admin, kind, actorActive, label: `${actorName} browser` });
     const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' }); const jwk = publicKey.export({ format: 'jwk' });
     const verifier = sha(Buffer.concat([Buffer.from('viq-phone-pair-verifier-v1\0'), Buffer.from(intent.code.split('.')[1])]));
     const proof = createHmac('sha256', verifier).update(pairRecord(origin, intent.intentId, jwk.x, jwk.y)).digest();
@@ -34,7 +34,7 @@ async function fixture() {
     return { device, privateKey, privateJwk: privateKey.export({ format: 'jwk' }), epoch: paired.epoch };
   };
   const signed = async (identity, method, target, value) => { const body = value === undefined ? Buffer.alloc(0) : Buffer.from(JSON.stringify(value)); const challenge = gateway.authStore.challenge({ device_id: identity.device, method, target, body_hash: b64url(sha(body)) }); const record = proofRecord(origin, challenge.id, Buffer.from(challenge.nonce, 'base64url'), identity.device, challenge.epoch, method, target, sha(body)); const signature = sign(null, record, { key: identity.privateKey, dsaEncoding: 'ieee-p1363' }); return fetch(`http://127.0.0.1:${gateway.address().port}${target}`, { method, headers: { 'content-type': 'application/json', 'x-viq-device': identity.device, 'x-viq-challenge': challenge.id, 'x-viq-signature': b64url(signature), authorization: 'Bearer caller-must-not-pass', cookie: 'caller=must-not-pass' }, body: body.length ? body : undefined }); };
-  return { dir, upstream, gateway, base: `http://127.0.0.1:${gateway.address().port}`, pair, signed, hits, get mutationHits() { return mutationHits; } };
+  return { dir, upstream, gateway, base: `http://127.0.0.1:${gateway.address().port}`, pair, signed, hits, upstreamRequests, setProject(value) { projectOverride = value; }, get mutationHits() { return mutationHits; } };
 }
 async function cleanup(f) { await close(f.gateway); await close(f.upstream); await rm(f.dir, { recursive: true, force: true }); }
 
@@ -49,6 +49,23 @@ test('public gateway brokers a truthful read-only coordinator capability', async
   const before = f.hits.length; for (const [method, route, body] of mutations) assert.equal((await f.signed(reader, method, route, body)).status, 403, `${method} ${route}`); assert.equal(f.hits.length, before); assert.equal(f.mutationHits, 0);
 });
 
+test('exact Artem browser receives only the frozen VC state transition capability', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const artem = f.pair({ actorId: 'artem', actorName: 'Artem', admin: false, deviceId: 'artems-macbook-pro' });
+  for (let n = 1; n <= 5; n++) for (const state of ['Open', 'Working', 'Waiting', 'Done']) { const response = await f.signed(artem, 'POST', `/v1/tickets/VC-${n}/state`, { state }); assert.equal(response.status, 200, `VC-${n} ${state}`); }
+  assert.equal(f.mutationHits, 20); for (const request of f.upstreamRequests.filter(({ method }) => method === 'POST')) { assert.equal(request.authorization, 'Bearer test_upstream_admin_credential'); assert.equal(request.cookie, undefined); assert.deepEqual(JSON.parse(request.body), { state: JSON.parse(request.body).state }); }
+  const audit = f.gateway.authStore.status().audit.filter(({ action }) => action === 'vc_state_changed'); assert.ok(audit.length > 0); assert.deepEqual(JSON.parse(audit[0].detail), { actor_id: 'artem', ticket_id: 'VC-5', state: 'Done', upstream_actor: 'maks', attribution: 'gateway-delegated via shared admin credential' });
+});
+
+test('VC state capability fails closed for identity, object, schema, and project mismatch', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const exact = f.pair({ actorId: 'artem', actorName: 'Artem', admin: false, deviceId: 'artems-macbook-pro' });
+  const identities = [f.pair({ actorId: 'other', actorName: 'Other', admin: false }), f.pair({ actorId: 'artem', actorName: 'Artem', admin: false }), f.pair({ actorId: 'artem', actorName: 'Artem', admin: false, kind: 'worker' }), f.pair({ actorId: 'artem', actorName: 'Artem', admin: false, actorActive: false })];
+  for (const identity of identities) assert.equal((await f.signed(identity, 'POST', '/v1/tickets/VC-1/state', { state: 'Done' })).status, 403);
+  const badTargets = ['/v1/tickets/VC-6/state', '/v1/tickets/VV-1/state', '/v1/tickets/VIQ-1/state', '/v1/tickets/LIVE1/state', '/v1/tickets/PRIVATEA1/state', '/v1/tickets/VC%2D1/state', '/v1/tickets/VC-1%2Fnotes/state', '/v1/tickets/VC-01/state', '/v1/tickets/VC-1/state?next=x'];
+  for (const target of badTargets) assert.notEqual((await f.signed(exact, 'POST', target, { state: 'Done' })).status, 200, target);
+  for (const value of [{ state: 'Review' }, { state: 'Done', actor: 'artem' }, {}, null, 'Done']) assert.equal((await f.signed(exact, 'POST', '/v1/tickets/VC-1/state', value)).status, 403);
+  const before = f.mutationHits; f.setProject('OTHER'); assert.equal((await f.signed(exact, 'POST', '/v1/tickets/VC-1/state', { state: 'Done' })).status, 403); assert.equal(f.mutationHits, before);
+});
+
 test('admin path remains proxied while worker, inactive actor, revoked device, anonymous and invalid proof remain denied', async (t) => {
   const f = await fixture(); t.after(() => cleanup(f)); const admin = f.pair({ actorId: 'admin', actorName: 'Admin', admin: true }); assert.equal((await f.signed(admin, 'POST', '/v1/projects', { key: 'OK' })).status, 200); assert.equal(f.mutationHits, 1);
   for (const identity of [f.pair({ actorId: 'worker', actorName: 'Worker', admin: false, kind: 'worker' }), f.pair({ actorId: 'inactive', actorName: 'Inactive', admin: false, actorActive: false })]) assert.equal((await f.signed(identity, 'GET', '/v1/board')).status, 403);
@@ -56,10 +73,10 @@ test('admin path remains proxied while worker, inactive actor, revoked device, a
   const reader = f.pair({ actorId: 'reader', actorName: 'Reader', admin: false }); const response = await fetch(`${f.base}/v1/board`, { headers: { 'x-viq-device': reader.device, 'x-viq-challenge': 'invalid_invalid_0000', 'x-viq-signature': 'x'.repeat(86) } }); assert.equal(response.status, 403);
 });
 
-test('phone browser renders the gateway-backed non-admin board and detail without mutation controls', async (t) => {
-  const { chromium } = await import('playwright'); const f = await fixture(); t.after(() => cleanup(f)); const reader = f.pair({ actorId: 'artem', actorName: 'Artem', admin: false });
+test('phone browser renders exact VC state controls without generic administration', async (t) => {
+  const { chromium } = await import('playwright'); const f = await fixture(); t.after(() => cleanup(f)); const reader = f.pair({ actorId: 'artem', actorName: 'Artem', admin: false, deviceId: 'artems-macbook-pro' });
   const browser = await chromium.launch({ headless: true }); t.after(() => browser.close()); const page = await browser.newPage();
   await page.route('**/v1/**', async (route) => { const request = route.request(), url = new URL(request.url()), data = request.postData(); const response = await f.signed(reader, request.method(), url.pathname + url.search, data === null ? undefined : JSON.parse(data)); await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }); });
   await page.goto(f.base); await page.evaluate(async () => { globalThis.__viqPhoneAuthorized = true; document.querySelector('#phone-auth').hidden = true; document.querySelector('#phone-app').hidden = false; await import('/app.js'); });
-  await page.waitForTimeout(1000); assert.equal(await page.locator('#status').textContent(), '5 tickets shown. This paired coordinator can read the board; administrative operations remain restricted.'); for (let i = 1; i <= 5; i++) await page.getByText(`VC-${i}`, { exact: true }).waitFor(); for (const id of ['#open-machines', '#open-project-create', '#open-ticket-create']) assert.equal(await page.locator(id).isHidden(), true); await page.getByText('VC-1', { exact: true }).click(); await page.getByText('Complete history').waitFor(); for (const selector of ['.detail-edit-form', '.manual-event-composer', '.resolve-block', '.danger-zone', '.inline-answer']) assert.equal(await page.locator(selector).count(), 0); assert.equal(f.mutationHits, 0);
+  await page.waitForTimeout(1000); assert.equal(await page.locator('#status').textContent(), '5 tickets shown. State controls are limited to VC-1 through VC-5.'); for (let i = 1; i <= 5; i++) await page.getByText(`VC-${i}`, { exact: true }).waitFor(); assert.equal(await page.locator('.vc-state-control').count(), 5); await page.locator('.vc-state-control').first().selectOption('Done'); await page.getByText('VC-1 moved to Done.').waitFor(); for (const id of ['#open-machines', '#open-project-create', '#open-ticket-create']) assert.equal(await page.locator(id).isHidden(), true); await page.getByText('VC-1', { exact: true }).click(); await page.getByText('Complete history').waitFor(); for (const selector of ['.detail-edit-form', '.manual-event-composer', '.resolve-block', '.danger-zone', '.inline-answer']) assert.equal(await page.locator(selector).count(), 0); assert.equal(f.mutationHits, 1);
 });
