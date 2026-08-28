@@ -1,6 +1,8 @@
-# Isolated staging phone access
+# Retired historical record: isolated staging phone access
 
-## Operator flow
+> **RETIRED — HISTORICAL EVIDENCE ONLY.** This is not an active runbook and must not be used to configure or restore current systems. The former commands and endpoints below are preserved exactly as historical evidence, not as guidance.
+
+## Former operator flow
 
 1. Build and run the existing application on loopback 7373 as today.
 2. Choose a separate durable auth directory (new directories are created 0700; an existing parent is never chmodded), database (0600), and canonical approved HTTPS phone origin.
@@ -28,15 +30,15 @@ viqueue-phone-gateway \
 
 `HTTP_PROXY`, `HTTPS_PROXY`, and lowercase variants are intentionally ignored. Standard Node CA and hostname verification must succeed. Each new connection re-resolves the exact hostname, rejects the whole answer set if any address is outside Tailscale IPv4 `100.64.0.0/10` or IPv6 `fd7a:115c:a1e0::/48`, and binds the socket to the validated result. Redirects are returned but never followed by the gateway.
 
-## Read-only upstream tracer
+## Former read-only upstream tracer
 
 From the gateway host and without proxy variables, `viq-trace-tailscale-upstream` performs only `GET /health` and `GET /v1/projects` against the exact `cc-worker.twin-pogona.ts.net` origin. It uses the production trust store and hostname verification, validates actual tailnet DNS answers, pins those answers into the request lookup, caps response bytes, and does not follow redirects. It creates no pairing or application state.
 
-## Cutover gate (Eva approval required)
+## Former cutover gate (Eva approval required)
 
 Before activation, Eva must approve **the phone hostname and specific ingress**, production auth DB path/service wiring, and any required policy exception or credential provisioning. Building, testing, tracing, and publishing v0.4.1 perform none of those actions. Tailscale Funnel remains forbidden/not authorized.
 
-## Rollback
+## Former rollback
 
 Stop/remove only the gateway ingress/process, revoke the active device, and archive or delete the separate auth DB according to policy. Do not alter the existing server, tailnet route, DNS, firewall, or application DB. Direct loopback/tailnet behavior remains available and unchanged.
 
