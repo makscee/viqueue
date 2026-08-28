@@ -1,5 +1,7 @@
 # VIQ-S1 interface design contract
 
+Status: accepted interface contract; subordinate to [ADR 0013](docs/adr-0013-product-charter.md) for product responsibilities, runtime ownership, and artifact ownership.
+
 ## Authority and selection
 
 This is the project-local interface contract for VIQ-S1. Maks selected **Direction B — Decision desk + work rail** on **2026-08-22** and supplied no additional rationale.
