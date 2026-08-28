@@ -1,6 +1,6 @@
 # VIQ-15 — Minimum forward-only dogfood design
 
-Status: superseded historical design; ADR 0012 and the pairing PoC replace its unassigned-claim, phone-gateway, and lane-runtime guidance. Do not implement or deploy this document.
+Status: superseded historical design; [ADR 0013](docs/adr-0013-product-charter.md) is authoritative for product boundaries, and ADR 0012 replaces this document's unassigned-claim and pairing guidance. Its lane/runtime and publication material is historical implementation drift, not a current feature or operational workflow. Do not implement or deploy this document.
 
 Date: 2026-08-20 UTC
 Owner: tower-pi

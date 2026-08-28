@@ -2,6 +2,8 @@
 
 viqueue is a minimalist pull-based ticket board for a private, single-operator dogfood environment. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.4.1 remains a prerelease and is not production-ready.
 
+**Product-boundary authority:** [ADR 0013: Viq product charter](docs/adr-0013-product-charter.md). Viq coordinates work, not workers: independently started workers request fenced claims, while their runtimes and artifact systems execute and publish outside the Viq kernel. See the [documentation index](docs/README.md).
+
 ## Pairing PoC contract
 
 The HTTP JSON core is the only state machine. Authorization is intentionally small:
@@ -12,7 +14,7 @@ The HTTP JSON core is the only state machine. Authorization is intentionally sma
 
 A coordinator may create/edit/archive tickets, assign to a worker device or role, answer/review submissions, issue/revoke pairing, and manage roles. A worker may read assigned work, claim it atomically, post claim-fenced progress/questions/blockers/submissions, or release its claim. Roles grant no API permissions.
 
-Assignment is launch authorization. Every HTTP, CLI, and `/viq` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Exact device/role assignments are preferred; eligible unassigned free-pool tickets may also be claimed atomically within project, role, and membership boundaries. Takeover is absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
+Assignment establishes claim eligibility; it does not launch a process. Every HTTP, CLI, and `/viq` claim calls the same predicate: active paired worker, open ticket, exact device/role assignment, no unresolved blocker, and no current claim. Exact device/role assignments are preferred; eligible unassigned free-pool tickets may also be claimed atomically within project, role, and membership boundaries. Takeover is absent. There is no Start action, stored Ready state, generic scope system, or active `execution_authorities` path.
 
 Claims remain durable generation-fenced locks until explicit release or submission. Claim and device credentials are returned only at creation/pairing, stored by hash in SQLite, and never included in ticket/model context.
 
@@ -48,11 +50,7 @@ MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/stat
 /viq pause|resume|stop
 ```
 
-`/viq PAIRING_CODE` pairs and starts the worker in the current visible Pi session; there is no separate worker command or launch ritual. Before every claim attempt it visibly runs `tools/vault-sync/vault-sync sync` in the current Vault and claims only after status proves a clean `CURRENT/EQUAL` canonical commit. The VIQ server remains the sole eligibility and atomic claim authority, and the complete returned ticket contract is injected unchanged with sanitized history. `viq_submit` visibly syncs again and submits the operator evidence plus the exact published commit only after publication succeeds; conflict, guard, or offline failure retains the fenced claim for retry.
-
-Pairing writes JSON outside repositories at `${XDG_CONFIG_HOME:-~/.config}/viq/credential.json`, with directory mode 0700 and file mode 0600. Sessions for the same Unix user reuse it; other users do not. Ordinary root Pi is supported and receives a root-only file. Polling is a timer owned by that Pi session, stopped on session shutdown, with no daemon or duplicate lifecycle store. Explicit `VIQ_WORKER_LOCKDOWN=1` preserves the historical isolated-workspace/root refusal contour. Credentials stay out of prompts, status, tool results, argv, environment, and request bodies; the trusted Pi process necessarily can read its own Unix user's file.
-
-An exact worker-only archive is built from clean committed `HEAD` with `npm run bundle:worker -- OUTPUT_DIR`. It includes `SOURCE_COMMIT`, `SOURCE_TREE`, the configured `package.json` discovery path, and only the worker extension/runtime. `scripts/install-viq-worker.sh` requires an explicit `VIQ_WORKER_ROOT`, exact candidate commit, and exact current predecessor before it creates a read-only release and atomically renames the `current` symlink. `scripts/rollback-viq-worker.sh` accepts only that installed candidate and the sealed predecessor; the VIQ-15 predecessor is `1398284ed89a6cf9395f129483f709e63c009286`. Tests and rehearsals must use an isolated root, never `/opt/viq-worker`.
+The repository still contains a legacy bundled Pi worker. Its mandatory readiness synchronization and publication coupling are implementation drift, not a current feature or operational workflow. In particular, `extensions/viq-worker/vault-sync.mjs` and its callers are a retirement target after the charter is accepted. A conforming runner starts independently, uses Viq only as an edge client, and may submit immutable references from any artifact backend; Viq neither performs nor requires publication.
 
 ## Migration and rollback
 
