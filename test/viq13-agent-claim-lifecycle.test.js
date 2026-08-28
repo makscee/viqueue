@@ -113,6 +113,29 @@ test('VIQ-13 HTTP rejects chosen IDs, cross-session, cross-machine, and revoked 
   assert.equal((await call(a.credential, `/v1/tickets/${claim.ticket.id}/release`, auth, sa.session_capability)).body.error.code, 'stale_claim');
 });
 
+test('VIQ-13 shutdown atomically records RELEASE and releases once, while failure retains the fenced claim', async (t) => {
+  const { store, file, a } = await fixture(); const ticket = await store.createTicket({ project: 'AAA', title: 'shutdown release', assignment: 'Agent' }); await store.close();
+  const app = await createApp({ storage: file }); await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve)); t.after(() => app.close());
+  const baseUrl = `http://127.0.0.1:${app.address().port}`;
+  const runtime = new ViqWorkerRuntime({ baseUrl, credential: a.credential, pollMs: 100000, deliver: async () => {}, syncVault: async () => ({ commit: 'a'.repeat(40) }) });
+  await runtime.start({ project: 'AAA' });
+  await Promise.all([runtime.shutdown(), runtime.shutdown()]);
+  const db = new DatabaseSync(file, { readOnly: true });
+  const claim = db.prepare('SELECT released_at FROM claims WHERE ticket_id=?').get(ticket.id);
+  const events = db.prepare('SELECT type,message FROM events WHERE ticket_id=? ORDER BY id').all(ticket.id); db.close();
+  assert.ok(claim.released_at); assert.equal((await (await fetch(`${baseUrl}/v1/tickets/${ticket.id}`, { headers: { authorization: `Bearer ${a.credential}` } })).json()).ticket.state, 'Open');
+  assert.deepEqual(events.filter((event) => event.type === 'progress' && event.message === 'RELEASE: Pi session shutdown').length, 1);
+  assert.equal(events.filter((event) => event.type === 'released').length, 1);
+
+  const failed = await fixture(); const failedTicket = await failed.store.createTicket({ project: 'AAA', title: 'failed shutdown', assignment: 'Agent' }); await failed.store.close();
+  const failedApp = await createApp({ storage: failed.file }); await new Promise((resolve) => failedApp.listen(0, '127.0.0.1', resolve)); t.after(() => failedApp.close());
+  const failedBase = `http://127.0.0.1:${failedApp.address().port}`; let failRelease = true;
+  const failedRuntime = new ViqWorkerRuntime({ baseUrl: failedBase, credential: failed.a.credential, pollMs: 100000, deliver: async () => {}, syncVault: async () => ({ commit: 'b'.repeat(40) }), fetchImpl: async (url, init) => failRelease && String(url).endsWith('/release') ? new Response(JSON.stringify({ error: { code: 'synthetic_release_failure' } }), { status: 503, headers: { 'content-type': 'application/json' } }) : fetch(url, init) });
+  await failedRuntime.start({ project: 'AAA' }); await Promise.all([failedRuntime.shutdown(), failedRuntime.shutdown()]);
+  const failedDb = new DatabaseSync(failed.file, { readOnly: true }); const failedClaim = failedDb.prepare('SELECT released_at FROM claims WHERE ticket_id=?').get(failedTicket.id); const failedEvents = failedDb.prepare('SELECT type,message FROM events WHERE ticket_id=?').all(failedTicket.id); failedDb.close();
+  assert.equal(failedClaim.released_at, null); assert.equal(failedEvents.some((event) => event.message === 'RELEASE: Pi session shutdown' || event.type === 'released'), false); assert.equal(failedRuntime.status().mode, 'blocked');
+});
+
 test('VIQ-13 real HTTP worker poll is global and its exact runtime session can release', async (t) => {
   const { store, file, a } = await fixture(); await store.createTicket({ project: 'AAA', title: 'global lower', assignment: 'Agent' }); await store.createTicket({ project: 'ZZZ', title: 'global first', assignment: 'Agent' }); await store.close();
   const app = await createApp({ storage: file }); await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve)); t.after(() => app.close());
