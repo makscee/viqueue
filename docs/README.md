@@ -13,3 +13,6 @@ For any question about Viq's purpose, responsibilities, worker/runtime boundary,
 ## Historical and bounded records
 
 ADRs 0001–0012 retain the decisions and context stated in each file, subject to their status lines and ADR 0013. [`MVP-DESIGN.md`](../MVP-DESIGN.md) is a superseded implementation-candidate record. Release, staging, recovery, and threat-model documents describe bounded operational history; they do not expand the product kernel.
+
+- [Historical records](history/README.md) are non-operational and cannot override ADR 0013 or current deployment authority.
+- [Retired phone-auth staging record](history/phone-auth-staging-retirement-record.md) preserves former commands and endpoints as evidence only; it is not an active runbook.
