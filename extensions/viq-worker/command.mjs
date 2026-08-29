@@ -1,4 +1,4 @@
-const commands = new Set(['pair', 'status', 'poll', 'start', 'pause', 'resume', 'stop']);
+const commands = new Set(['pair', 'status', 'poll', 'start', 'continue', 'pause', 'resume', 'stop']);
 
 export function parseViqCommand(raw = '') {
   const words = raw.trim().split(/\s+/).filter(Boolean);
@@ -10,6 +10,7 @@ export function parseViqCommand(raw = '') {
   else throw new Error(`Unknown VIQ command “${first}”. Run /viq for help.`);
   const out = { sub };
   if (sub === 'pair') out.code = words.shift();
+  if (sub === 'continue') out.ticket = words.shift();
   for (let i = 0; i < words.length; i += 1) {
     if (words[i] === '--id' && words[i + 1]) out.id = words[++i];
     else if (words[i] === '--name' && words[i + 1]) out.name = words[++i];
@@ -23,7 +24,7 @@ export function viqHelp(status = {}) {
   const next = status.paired
     ? status.mode === 'stopped' ? 'Next: run /viq poll to start receiving work.' : 'VIQ is paired. Run /viq status to inspect this session.'
     : 'Next: generate a one-time code in Board → Machines, then pair this Pi.';
-  return ['VIQ commands', '/viq pair <code>  Pair this Pi with a one-time code. Example: /viq pair <code>', '/viq status       Show pairing and worker state. Example: /viq status', '/viq poll         Start polling for work. Example: /viq poll --project VIQ', '/viq stop         Stop polling safely. Example: /viq stop', next].join('\n');
+  return ['VIQ commands', '/viq pair <code>       Pair this Pi with a one-time code. Example: /viq pair <code>', '/viq status            Show pairing and worker state. Example: /viq status', '/viq poll              Start ordinary polling for initial work. Example: /viq poll --project VIQ', '/viq continue <ticket> Continue only that answered-question ticket after re-reading its state and history.', '/viq stop              Stop polling safely. Example: /viq stop', 'viq_submit records an outcome summary and backend-neutral immutable evidence references produced elsewhere; it never publishes artifacts.', next].join('\n');
 }
 
 export function viqStatus(status = {}, baseUrl = '') {

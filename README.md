@@ -47,10 +47,11 @@ MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/stat
 ```text
 /viq PAIRING_CODE [--project KEY]
 /viq status
+/viq continue TICKET-ID
 /viq pause|resume|stop
 ```
 
-The repository still contains a legacy bundled Pi worker. Its mandatory readiness synchronization and publication coupling are implementation drift, not a current feature or operational workflow. In particular, `extensions/viq-worker/vault-sync.mjs` and its callers are a retirement target after the charter is accepted. A conforming runner starts independently, uses Viq only as an edge client, and may submit immutable references from any artifact backend; Viq neither performs nor requires publication.
+The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` acquires initial work. After a human answers a blocking question, `/viq continue TICKET-ID` re-reads that exact ticket, its questions, and history, then requests a normally fenced claim only for that ID; it never falls back to claim-next or another ticket. `viq_submit` records a worker-authored outcome summary and backend-neutral immutable evidence references already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, or publish artifacts.
 
 ## Migration and rollback
 
