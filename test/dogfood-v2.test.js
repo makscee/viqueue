@@ -44,11 +44,12 @@ test('one-project tickets reject legacy memberships and preserve claim authority
   await f.store.close();
 });
 
-test('next and claimNext use authoritative global order regardless of legacy project hints', async () => {
+test('claimNext honors an explicit project while unscoped next keeps authoritative global order', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'canonical membership', assignment: 'Agent', actor: 'mair' });
   assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
-  assert.equal((await claimNextWithSession(f.store, { project: 'TWO', device: 'worker-one' })).ticket.id, ticket.id);
+  assert.equal(await claimNextWithSession(f.store, { project: 'TWO', device: 'worker-one' }), null);
+  assert.equal((await claimNextWithSession(f.store, { project: 'ONE', device: 'worker-one' })).ticket.id, ticket.id);
   await f.store.close();
 });
 

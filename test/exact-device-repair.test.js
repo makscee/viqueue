@@ -11,7 +11,7 @@ async function fixture() {
   const dir = await mkdtemp(path.join(tmpdir(), 'viq-exact-repair-'));
   const file = path.join(dir, 'data.sqlite');
   const store = new Store(file, { now: () => ++tick });
-  await store.init();
+  await store.init(); await store.createProject('REP');
   const admin = await store.bootstrapCoordinator({ id: 'admin', name: 'Admin' });
   await store.createActor({ id: 'artem', name: 'Artem', kind: 'agent' }, 'admin');
   const issue = (options = {}) => store.createPairingCode('admin', { actor_id: 'artem', intended_kind: 'worker', device_id: 'artems-macbook-pro', device_name: "Artem's MacBook Pro", ttl_ms: 900000, ...options });
@@ -49,7 +49,7 @@ test('store exact bound re-pair rotates credential and strips device authority a
     assert.ok(replacement.device.created_at > before.created_at);
     await assert.rejects(f.store.authenticateDevice(original.credential), (error) => error.code === 'device_unauthorized');
     assert.equal((await f.store.authenticateDevice(replacement.credential)).id, original.device.id);
-    await assert.rejects(f.store.claimNext({ device: original.device.id, session_capability: session.session_capability }), (error) => error.code === 'session_unauthorized');
+    await assert.rejects(f.store.claimNext({ project: 'REP', device: original.device.id, session_capability: session.session_capability }), (error) => error.code === 'session_unauthorized');
     assert.deepEqual((await f.store.listDeviceRoles(original.device.id)).roles, []);
     await assert.rejects(f.store.pairDevice({ code: replacementCode.code }), (error) => error.code === 'pairing_code_used_or_invalid');
   } finally { await f.close(); }

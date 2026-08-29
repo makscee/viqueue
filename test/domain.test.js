@@ -104,6 +104,45 @@ test('Agent assignment is launch authorization and atomic claimNext skips Unassi
   assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3'); await other.close();
 });
 
+test('claimNext rejects every invalid project before ticket, claim, or event mutation', async () => {
+  const { store } = await fixture(); await store.createProject('ABC');
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Untouched', assignment: 'Agent', actor: 'maks' });
+  const session = await store.openWorkerSession('worker-a');
+  const before = { ticket: await store.getTicket(ticket.id), events: await store.listEvents({ ticket: ticket.id }) };
+  for (const project of [undefined, null, '', '   ', 'bad key!', 'UNKNOWN']) {
+    await assert.rejects(store.claimNext({ device: 'worker-a', session_capability: session.session_capability, ...(project === undefined ? {} : { project }) }), (error) => ['invalid_project','project_not_found'].includes(error.code));
+    assert.deepEqual(await store.getTicket(ticket.id), before.ticket);
+    assert.deepEqual(await store.listEvents({ ticket: ticket.id }), before.events);
+    assert.deepEqual(await store.activeClaimsForDevice('worker-a'), []);
+  }
+});
+
+test('project-scoped claimNext contention grants exactly one claim and never crosses projects', async () => {
+  const { store, file } = await fixture(); for (const key of ['ABC','XYZ']) await store.createProject(key);
+  const selected = await store.createTicket({ project: 'ABC', title: 'Selected', assignment: 'Agent', actor: 'maks' });
+  const outside = await store.createTicket({ project: 'XYZ', title: 'Outside', assignment: 'Agent', actor: 'maks' });
+  const other = new Store(file); await other.init();
+  const [a, b] = await Promise.all([claimNextWithSession(store, { project: 'abc', device: 'worker-a' }), claimNextWithSession(other, { project: 'ABC', device: 'worker-b' })]);
+  assert.equal([a,b].filter(Boolean).length, 1); assert.equal([a,b].find(Boolean).ticket.id, selected.id);
+  assert.equal((await store.getTicket(outside.id)).claim, null); await other.close();
+});
+
+test('exact worker assignment restricts poll and direct claim to the selected paired actor', async () => {
+  const { store } = await fixture(); await store.createProject('ABC');
+  const selected = await store.createTicket({ project: 'ABC', title: 'Selected worker', assignment: 'Agent', worker_actor_id: 'worker-a', actor: 'maks' });
+  const other = await store.createTicket({ project: 'ABC', title: 'Other worker', assignment: 'Agent', worker_actor_id: 'worker-b', actor: 'maks' });
+  assert.deepEqual(selected.assigned_worker, { id: 'worker-a', name: 'worker-a' });
+  assert.equal((await claimNextWithSession(store, { project: 'ABC', device: 'worker-a' })).ticket.id, selected.id);
+  await assert.rejects(claimWithSession(store, other.id, { device: 'worker-a' }), (error) => error.code === 'ticket_ineligible');
+});
+
+test('exact direct claim can select an eligible Open ticket without claim-next ordering', async () => {
+  const { store } = await fixture(); await store.createProject('ABC');
+  await store.createTicket({ project: 'ABC', title: 'Broad first', assignment: 'Agent', actor: 'maks' });
+  const exact = await store.createTicket({ project: 'ABC', title: 'Exact rework', assignment: 'Agent', worker_actor_id: 'worker-a', actor: 'maks' });
+  assert.equal((await claimWithSession(store, exact.id, { device: 'worker-a' })).ticket.id, exact.id);
+});
+
 test('assignment category changes eligibility without exposing identity authority', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Launch', actor: 'maks' });
