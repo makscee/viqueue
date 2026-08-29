@@ -12,6 +12,7 @@ export TMPDIR="$controller_tmp"
 export VIQ_WORKER_TMPDIR="$worker_tmp"
 if [[ $(id -u) -ne 0 ]]; then export VIQ_WORKER_USER="${VIQ_WORKER_USER:-$(id -un)}"; fi
 export VIQ_EVIDENCE_DIR
+bash test/e2e-failure-diagnostics.sh
 bash test/e2e.sh
 node test/browser-human-journey-e2e.js
 node test/browser-e2e.js
