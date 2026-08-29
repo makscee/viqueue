@@ -147,12 +147,12 @@ test('VIQ-13 idle shutdown can restart, claim, and release exactly once on its n
   const db = new DatabaseSync(file, { readOnly: true }); const events = db.prepare('SELECT type,message FROM events WHERE ticket_id=?').all(ticket.id); const claim = db.prepare('SELECT released_at FROM claims WHERE ticket_id=?').get(ticket.id); db.close(); assert.ok(claim.released_at); assert.equal(events.filter((event) => event.message === 'RELEASE: Pi session shutdown').length, 1); assert.equal(events.filter((event) => event.type === 'released').length, 1);
 });
 
-test('VIQ-13 real HTTP worker poll is global and its exact runtime session can release', async (t) => {
-  const { store, file, a } = await fixture(); await store.createTicket({ project: 'AAA', title: 'global lower', assignment: 'Agent' }); await store.createTicket({ project: 'ZZZ', title: 'global first', assignment: 'Agent' }); await store.close();
+test('VIQ-13 real HTTP worker poll is project-scoped and its exact runtime session can release', async (t) => {
+  const { store, file, a } = await fixture(); await store.createTicket({ project: 'AAA', title: 'project work', assignment: 'Agent' }); await store.createTicket({ project: 'ZZZ', title: 'outside selected project', assignment: 'Agent' }); await store.close();
   const app = await createApp({ storage: file }); await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve)); t.after(() => app.close());
   const prompts = []; const runtime = new ViqWorkerRuntime({ baseUrl: `http://127.0.0.1:${app.address().port}`, credential: a.credential, pollMs: 100000, deliver: async (prompt) => prompts.push(prompt), syncVault: async () => ({ commit: 'a'.repeat(40) }) });
-  const status = await runtime.start({ project: 'AAA' }); assert.equal(status.ticket, 'ZZZ-1'); assert.match(prompts[0], /ZZZ-1/);
-  await runtime.release('return to global queue');
-  const response = await fetch(`http://127.0.0.1:${app.address().port}/v1/tickets/ZZZ-1`, { headers: { authorization: `Bearer ${a.credential}` } });
+  const status = await runtime.start({ project: 'AAA' }); assert.equal(status.ticket, 'AAA-1'); assert.match(prompts[0], /AAA-1/);
+  await runtime.release('return to project queue');
+  const response = await fetch(`http://127.0.0.1:${app.address().port}/v1/tickets/AAA-1`, { headers: { authorization: `Bearer ${a.credential}` } });
   assert.equal((await response.json()).ticket.state, 'Open');
 });
