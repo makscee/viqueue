@@ -13,7 +13,7 @@ async function fixture() {
   const code = await store.createPairingCode('coord', { intended_kind: 'worker', actor_id: 'worker', device_id: 'machine', device_name: 'Machine' }); const paired = await store.pairDevice({ code: code.code, id: 'machine', name: 'Machine' });
   const otherCode = await store.createPairingCode('coord', { intended_kind: 'worker', actor_id: 'worker', device_id: 'other-machine', device_name: 'Other Machine' }); const otherPaired = await store.pairDevice({ code: otherCode.code, id: 'other-machine', name: 'Other Machine' });
   await store.createProject('VIQ'); const ticket = await store.createTicket({ project: 'VIQ', title: 'VIQ-14 test', assignment: 'Agent', actor: 'coord' });
-  const session = await store.openWorkerSession('machine'); const claim = await store.claimNext({ device: 'machine', session_capability: session.session_capability });
+  const session = await store.openWorkerSession('machine'); const claim = await store.claimNext({ project: 'VIQ', device: 'machine', session_capability: session.session_capability });
   const authority = { claim_id: claim.ticket.claim.claim_id, actor: claim.ticket.claim.actor, device: 'machine', generation: claim.ticket.claim.generation, claim_token: claim.claim_token, session_capability: session.session_capability };
   return { store, file, coordinator, paired, otherPaired, ticket, session, claim, authority };
 }
