@@ -134,7 +134,7 @@ export async function createPhoneGateway({authDb,origin,upstream,upstreamAddress
  const server=cert&&key?https.createServer({cert,key},handler):http.createServer(handler);server.authStore=store;server.rateLimitBuckets=buckets;server.on('close',()=>store.close());return server;
 }
 export async function runPhoneGateway(o){const s=await createPhoneGateway(o);const port=Number(o.port||7443);s.listen(port,'127.0.0.1',()=>console.log(JSON.stringify({event:'phone_gateway_listening',url:o.origin})));return s}
-const gatewayHelp=`Usage: viqueue-phone-gateway --auth-db=PATH --origin=https://PHONE_ORIGIN --upstream=ORIGIN [options]\n\nDefault upstream: loopback HTTP only (for example http://127.0.0.1:7373).\nRemote upstream: exact HTTPS DNS origin plus --upstream-address-policy=tailscale.\nOptions: --upstream-authorization-file=PATH; --cert=PATH --key=PATH | --tls-terminated=true; --port=7443\n`;
+const gatewayHelp=`Usage: viqueue-phone-gateway --auth-db=PATH --origin=https://PHONE_ORIGIN --upstream=ORIGIN [options]\n\nDefault upstream: loopback HTTP only (for example http://127.0.0.1:17373).\nRemote upstream: exact HTTPS DNS origin plus --upstream-address-policy=tailscale.\nOptions: --upstream-authorization-file=PATH; --cert=PATH --key=PATH | --tls-terminated=true; --port=7443\n`;
 if(process.argv[1]&&fileURLToPath(import.meta.url)===realpathSync(process.argv[1])){
  if(process.argv.slice(2).includes('--help')){process.stdout.write(gatewayHelp);process.exit(0)}
  const a=Object.fromEntries(process.argv.slice(2).map(x=>{const[k,...v]=x.replace(/^--/,'').split('=');return[k.replaceAll('-','_'),v.join('=')]}));

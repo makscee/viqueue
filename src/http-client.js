@@ -1,5 +1,5 @@
 export class HttpApplicationClient {
-  constructor({ server = process.env.VIQ_URL ?? 'http://127.0.0.1:7373', deviceToken = process.env.VIQ_DEVICE_TOKEN, sessionCapability = process.env.VIQ_SESSION_CAPABILITY } = {}) {
+  constructor({ server = process.env.VIQ_URL ?? 'http://127.0.0.1:17373', deviceToken = process.env.VIQ_DEVICE_TOKEN, sessionCapability = process.env.VIQ_SESSION_CAPABILITY } = {}) {
     this.server = server.replace(/\/$/, '');
     this.deviceToken = deviceToken;
     this.sessionCapability = sessionCapability;

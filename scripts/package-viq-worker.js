@@ -15,7 +15,7 @@ const name = `viq-worker-${commit}`;
 const stage = path.join(work, name);
 try {
   await mkdir(path.join(stage, 'extensions', 'viq-worker'), { recursive: true });
-  for (const file of ['package.json', 'extensions/viq-worker/index.ts', 'extensions/viq-worker/worker-runtime.mjs', 'extensions/viq-worker/credential-store.mjs', 'extensions/viq-worker/vault-sync.mjs']) {
+  for (const file of ['package.json', 'extensions/viq-worker/index.ts', 'extensions/viq-worker/worker-runtime.mjs', 'extensions/viq-worker/credential-store.mjs', 'extensions/viq-worker/command.mjs']) {
     await writeFile(path.join(stage, file), git('show', `HEAD:${file}`));
   }
   await writeFile(path.join(stage, 'SOURCE_COMMIT'), `${commit}\n`);
