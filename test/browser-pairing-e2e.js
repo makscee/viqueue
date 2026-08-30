@@ -62,20 +62,25 @@ try {
   const browserIssuance = page.waitForResponse((response) => new URL(response.url()).pathname === '/v1/machines/pairing-codes' && response.request().method() === 'POST');
   await page.locator('.machine-pair-form').getByRole('button', { name: 'Create code' }).click();
   const browserIssuanceResponse = await browserIssuance; assert.equal(browserIssuanceResponse.status(), 201); assert.deepEqual(browserIssuanceResponse.request().postDataJSON(), { role: 'Human', name: 'Fresh browser' });
-  const issuedBrowser = await browserIssuanceResponse.json(); const displayedBrowserCode = await page.locator('.one-time-code').textContent(); assert.equal(displayedBrowserCode === issuedBrowser.code, true); assert.equal(issuedBrowser.expires_at > Date.now() && issuedBrowser.expires_at <= Date.now() + 300000, true);
+  const browserResult = page.getByRole('group', { name: 'Browser pairing details' }); await browserResult.waitFor();
+  const browserHandoff = { code: await browserResult.getByLabel('One-time code').textContent(), id: await browserResult.getByLabel('Device ID').textContent(), name: await browserResult.getByLabel('Device name').textContent(), expires_at: Date.parse(await browserResult.locator('time').getAttribute('datetime')) };
+  const issuedBrowser = await browserIssuanceResponse.json(); assert.deepEqual(browserHandoff, { code: issuedBrowser.code, id: issuedBrowser.id, name: issuedBrowser.name, expires_at: issuedBrowser.expires_at });
+  assert.equal(browserHandoff.expires_at > Date.now() && browserHandoff.expires_at <= Date.now() + 300000, true);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
+  for (const [label, value] of [['Copy one-time code', browserHandoff.code], ['Copy Device ID', browserHandoff.id], ['Copy Device name', browserHandoff.name]]) { await browserResult.getByRole('button', { name: label, exact: true }).click(); assert.equal(await page.evaluate(() => navigator.clipboard.readText()), value); }
   await page.getByRole('button', { name: 'Done' }).click(); assert.equal(await page.locator('.one-time-code').count(), 0);
   const freshContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   try {
     const freshPage = await freshContext.newPage(); freshPage.on('request', (request) => requestedPaths.push(new URL(request.url()).pathname)); freshPage.on('console', observeConsole); freshPage.on('pageerror', (error) => pageErrors.push(error.message)); await freshPage.goto(base); await freshPage.getByRole('heading', { name: 'Pair this browser' }).waitFor();
-    await freshPage.getByLabel('One-time code').fill(issuedBrowser.code); await freshPage.getByLabel('Device ID').fill(issuedBrowser.id); await freshPage.getByLabel('Device name').fill(issuedBrowser.name);
+    await freshPage.getByLabel('One-time code').fill(browserHandoff.code); await freshPage.getByLabel('Device ID').fill(browserHandoff.id); await freshPage.getByLabel('Device name').fill(browserHandoff.name);
     const identityResponse = freshPage.waitForResponse((response) => new URL(response.url()).pathname === '/v1/devices/me' && response.request().method() === 'GET'); await freshPage.getByRole('button', { name: 'Pair device' }).click();
     const identity = await (await identityResponse).json(); assert.deepEqual({ deviceKind: identity.device.kind, deviceName: identity.device.name, actorId: identity.actor.id, actorAdmin: identity.actor.admin }, { deviceKind: 'coordinator', deviceName: 'Fresh browser', actorId: 'bootstrap', actorAdmin: true });
     await freshPage.locator('#app-shell').waitFor({ state: 'visible' });
     const browserCredential = await freshPage.evaluate(() => localStorage.getItem('viq.deviceCredential')); assert.equal(Boolean(browserCredential), true);
-    assert.deepEqual(await freshPage.evaluate(({ code, credential }) => ({ codeInUrl: location.href.includes(code), codeInStorage: JSON.stringify({ ...localStorage }).includes(code), credentialInUrl: location.href.includes(credential), credentialInPage: document.body.innerText.includes(credential) }), { code: issuedBrowser.code, credential: browserCredential }), { codeInUrl: false, codeInStorage: false, credentialInUrl: false, credentialInPage: false });
-    assert.equal(consoleMessages.some((line) => line.includes(issuedBrowser.code) || line.includes(browserCredential)), false);
+    assert.deepEqual(await freshPage.evaluate(({ code, credential }) => ({ codeInUrl: location.href.includes(code), codeInStorage: JSON.stringify({ ...localStorage }).includes(code), credentialInUrl: location.href.includes(credential), credentialInPage: document.body.innerText.includes(credential) }), { code: browserHandoff.code, credential: browserCredential }), { codeInUrl: false, codeInStorage: false, credentialInUrl: false, credentialInPage: false });
+    assert.equal(consoleMessages.some((line) => line.includes(browserHandoff.code) || line.includes(browserCredential)), false);
   } finally { await freshContext.close(); }
-  assert.equal((await fetch(`${base}/v1/devices/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: issuedBrowser.code }) })).status, 409); scenarios.browserAuthorizationFromMachines = true;
+  assert.equal((await fetch(`${base}/v1/devices/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: browserHandoff.code }) })).status, 409); scenarios.browserAuthorizationFromMachines = true;
   await page.getByRole('button', { name: 'Machines', exact: true }).click(); await page.locator('.machine-pair-form').getByLabel('Worker').check();
   await page.locator('.machine-pair-form').getByLabel('Name').fill('Disposable isolated machine'); await page.locator('.machine-pair-form').getByLabel('Actor').selectOption('disposable-agent');
   const issuanceResponse = page.waitForResponse((response) => response.url().endsWith('/v1/pairing-codes')); await page.locator('.machine-pair-form').getByRole('button', { name: 'Create code' }).click();
