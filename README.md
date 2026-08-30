@@ -51,7 +51,7 @@ MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/stat
 /viq pause|resume|stop
 ```
 
-The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` acquires initial work. After a human answers a blocking question, `/viq continue TICKET-ID` re-reads that exact ticket, its questions, and history, then requests a normally fenced claim only for that ID; it never falls back to claim-next or another ticket. `viq_submit` records a worker-authored outcome summary and backend-neutral immutable evidence references already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, or publish artifacts.
+The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` starts a persistent worker pool. Blocking questions and terminal/release boundaries rotate the ordinary Pi process to a genuinely fresh model session; a small owner-only local checkpoint remembers only pool mode, project, and an exact pending continuation ticket. After a human answers a blocking question, the fresh session re-reads that exact ticket, its questions, and history, then requests a normally fenced claim only for that ID; it never falls back to claim-next or another ticket. `/viq continue TICKET-ID` remains a compatible manual recovery command. `viq_submit` records a worker-authored outcome summary and backend-neutral immutable evidence references already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, or publish artifacts.
 
 ## Migration and rollback
 

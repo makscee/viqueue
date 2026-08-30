@@ -1,0 +1,9 @@
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { defaultCredentialPath } from './credential-store.mjs';
+
+export function defaultPoolStatePath(){return process.env.VIQ_WORKER_POOL_STATE??path.join(path.dirname(defaultCredentialPath()),'pool.json')}
+function valid(value){return value&&value.version===1&&typeof value.enabled==='boolean'&&(value.project===null||typeof value.project==='string')&&(value.continue_ticket===null||typeof value.continue_ticket==='string')}
+export function loadPoolState(file=defaultPoolStatePath()){if(!existsSync(file))return null;const s=lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==process.getuid()||(s.mode&0o077)!==0||s.nlink!==1)throw new Error('unsafe_worker_pool_state');let value;try{value=JSON.parse(readFileSync(file,'utf8'))}catch{throw new Error('invalid_worker_pool_state')}if(!valid(value))throw new Error('invalid_worker_pool_state');return value}
+export function savePoolState(value,file=defaultPoolStatePath()){if(!valid(value))throw new Error('invalid_worker_pool_state');const dir=path.dirname(file);mkdirSync(dir,{recursive:true,mode:0o700});const ds=lstatSync(dir);if(!ds.isDirectory()||ds.isSymbolicLink()||ds.uid!==process.getuid()||(ds.mode&0o077)!==0)throw new Error('unsafe_worker_pool_state_directory');const tmp=path.join(dir,`.pool.${process.pid}.${Date.now()}`);let fd;try{fd=openSync(tmp,'wx',0o600);writeFileSync(fd,`${JSON.stringify(value)}\n`);fsyncSync(fd);closeSync(fd);fd=undefined;renameSync(tmp,file)}finally{if(fd!==undefined)closeSync(fd);try{unlinkSync(tmp)}catch{}}return file}
+export function poolState(project,continueTicket=null,enabled=true){return{version:1,enabled,project,continue_ticket:continueTicket}}
