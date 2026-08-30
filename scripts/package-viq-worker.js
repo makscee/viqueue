@@ -18,7 +18,7 @@ try {
   const rootManifest = JSON.parse(String(git('show', 'HEAD:package.json')));
   const workerManifest = { name: `${rootManifest.name}-worker`, version: rootManifest.version, type: 'module', pi: { extensions: ['./extensions/viq-worker/index.ts'] } };
   await writeFile(path.join(stage, 'package.json'), `${JSON.stringify(workerManifest, null, 2)}\n`);
-  for (const file of ['extensions/viq-worker/index.ts', 'extensions/viq-worker/worker-runtime.mjs', 'extensions/viq-worker/credential-store.mjs', 'extensions/viq-worker/pool-state.mjs', 'extensions/viq-worker/command.mjs']) {
+  for (const file of ['extensions/viq-worker/index.ts', 'extensions/viq-worker/worker-runtime.mjs', 'extensions/viq-worker/credential-store.mjs', 'extensions/viq-worker/pool-state.mjs', 'extensions/viq-worker/session-rotation.mjs', 'extensions/viq-worker/command.mjs']) {
     await writeFile(path.join(stage, file), git('show', `HEAD:${file}`));
   }
   await writeFile(path.join(stage, 'SOURCE_COMMIT'), `${commit}\n`);
