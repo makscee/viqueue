@@ -104,13 +104,16 @@ test('Agent assignment is launch authorization and atomic claimNext skips Unassi
   assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3'); await other.close();
 });
 
-test('claimNext rejects every invalid project before ticket, claim, or event mutation', async () => {
+test('claimNext accepts absent project for identity scope but rejects malformed explicit projects without mutation', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  const ticket = await store.createTicket({ project: 'ABC', title: 'Untouched', assignment: 'Agent', actor: 'maks' });
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Untouched free-pool work', assignment: 'Agent', actor: 'maks' });
   const session = await store.openWorkerSession('worker-a');
+  const authority = { device: 'worker-a', session_capability: session.session_capability };
   const before = { ticket: await store.getTicket(ticket.id), events: await store.listEvents({ ticket: ticket.id }) };
+  assert.equal(await store.claimNext(authority), null);
+  assert.deepEqual(await store.getTicket(ticket.id), before.ticket);
   for (const project of [undefined, null, '', '   ', 'bad key!', 'UNKNOWN']) {
-    await assert.rejects(store.claimNext({ device: 'worker-a', session_capability: session.session_capability, ...(project === undefined ? {} : { project }) }), (error) => ['invalid_project','project_not_found'].includes(error.code));
+    await assert.rejects(store.claimNext({ ...authority, project }), (error) => ['invalid_project','project_not_found'].includes(error.code));
     assert.deepEqual(await store.getTicket(ticket.id), before.ticket);
     assert.deepEqual(await store.listEvents({ ticket: ticket.id }), before.events);
     assert.deepEqual(await store.activeClaimsForDevice('worker-a'), []);
