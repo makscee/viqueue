@@ -45,13 +45,14 @@ The browser board shows a pairing form when no valid local pairing exists. New c
 MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. Install the existing package in a user's Pi profile with `pi install <Viq package>`. Subsequent Pi sessions for that Unix user discover:
 
 ```text
-/viq PAIRING_CODE [--project KEY]
+/viq pair WORKER_CODE
 /viq status
+/viq poll
 /viq continue TICKET-ID
 /viq pause|resume|stop
 ```
 
-The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` starts a persistent worker pool. Blocking questions and terminal/release boundaries rotate the ordinary Pi process to a genuinely fresh model session; a small owner-only local checkpoint remembers only pool mode, project, and an exact pending continuation ticket. After a human answers a blocking question, the fresh session re-reads that exact ticket, its questions, and history, then requests a normally fenced claim only for that ID; it never falls back to claim-next or another ticket. `/viq continue TICKET-ID` remains a compatible manual recovery command. `viq_submit` records a worker-authored outcome summary and backend-neutral immutable evidence references already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, or publish artifacts.
+The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` starts a persistent worker pool that atomically considers only tickets exactly assigned to the paired actor across all projects; it never takes unassigned or free-pool work. Blocking questions and terminal/release boundaries rotate the ordinary Pi process to a genuinely fresh model session; a small owner-only local checkpoint remembers only pool mode and an exact pending continuation ticket. After a human answers a blocking question, the fresh session re-reads that exact ticket, its questions, and history, then requests a normally fenced claim only for that ID; it never falls back to claim-next or another ticket. `/viq continue TICKET-ID` remains a compatible manual recovery command. `viq_submit` records a worker-authored outcome summary and backend-neutral immutable evidence references already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, or publish artifacts.
 
 ## Migration and rollback
 

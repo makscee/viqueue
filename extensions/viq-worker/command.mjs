@@ -14,7 +14,7 @@ export function parseViqCommand(raw = '') {
   for (let i = 0; i < words.length; i += 1) {
     if (words[i] === '--id' && words[i + 1]) out.id = words[++i];
     else if (words[i] === '--name' && words[i + 1]) out.name = words[++i];
-    else if (words[i] === '--project' && words[i + 1]) out.project = words[++i];
+    else if (words[i] === '--project' && words[i + 1] && (sub === 'poll' || sub === 'start')) out.project = words[++i];
     else throw new Error(`Unknown VIQ option “${words[i]}”. Run /viq for help.`);
   }
   return out;
@@ -24,11 +24,11 @@ export function viqHelp(status = {}) {
   const next = status.paired
     ? status.mode === 'stopped' ? 'Next: run /viq poll to start receiving work.' : 'VIQ is paired. Run /viq status to inspect this session.'
     : 'Next: generate a one-time code in Board → Machines, then pair this Pi.';
-  return ['VIQ commands', '/viq pair <code>       Pair this Pi with a one-time code. Example: /viq pair <code>', '/viq status            Show pairing and worker state. Example: /viq status', '/viq poll              Claim eligible work in one project. Example: /viq poll --project VIQ', '/viq claim <ticket>    Claim that exact eligible Open ticket for initial or requested-change work.', '/viq continue <ticket> Continue only that exact ticket after an answered blocking question.', '/viq stop              Stop polling safely. Example: /viq stop', 'viq_submit records an outcome summary and backend-neutral immutable evidence references produced elsewhere; it never publishes artifacts.', next].join('\n');
+  return ['VIQ commands', '/viq pair <code>       Pair this Pi with a one-time code. Example: /viq pair <code>', '/viq status            Show pairing and worker state. Example: /viq status', '/viq poll              Poll exact assignments for this paired worker across all projects. Example: /viq poll', '/viq claim <ticket>    Claim that exact eligible Open ticket for initial or requested-change work.', '/viq continue <ticket> Continue only that exact ticket after an answered blocking question.', '/viq stop              Stop polling safely. Example: /viq stop', 'viq_submit records an outcome summary and backend-neutral immutable evidence references produced elsewhere; it never publishes artifacts.', next].join('\n');
 }
 
 export function viqStatus(status = {}, baseUrl = '') {
-  return [`VIQ is ${status.paired ? 'paired' : 'not paired'}; worker is ${status.mode || 'stopped'}.`, status.device ? `Machine: ${status.device}.` : null, status.project ? `Project: ${status.project}.` : null, status.ticket ? `Current ticket: ${status.ticket}.` : null, status.last_error ? `Last error: ${status.last_error}.` : null, `Target: ${baseUrl || 'not configured'}.`, status.paired ? (status.mode === 'stopped' ? 'Next: /viq poll' : 'Next: /viq stop when you are done.') : 'Next: /viq pair <code>'].filter(Boolean).join(' ');
+  return [`VIQ is ${status.paired ? 'paired' : 'not paired'}; worker is ${status.mode || 'stopped'}.`, status.device ? `Machine: ${status.device}.` : null, status.project ? `Compatibility project filter: ${status.project}.` : 'Scope: exact assignments across all projects.', status.ticket ? `Current ticket: ${status.ticket}.` : null, status.last_error ? `Last error: ${status.last_error}.` : null, `Target: ${baseUrl || 'not configured'}.`, status.paired ? (status.mode === 'stopped' ? 'Next: /viq poll' : 'Next: /viq stop when you are done.') : 'Next: /viq pair <code>'].filter(Boolean).join(' ');
 }
 
 export function friendlyViqError(error, baseUrl = '') {

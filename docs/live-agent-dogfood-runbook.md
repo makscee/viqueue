@@ -13,7 +13,7 @@ This is the operator checklist for a bounded Viq worker canary. Viq coordinates 
 
 Choose exactly one entry path:
 
-- **Persistent pool:** run `/viq poll` (optionally `--project KEY`) once. It atomically claims the first eligible ticket and keeps this ordinary Pi process in worker mode across fresh model-session boundaries. Inspect `/viq status` and the delivered contract before work.
+- **Persistent pool:** run `/viq poll` once. It atomically considers only tickets exactly assigned to this paired worker across all projects, never unassigned/free-pool work, and keeps this ordinary Pi process in worker mode across fresh model-session boundaries. Inspect `/viq status` and the delivered contract before work.
 - **Answered blocking question:** no operator command is needed. The worker checkpoints the exact ticket outside the transcript, rotates to a fresh Pi session, waits for the answer, then re-reads that ticket, its questions, and history and directly claims only that ticket. It never falls back to claim-next while that continuation is pending. `/viq continue TICKET-ID` remains available for compatibility and manual recovery.
 
 Expected initial state is `Open` with no claim. A successful claim projects as `Working` and carries a durable, generation-fenced claim bound to the worker session. If acquisition fails or returns an unexpected ticket, make no changes and stop; never take over or work without the exact claim.
