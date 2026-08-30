@@ -167,11 +167,12 @@ async function openMachines(trigger) {
     event.preventDefault(); clearCode();
     const name = pairing.elements.name.value.trim(), worker = pairing.elements.type.value === 'worker';
     const issued = worker ? await request('/v1/pairing-codes', { method: 'POST', body: JSON.stringify({ actor_id: actorSelect.value, intended_kind: 'worker', device_id: `worker-${crypto.randomUUID()}`, device_name: name }) }) : await request('/v1/machines/pairing-codes', { method: 'POST', body: JSON.stringify({ role: 'Human', name }) });
-    const expires = issued.expires ?? issued.expires_at, result = pairing.querySelector('.pairing-code-result');
+    const expiryValue = issued.expires ?? issued.expires_at, expiresAt = typeof expiryValue === 'number' || (typeof expiryValue === 'string' && expiryValue.trim()) ? new Date(expiryValue).getTime() : Number.NaN, result = pairing.querySelector('.pairing-code-result');
+    if (!Number.isFinite(expiresAt)) throw new Error('Pairing code response contained an invalid expiry');
     const copyButton = (label, value) => { const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary', textContent: `Copy ${label}` }); copy.addEventListener('click', safely(async () => { await navigator.clipboard.writeText(value); announce(`${label} copied`); })); return copy; };
     const done = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary', textContent: 'Done' }); done.addEventListener('click', () => { clearCode(); modal.close(); });
     const instruction = Object.assign(document.createElement('p'), { textContent: worker ? 'In an ordinary Pi session on the worker, run /viq pair <code>, replacing <code> with this one-time code. Pairing authorizes Pi; it does not start a process.' : 'On the other browser, open VIQ and enter all three values exactly as shown. Browser authorization is separate from worker pairing.' });
-    const expiry = Object.assign(document.createElement('time'), { dateTime: new Date(expires).toISOString(), textContent: `Expires ${new Date(expires).toLocaleTimeString()}` });
+    const expiryDate = new Date(expiresAt); const expiry = Object.assign(document.createElement('time'), { dateTime: expiryDate.toISOString(), textContent: `Expires ${expiryDate.toLocaleTimeString()}` });
     if (worker) {
       const code = Object.assign(document.createElement('output'), { className: 'one-time-code', textContent: issued.code });
       result.append(code, expiry, instruction, copyButton('code', issued.code), done);
@@ -185,7 +186,7 @@ async function openMachines(trigger) {
       }
       details.append(expiry); result.append(details, instruction, done);
     }
-    expiryTimer = setTimeout(clearCode, Math.max(0, expires - Date.now()));
+    expiryTimer = setTimeout(clearCode, Math.max(0, expiresAt - Date.now()));
   }));
   panel.append(list, pairing); openModal({ title: 'Machines', eyebrow: 'Execution provenance', content: panel, trigger, initialFocus: pairing.elements.type[0] });
 }
