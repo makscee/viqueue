@@ -13,8 +13,8 @@ This is the operator checklist for a bounded Viq worker canary. Viq coordinates 
 
 Choose exactly one entry path:
 
-- **Initial work:** run `/viq poll` (optionally `--project KEY`). It atomically claims the first eligible ticket. Inspect `/viq status` and the delivered contract before work.
-- **Answered blocking question:** run `/viq continue TICKET-ID`. This re-reads that exact ticket, its questions, and history, validates same-worker provenance, and directly claims only that ticket. It never falls back to claim-next. Do not use ordinary polling for this continuation.
+- **Persistent pool:** run `/viq poll` (optionally `--project KEY`) once. It atomically claims the first eligible ticket and keeps this ordinary Pi process in worker mode across fresh model-session boundaries. Inspect `/viq status` and the delivered contract before work.
+- **Answered blocking question:** no operator command is needed. The worker checkpoints the exact ticket outside the transcript, rotates to a fresh Pi session, waits for the answer, then re-reads that ticket, its questions, and history and directly claims only that ticket. It never falls back to claim-next while that continuation is pending. `/viq continue TICKET-ID` remains available for compatibility and manual recovery.
 
 Expected initial state is `Open` with no claim. A successful claim projects as `Working` and carries a durable, generation-fenced claim bound to the worker session. If acquisition fails or returns an unexpected ticket, make no changes and stop; never take over or work without the exact claim.
 
@@ -25,12 +25,12 @@ Expected initial state is `Open` with no claim. A successful claim projects as `
 3. Use `viq_progress` only for a factual, non-secret milestone useful to an external reviewer. Silence is not health or completion.
 4. Use `viq_question` when a reviewer decision is genuinely needed:
    - non-blocking keeps the ticket `Working` and retains the claim;
-   - blocking releases the claim, moves the ticket to `Waiting`, and ends the worker turn. After the answer reopens the ticket, start a fresh session and use `/viq continue TICKET-ID`.
+   - blocking releases the claim, moves the ticket to `Waiting`, ends the worker turn, and automatically rotates to a fresh session. After the answer reopens the ticket, the pool continues that exact ticket automatically.
 5. Use `viq_block` for an actionable blocker when the claim must be retained; the ticket remains claimed and the worker pauses. Do not claim other work from that session.
 6. Run focused checks and inspect the final diff. Produce immutable evidence in the worker's own toolchain; Viq neither creates nor publishes it.
 7. When publication and immutable references already exist, call `viq_submit` once with a concise outcome and at least one **backend-neutral immutable evidence reference**. Suitable references include a commit plus tree identity, a content digest, an immutable object identifier, or a stable immutable report URL. Do not use a mutable branch name, local path, credential-bearing URL, or claim secret as evidence.
 
-Submission releases the claim, moves the ticket to `Waiting`, creates the approval request, and ends the worker turn. A human or authorized policy reviewer—not the worker—then accepts it to `Done` or requests changes, returning it to `Open`. For requested changes, follow the explicit continuation policy presented by the ticket; do not assume old claim authority remains valid.
+Submission releases the claim, moves the ticket to `Waiting`, creates the approval request, ends the worker turn, and rotates the pool to a fresh idle session before another ticket can be acquired. A human or authorized policy reviewer—not the worker—then accepts it to `Done` or requests changes, returning it to `Open`. For requested changes, follow the explicit continuation policy presented by the ticket; do not assume old claim authority remains valid.
 
 ## Safe stop, release, and rollback
 
