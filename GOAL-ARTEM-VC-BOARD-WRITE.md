@@ -6,7 +6,7 @@
 - One independent consolidated review after owner green; one bounded repair maximum.
 
 ## Current production
-- Public: https://cc-worker.twin-pogona.ts.net/
+- Canonical public Browser/Board: https://viq.makscee.ru/
 - Authoritative backend: mcow `viqueue-alpha.service`, current release merge `c108aad0968d5b2a2a2b23ce7b220ac574cc5def`.
 - Existing paired browser identity: actor `artem`, device `artems-macbook-pro`, kind `coordinator`, actor active, admin false.
 - Existing gateway read broker permits board reads for this exact paired identity and blocks writes before upstream.
