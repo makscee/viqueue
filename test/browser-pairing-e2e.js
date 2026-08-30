@@ -58,14 +58,20 @@ try {
   assert.equal(page.url(), `${base}/`);
   assert.equal(await page.locator('#actor-select').inputValue(), 'bootstrap');
   await page.getByRole('button', { name: 'Machines', exact: true }).click();
+  await page.route('**/v1/machines/pairing-codes', async (route) => {
+    const response = await route.fetch(); const body = await response.json();
+    await route.fulfill({ response, json: { ...body, expires_at: new Date(body.expires_at).toISOString() } });
+  });
   await page.locator('.machine-pair-form').getByLabel('Name').fill('Fresh browser');
   const browserIssuance = page.waitForResponse((response) => new URL(response.url()).pathname === '/v1/machines/pairing-codes' && response.request().method() === 'POST');
   await page.locator('.machine-pair-form').getByRole('button', { name: 'Create code' }).click();
   const browserIssuanceResponse = await browserIssuance; assert.equal(browserIssuanceResponse.status(), 201); assert.deepEqual(browserIssuanceResponse.request().postDataJSON(), { role: 'Human', name: 'Fresh browser' });
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
   const browserResult = page.getByRole('group', { name: 'Browser pairing details' }); await browserResult.waitFor();
   const browserHandoff = { code: await browserResult.getByLabel('One-time code').textContent(), id: await browserResult.getByLabel('Device ID').textContent(), name: await browserResult.getByLabel('Device name').textContent(), expires_at: Date.parse(await browserResult.locator('time').getAttribute('datetime')) };
-  const issuedBrowser = await browserIssuanceResponse.json(); assert.deepEqual(browserHandoff, { code: issuedBrowser.code, id: issuedBrowser.id, name: issuedBrowser.name, expires_at: issuedBrowser.expires_at });
+  const issuedBrowser = await browserIssuanceResponse.json(); assert.equal(typeof issuedBrowser.expires_at, 'string'); assert.deepEqual(browserHandoff, { code: issuedBrowser.code, id: issuedBrowser.id, name: issuedBrowser.name, expires_at: Date.parse(issuedBrowser.expires_at) });
   assert.equal(browserHandoff.expires_at > Date.now() && browserHandoff.expires_at <= Date.now() + 300000, true);
+  assert.equal(await browserResult.isVisible(), true); assert.equal(await browserResult.getByRole('button', { name: /^Copy / }).count(), 3);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
   for (const [label, value] of [['Copy one-time code', browserHandoff.code], ['Copy Device ID', browserHandoff.id], ['Copy Device name', browserHandoff.name]]) { await browserResult.getByRole('button', { name: label, exact: true }).click(); assert.equal(await page.evaluate(() => navigator.clipboard.readText()), value); }
   await page.getByRole('button', { name: 'Done' }).click(); assert.equal(await page.locator('.one-time-code').count(), 0);
