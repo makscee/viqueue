@@ -15,7 +15,11 @@ const sha = (value) => createHash('sha256').update(value).digest();
 const ATTRIBUTION = '[via gateway: artem@artems-macbook-pro]';
 const DELEGATED_AUDIT = { actor_id: 'artem', device_id: 'artems-macbook-pro', upstream_actor: 'maks', attribution: 'gateway-delegated via shared admin credential' };
 const MAX_NOTE = 8000;
-const writes = [['POST', '/v1/tickets', { project: 'VC', title: 'x' }], ['PATCH', '/v1/tickets/VC-1', { title: 'x' }], ['POST', '/v1/tickets/VC-1/notes', { message: 'x' }]];
+const writes = [['POST', '/v1/tickets', { project: 'VC', title: 'x' }], ['PATCH', '/v1/tickets/VC-1', { title: 'x' }], ['POST', '/v1/tickets/VC-1/notes', { message: 'x' }], ['POST', '/v1/tickets/VC-1/state', { state: 'Done' }]];
+// Only the fields the spec names. A key that is absent stays absent, so deepEqual pins presence both ways.
+const SPEC_AUDIT_KEYS = ['auth_mode', 'operation', 'actor_id', 'device_id', 'ticket_id', 'state', 'upstream_actor', 'attribution'];
+const auditShape = (detail) => Object.fromEntries(SPEC_AUDIT_KEYS.filter((key) => key in detail).map((key) => [key, detail[key]]));
+const writtenAudit = (operation, extra = {}) => ({ operation, ...DELEGATED_AUDIT, ...extra });
 
 const seedTickets = () => new Map([
   ...Array.from({ length: 5 }, (_, i) => [`VC-${i + 1}`, { id: `VC-${i + 1}`, project: 'VC', title: `Ticket ${i + 1}`, description: '', assignment: 'Human', state: 'Open' }]),
@@ -23,18 +27,19 @@ const seedTickets = () => new Map([
   ['LIVE1', { id: 'LIVE1', project: 'LIVE', title: 'Foreign', description: '', assignment: 'Human', state: 'Open' }],
   ['PRIVATEA1', { id: 'PRIVATEA1', project: 'PRIVATEA', title: 'Foreign', description: '', assignment: 'Human', state: 'Open' }],
   ['VCX-1', { id: 'VCX-1', project: 'VCX', title: 'Lookalike project', description: '', assignment: 'Human', state: 'Open' }],
-  ['VC-99', { id: 'VC-99', project: 'OTHER', title: 'Lookalike id', description: '', assignment: 'Human', state: 'Open' }]
+  ['VC-99', { id: 'VC-99', project: 'OTHER', title: 'Lookalike id', description: '', assignment: 'Human', state: 'Open' }],
+  ['VC-201', { id: 'VC-201', project: 'vc', title: 'Lowercase project', description: '', assignment: 'Human', state: 'Open' }],
+  ['VC-202', { id: 'VC-202', project: 'Vc', title: 'Mixed-case project', description: '', assignment: 'Human', state: 'Open' }]
 ]);
-// Frozen identity is one row; every other row differs from it in exactly one field.
-const bearerIdentities = new Map([
-  ['core_artem_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
-  ['wrong_actor_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'other', active: true, admin: false } }],
-  ['wrong_device_token', { device: { id: 'other-device', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
-  ['wrong_kind_token', { device: { id: 'artems-macbook-pro', kind: 'worker', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
-  ['inactive_device_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'revoked', admin: false }, actor: { id: 'artem', active: true, admin: false } }],
-  ['inactive_actor_token', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: false, admin: false } }],
-  ['admin_token_value', { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: true }, actor: { id: 'artem', active: true, admin: true } }]
-]);
+// The frozen identity, and one variant per field. Each variant differs in exactly that field, so
+// removing any single check upstream reddens exactly its own case and nothing else.
+const FROZEN_IDENTITY = { device: { id: 'artems-macbook-pro', kind: 'coordinator', status: 'active', admin: false }, actor: { id: 'artem', active: true, admin: false } };
+const bearerFieldVariants = [
+  ['actor.id', 'actor', 'id', 'other'], ['actor.active', 'actor', 'active', false], ['actor.admin', 'actor', 'admin', true],
+  ['device.id', 'device', 'id', 'other-device'], ['device.kind', 'device', 'kind', 'worker'],
+  ['device.status', 'device', 'status', 'revoked'], ['device.admin', 'device', 'admin', true]
+].map(([field, group, key, value]) => ({ field, token: `off_${group}_${key}_token`, identity: { ...FROZEN_IDENTITY, [group]: { ...FROZEN_IDENTITY[group], [key]: value } } }));
+const bearerIdentities = new Map([['core_artem_token', FROZEN_IDENTITY], ...bearerFieldVariants.map(({ token, identity }) => [token, identity])]);
 
 async function fixture() {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-vc-writes-'));
@@ -221,10 +226,9 @@ test('delegated VC writes are audited under operation, and only after upstream a
   assert.equal((await f.signed(artem, 'PATCH', '/v1/tickets/VC-2', { title: 'Audited edit' })).status, 200);
   assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VC-2/notes', { message: 'Audited note' })).status, 201);
   const audit = f.auditOf('vc_ticket_written'); assert.equal(audit.length, 3);
-  for (const row of audit) { assert.equal(row.device_id, 'artems-macbook-pro'); const detail = JSON.parse(row.detail); for (const [key, value] of Object.entries(DELEGATED_AUDIT)) assert.equal(detail[key], value, key); assert.equal('action' in detail, false, 'the key is operation, not action'); }
-  assert.deepEqual(audit.map((row) => JSON.parse(row.detail).operation), ['note', 'edit', 'create']); // newest first
-  for (const row of audit.slice(0, 2)) assert.equal(JSON.parse(row.detail).ticket_id, 'VC-2');
-  assert.equal('ticket_id' in JSON.parse(audit[2].detail), false, 'create has no ticket id before the upstream answer');
+  for (const row of audit) { assert.equal(row.device_id, 'artems-macbook-pro'); assert.equal('action' in JSON.parse(row.detail), false, 'the key is operation, not action'); }
+  // Newest first. The signed path carries no auth_mode, and create has no ticket id before the upstream answer.
+  assert.deepEqual(audit.map((row) => auditShape(JSON.parse(row.detail))), [writtenAudit('note', { ticket_id: 'VC-2' }), writtenAudit('edit', { ticket_id: 'VC-2' }), writtenAudit('create')]);
   f.failNextMutation(500);
   assert.notEqual((await f.signed(artem, 'POST', '/v1/tickets/VC-2/notes', { message: 'Refused upstream' })).status, 201);
   assert.equal(f.auditOf('vc_ticket_written').length, 3);
@@ -268,19 +272,8 @@ test('delegated VC writes fail closed on request schema before any upstream requ
   }
 });
 
-test('delegated VC writes fail closed for every identity but the frozen Artem browser', async (t) => {
+test('delegated VC writes fail closed for an unpaired or revoked browser', async (t) => {
   const f = await fixture(); t.after(() => cleanup(f));
-  const others = [
-    f.pair({ actorId: 'other', actorName: 'Other' }),
-    f.pair({ actorId: 'artem', actorName: 'Artem' }),
-    f.pair({ actorId: 'artem', actorName: 'Artem', kind: 'worker' }),
-    f.pair({ actorId: 'artem', actorName: 'Artem', actorActive: false })
-  ];
-  for (const identity of others) for (const [method, target, value] of writes) {
-    const before = f.upstreamHits;
-    assert.equal((await f.signed(identity, method, target, value)).status, 403, `${method} ${target}`);
-    assert.equal(f.upstreamHits, before, `${method} ${target}`);
-  }
   // Unpaired browser: no device proof at all.
   for (const [method, target, value] of writes) {
     const before = f.upstreamHits;
@@ -293,14 +286,20 @@ test('delegated VC writes fail closed for every identity but the frozen Artem br
   assert.equal((await send()).status, 403); assert.equal(f.upstreamHits, before);
 });
 
-test('the exact device id with a worker kind or an inactive actor is still refused', async (t) => {
-  for (const overrides of [{ kind: 'worker' }, { actorActive: false }]) {
+test('the signed browser is refused when a single field differs from the frozen identity', async (t) => {
+  const variants = [
+    ['actor_id', { actorId: 'other', deviceId: 'artems-macbook-pro' }],
+    ['device id', { actorId: 'artem', deviceId: 'another-macbook-pro' }],
+    ['kind', { actorId: 'artem', deviceId: 'artems-macbook-pro', kind: 'worker' }],
+    ['actor_active', { actorId: 'artem', deviceId: 'artems-macbook-pro', actorActive: false }]
+  ];
+  for (const [field, overrides] of variants) {
     const f = await fixture(); t.after(() => cleanup(f));
-    const identity = f.pair({ actorId: 'artem', actorName: 'Artem', deviceId: 'artems-macbook-pro', ...overrides });
+    const identity = f.pair({ actorName: 'Artem', ...overrides });
     for (const [method, target, value] of writes) {
       const before = f.upstreamHits;
-      assert.equal((await f.signed(identity, method, target, value)).status, 403, `${JSON.stringify(overrides)} ${method} ${target}`);
-      assert.equal(f.upstreamHits, before);
+      assert.equal((await f.signed(identity, method, target, value)).status, 403, `${field} ${method} ${target}`);
+      assert.equal(f.upstreamHits, before, `${field} ${method} ${target}`);
     }
   }
 });
@@ -315,7 +314,7 @@ test('every other write route stays blocked before upstream for the frozen Artem
   assert.equal(f.upstreamHits, 0);
 });
 
-test('the frozen Artem Bearer delegates create, edit and note without a browser', async (t) => {
+test('the frozen Artem Bearer delegates all four VC writes without a browser', async (t) => {
   const f = await fixture(); t.after(() => cleanup(f));
   const created = await f.bearerAs('core_artem_token', 'POST', '/v1/tickets', { project: 'VC', title: 'From the CLI' });
   assert.equal(created.status, 201); assert.equal((await created.json()).ticket.id, 'VC-6');
@@ -323,21 +322,35 @@ test('the frozen Artem Bearer delegates create, edit and note without a browser'
   const noted = await f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-6/notes', { message: 'Started from the CLI.' });
   assert.equal(noted.status, 201);
   assert.equal(JSON.parse(f.upstreamRequests.at(-1).body).message, `${ATTRIBUTION}\nStarted from the CLI.`);
+  assert.equal((await f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-6/state', { state: 'Working' })).status, 200, 'a ticket the CLI just created is movable by the same credential');
+  assert.equal((await f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-1/state', { state: 'Done' })).status, 200);
   // The caller's own credential proves identity upstream and never writes.
   assert.ok(f.upstreamRequests.filter(({ authorization }) => authorization === 'Bearer core_artem_token').every(({ method, url }) => method === 'GET' && url === '/v1/devices/me'));
   for (const request of f.upstreamRequests.filter(({ method }) => method !== 'GET')) assert.equal(request.authorization, 'Bearer test_upstream_admin_credential');
-  const audit = f.auditOf('vc_ticket_written'); assert.equal(audit.length, 3);
-  assert.deepEqual(audit.map((row) => JSON.parse(row.detail).operation), ['note', 'edit', 'create']); // newest first
-  for (const row of audit) { assert.equal(row.device_id, 'artems-macbook-pro'); const detail = JSON.parse(row.detail); assert.equal(detail.auth_mode, 'bearer-delegation'); for (const [key, value] of Object.entries(DELEGATED_AUDIT)) assert.equal(detail[key], value, key); }
+  const written = f.auditOf('vc_ticket_written'); assert.equal(written.length, 3);
+  const bearer = { auth_mode: 'bearer-delegation' };
+  assert.deepEqual(written.map((row) => auditShape(JSON.parse(row.detail))), [ // newest first
+    { ...bearer, ...writtenAudit('note', { ticket_id: 'VC-6' }) }, { ...bearer, ...writtenAudit('edit', { ticket_id: 'VC-6' }) }, { ...bearer, ...writtenAudit('create') }
+  ]);
+  for (const row of written) assert.equal(row.device_id, 'artems-macbook-pro');
+  const moved = f.auditOf('vc_state_changed'); assert.equal(moved.length, 2);
+  assert.deepEqual(moved.map((row) => auditShape(JSON.parse(row.detail))), [ // newest first
+    { ...bearer, actor_id: 'artem', device_id: 'artems-macbook-pro', ticket_id: 'VC-1', state: 'Done', upstream_actor: 'maks' },
+    { ...bearer, actor_id: 'artem', device_id: 'artems-macbook-pro', ticket_id: 'VC-6', state: 'Working', upstream_actor: 'maks' }
+  ]);
 });
 
-test('Bearer delegated writes fail closed for every credential but the frozen one', async (t) => {
+test('Bearer delegation is refused when a single identity field differs from the frozen one', async (t) => {
   const f = await fixture(); t.after(() => cleanup(f));
-  const tokens = ['invalid_token_value', 'wrong_actor_token', 'wrong_device_token', 'wrong_kind_token', 'inactive_device_token', 'inactive_actor_token', 'admin_token_value'];
-  for (const token of tokens) for (const [method, target, value] of writes) {
+  for (const { field, token } of bearerFieldVariants) for (const [method, target, value] of writes) {
     const before = f.mutationHits;
-    assert.equal((await f.bearerAs(token, method, target, value)).status, 403, `${token} ${method} ${target}`);
-    assert.equal(f.mutationHits, before, `${token} ${method} ${target}`);
+    assert.equal((await f.bearerAs(token, method, target, value)).status, 403, `${field} ${method} ${target}`);
+    assert.equal(f.mutationHits, before, `${field} ${method} ${target}`);
+  }
+  for (const [method, target, value] of writes) {
+    const before = f.mutationHits;
+    assert.equal((await f.bearerAs('invalid_token_value', method, target, value)).status, 403, `unknown credential ${method} ${target}`);
+    assert.equal(f.mutationHits, before);
   }
   for (const [method, target, value] of writes) {
     for (const authorization of [undefined, 'Basic nope', 'Bearer', `Bearer ${'x'.repeat(513)}`]) {
@@ -365,5 +378,25 @@ test('Bearer delegated writes fail closed on body and object before the ticket l
     const before = f.mutationHits;
     assert.equal((await f.bearerAs('core_artem_token', method, target, value)).status, 403, `${method} ${target}`);
     assert.equal(f.mutationHits, before, `${method} ${target}`);
+  }
+});
+
+test('the project boundary is compared letter for letter', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
+  // Upstream project keys match ^[A-Za-z][A-Za-z0-9]{1,9}$, so `vc` and `Vc` are different projects, not VC.
+  for (const id of ['VC-201', 'VC-202']) {
+    for (const [method, target, value] of [['PATCH', `/v1/tickets/${id}`, { title: 'no' }], ['POST', `/v1/tickets/${id}/notes`, { message: 'no' }], ['POST', `/v1/tickets/${id}/state`, { state: 'Done' }]]) {
+      const signedBefore = f.mutationHits;
+      assert.equal((await f.signed(artem, method, target, value)).status, 403, `signed ${method} ${target}`);
+      assert.equal(f.mutationHits, signedBefore, `signed ${method} ${target}`);
+      const bearerBefore = f.mutationHits;
+      assert.equal((await f.bearerAs('core_artem_token', method, target, value)).status, 403, `bearer ${method} ${target}`);
+      assert.equal(f.mutationHits, bearerBefore, `bearer ${method} ${target}`);
+    }
+  }
+  for (const project of ['vc', 'Vc', 'VC ', ' VC']) {
+    const before = f.upstreamHits;
+    assert.equal((await f.signed(artem, 'POST', '/v1/tickets', { project, title: 'no' })).status, 403, `create in ${JSON.stringify(project)}`);
+    assert.equal(f.upstreamHits, before, `create in ${JSON.stringify(project)}`);
   }
 });
