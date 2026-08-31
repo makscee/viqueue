@@ -640,4 +640,12 @@ test('anonymous Bearer probing is capped, and the cap is spent only by identity 
   const row = f.lastDenial();
   assert.deepEqual(JSON.parse(row.detail), { auth_mode: 'bearer-delegation', method: 'POST', target: '/v1/tickets/VC-1/notes', reason: 'rate_limited' });
   assert.equal(row.device_id, null);
+  // One row per bucket per window. A flood is one fact repeated, and a row for each copy of it would
+  // push the real refusals out of the fifty the audit view shows (phone-auth-store.js:34).
+  const rows = f.auditOf('vc_delegation_denied').length;
+  for (let n = 12; n <= 31; n++) {
+    assert.equal((await probe('unknown_credential_token')).status, 429, `capped probe ${n}`);
+    assert.equal(f.upstreamHits, spent, `capped probe ${n} must not ask upstream`);
+  }
+  assert.equal(f.auditOf('vc_delegation_denied').length, rows, 'twenty more capped probes in the same window add no rows');
 });
