@@ -106,3 +106,29 @@ test.skip('VIQ-13+ excluded: Admin/project/question full modal surface', { skip:
   assert.match(app, /question-card[\s\S]*addEventListener\(['"]click/);
   assert.match(app, /ticket-question[\s\S]*addEventListener\(['"]click/);
 });
+
+test('board declares a dark palette for browser chrome and every surface', async () => {
+  const [html, css] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.css', 'utf8')]);
+  assert.match(html, /name="color-scheme" content="dark"/);
+  assert.match(css, /:root\{color-scheme:dark/);
+  for (const token of ['--ink:#eef4f0', '--panel:#18201c', '--edge:#35423a', '--soft:#202b24']) assert.ok(css.includes(token), `missing dark theme token: ${token}`);
+  assert.doesNotMatch(css, /background:#(?:fff|f6f7f4|eef1ed|f0f3ef|f7f8f6)(?:[;}])/i);
+});
+
+test('danger buttons retain readable foreground contrast', async () => {
+  const css = await readFile('web/app.css', 'utf8');
+  const declarations = (selector) => css.match(new RegExp(`${selector}\\{([^}]*)\\}`))?.[1] ?? '';
+  const value = (block, property) => block.match(new RegExp(`(?:^|;)${property}:([^;}]*)`))?.[1];
+  const resolve = (color) => color?.replace(/var\((--[^)]+)\)/, (_, token) => value(declarations(':root'), token));
+  const danger = declarations('button\\.danger');
+  const foreground = resolve(value(danger, 'color') ?? value(declarations('button'), 'color'));
+  const background = resolve(value(danger, 'background'));
+  const luminance = (hex) => {
+    const channels = hex.slice(1).match(/../g).map((channel) => parseInt(channel, 16) / 255);
+    const [r, g, b] = channels.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  const ratio = (lighter + 0.05) / (darker + 0.05);
+  assert.ok(ratio >= 4.5, `danger button contrast ${ratio.toFixed(2)}:1 is below 4.5:1 (${foreground} on ${background})`);
+});
