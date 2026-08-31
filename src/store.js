@@ -60,8 +60,8 @@ const validateV11Snapshot = async (source, snapshot, manifestFile) => {
 const unstampedV11Recovery = () => new DomainError(409, 'migration_snapshot_recovery_required', 'VIQ-11 snapshot exists but the live database has no durable family token; operator recovery is required');
 
 export class Store {
-  #file; #now; #db; #v11Plan = null;
-  constructor(file, { now = Date.now } = {}) { this.#file = file; this.#now = now; }
+  #file; #now; #db; #v11Plan = null; #cleanSlateFailure;
+  constructor(file, { now = Date.now, cleanSlateFailure = null } = {}) { this.#file = file; this.#now = now; this.#cleanSlateFailure = cleanSlateFailure; }
 
   static async rollbackV11(file) {
     const source = path.resolve(file), snapshot = `${source}.pre-viq11.sqlite`, manifestFile = `${snapshot}.manifest.json`, temporary = `${source}.rollback.${process.pid}`;
@@ -399,6 +399,33 @@ export class Store {
 
   async createProject(raw) { return this.#transaction(() => { const key = String(raw ?? '').toUpperCase(); if (!/^[A-Z][A-Z0-9]{1,9}$/.test(key)) throw new DomainError(400, 'invalid_project_key', 'project key must be 2-10 uppercase letters or digits'); try { this.#db.prepare('INSERT INTO projects(key,next_number,created_at) VALUES(?,1,?)').run(key, this.#now()); } catch (error) { if (error.code?.startsWith('ERR_SQLITE_CONSTRAINT')) throw new DomainError(409, 'project_exists', `project ${key} already exists`); throw error; } return this.#project(key); }); }
   async listProjects() { return this.#db.prepare('SELECT key,next_number,created_at FROM projects ORDER BY key').all(); }
+  async cleanSlateProjectsAndTickets() { return this.#transaction(() => {
+    const count = (table) => Number(this.#db.prepare(`SELECT count(*) n FROM ${table}`).get().n);
+    const removed = { projects: count('projects'), tickets: count('tickets'), claims: count('claims'), questions: count('questions'), blocks: count('ticket_blocks'), tombstones: count('ticket_tombstones'), submission_authorities: count('submission_authority'), ticket_projects: count('ticket_projects'), events: Number(this.#db.prepare('SELECT count(*) n FROM events WHERE ticket_id IS NOT NULL OR project IS NOT NULL').get().n) };
+    this.#db.exec(`
+      DROP TRIGGER submission_authority_immutable_delete;
+      DROP TRIGGER ticket_tombstones_immutable_delete;
+      DROP TRIGGER events_immutable_delete;
+      DROP TRIGGER tickets_audit_preserved;
+      DELETE FROM submission_authority;
+      DELETE FROM ticket_tombstones;
+      DELETE FROM questions;
+      DELETE FROM ticket_blocks;
+      DELETE FROM claims;
+      DELETE FROM ticket_projects;
+      DELETE FROM events WHERE ticket_id IS NOT NULL OR project IS NOT NULL;
+    `);
+    if (this.#cleanSlateFailure) this.#cleanSlateFailure();
+    this.#db.exec(`
+      DELETE FROM tickets;
+      DELETE FROM projects;
+      CREATE TRIGGER submission_authority_immutable_delete BEFORE DELETE ON submission_authority BEGIN SELECT RAISE(ABORT,'submission authority is immutable'); END;
+      CREATE TRIGGER ticket_tombstones_immutable_delete BEFORE DELETE ON ticket_tombstones BEGIN SELECT RAISE(ABORT,'ticket tombstones are immutable'); END;
+      CREATE TRIGGER events_immutable_delete BEFORE DELETE ON events BEGIN SELECT RAISE(ABORT,'events are immutable'); END;
+      CREATE TRIGGER tickets_audit_preserved BEFORE DELETE ON tickets WHEN OLD.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'deleted ticket audit cannot be physically deleted'); END;
+    `);
+    return { success: true, removed };
+  }); }
 
   #insertDevice({ id, name, kind, actor_id: actorId }, token, createdAt = this.#now()) { const key = stableId(id); const label = cleanOptional(name, 'name'); const actor = this.#actor(actorId); if (!key || !label || !['coordinator','worker'].includes(kind)) throw new DomainError(400, 'invalid_device', 'valid id, name, actor, and device kind are required'); this.#db.prepare('INSERT INTO devices(id,name,kind,token_hash,status,created_at,revoked_at,actor_id) VALUES(?,?,?,?,\'active\',?,NULL,?)').run(key, label, kind, hash(token), createdAt, actor.id); return this.#device(key); }
   async bootstrapCoordinator({ id, name }) { return this.#transaction(() => { if (this.#db.prepare('SELECT 1 FROM devices LIMIT 1').get()) throw new DomainError(409, 'bootstrap_complete', 'first coordinator was already bootstrapped'); const key = stableId(id); const now = this.#now(); this.#db.prepare("INSERT OR IGNORE INTO actors(id,name,kind,machine,active,created_at,updated_at,admin) VALUES(?,?,'human',NULL,1,?,?,1)").run(key, cleanOptional(name, 'name'), now, now); this.#db.prepare("UPDATE actors SET kind='human',active=1,admin=1,updated_at=? WHERE id=?").run(now, key); const credential = `${key}.${randomBytes(32).toString('base64url')}`; const device = this.#insertDevice({ id: key, name, kind: 'coordinator', actor_id: key }, credential); this.#event(null, null, 'device_bootstrapped', device.id, null, { kind: device.kind }); return { device, credential }; }); }

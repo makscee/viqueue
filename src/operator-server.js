@@ -14,9 +14,15 @@ export async function createOperatorServer({ store, socketPath='/run/viqueue-alp
   if (!store) throw new Error('operator store is required');
   await prepare(socketPath,uid);
   const server=http.createServer(async(request,response)=>{try{
-    if(request.method!=='POST'||request.url!=='/v1/operator/browser-pairings')throw new DomainError(404,'route_not_found','route not found');
-    const input=await body(request);if(Object.keys(input).some(key=>key!=='name')||typeof input.name!=='string')throw new DomainError(400,'invalid_browser_name','exactly one browser name is required');
-    return send(response,201,await store.createLocalBrowserPairing({device_name:input.name}));
+    if(request.method==='POST'&&request.url==='/v1/operator/browser-pairings'){
+      const input=await body(request);if(Object.keys(input).some(key=>key!=='name')||typeof input.name!=='string')throw new DomainError(400,'invalid_browser_name','exactly one browser name is required');
+      return send(response,201,await store.createLocalBrowserPairing({device_name:input.name}));
+    }
+    if(request.method==='POST'&&request.url==='/v1/operator/projects-tickets/clean-slate'){
+      const input=await body(request);if(Object.keys(input).length!==1||input.confirm!=='FULL_PROJECT_TICKET_CLEAN_SLATE')throw new DomainError(409,'clean_slate_confirmation_required','exact clean-slate confirmation is required');
+      return send(response,200,await store.cleanSlateProjectsAndTickets());
+    }
+    throw new DomainError(404,'route_not_found','route not found');
   }catch(error){if(error instanceof DomainError)return send(response,error.status,{error:{code:error.code,message:error.message}});return send(response,500,{error:{code:'internal_error',message:'internal server error'}});}});
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,()=>{server.off('error',reject);resolve();});});
   try { await chmod(socketPath,0o600); const socket=await lstat(socketPath); if(!socket.isSocket()||socket.uid!==uid||(socket.mode&0o777)!==0o600)throw new Error('operator socket permission verification failed'); }
