@@ -52,7 +52,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const consoleMessages = []; page.on('console', (message) => consoleMessages.push(message.text()));
   await page.goto(base);
-  await page.getByLabel('One-time code').fill(browserCode.code); await page.getByLabel('Device ID').fill('browser-coordinator'); await page.getByLabel('Device name').fill('Browser Coordinator'); await page.getByRole('button', { name: 'Pair device' }).click();
+  await page.getByLabel('One-time code').fill(browserCode.code); await page.getByRole('button', { name: 'Pair browser' }).click();
   await page.locator('#app-shell').waitFor({ state: 'visible' }); assert.equal(await page.locator('#actor-select').inputValue(), 'bootstrap');
   assert.ok(workerCode);
   const workerEnv = { ...process.env, VIQ_URL: base, XDG_CONFIG_HOME: stateHome, PI_CODING_AGENT_DIR: piAgentDir, VIQ_WORKER_ROOT: jobsRoot, VIQ_WORKER_UID: String(workerUid), VIQ_WORKER_GID: String(workerGid) };

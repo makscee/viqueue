@@ -40,15 +40,15 @@ try {
   assert.equal(await page.locator('#pairing-form [name="kind"]').count(), 0);
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('name')), 'code');
 
-  const pair = async (code, id, name) => { await page.getByLabel('One-time code').fill(code); await page.getByLabel('Device ID').fill(id); await page.getByLabel('Device name').fill(name); await page.getByRole('button', { name: 'Pair device' }).click(); };
-  await pair('wrong-code', 'wrong-browser', 'Wrong Browser');
+  const pair = async (code) => { await page.getByLabel('One-time code').fill(code); await page.getByRole('button', { name: 'Pair browser' }).click(); };
+  await pair('wrong-code');
   await page.getByText(/invalid or already used/i).waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('viq.deviceCredential')), null);
-  await pair(expired.code, 'expired-browser', 'Expired Browser');
+  await pair(expired.code);
   await page.getByText(/expired/i).waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('viq.deviceCredential')), null);
 
-  await pair(firstCode.code, 'browser-one', 'Browser One');
+  await pair(firstCode.code);
   await page.locator('#app-shell').waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'DOG', exact: true }).waitFor();
   assert.equal(await page.locator('#status').textContent(), '0 tickets shown');
@@ -78,8 +78,9 @@ try {
   const freshContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   try {
     const freshPage = await freshContext.newPage(); freshPage.on('request', (request) => requestedPaths.push(new URL(request.url()).pathname)); freshPage.on('console', observeConsole); freshPage.on('pageerror', (error) => pageErrors.push(error.message)); await freshPage.goto(base); await freshPage.getByRole('heading', { name: 'Pair this browser' }).waitFor();
-    await freshPage.getByLabel('One-time code').fill(browserHandoff.code); await freshPage.getByLabel('Device ID').fill(browserHandoff.id); await freshPage.getByLabel('Device name').fill(browserHandoff.name);
-    const identityResponse = freshPage.waitForResponse((response) => new URL(response.url()).pathname === '/v1/devices/me' && response.request().method() === 'GET'); await freshPage.getByRole('button', { name: 'Pair device' }).click();
+    await freshPage.getByLabel('One-time code').fill(browserHandoff.code);
+    const pairRequest = freshPage.waitForRequest((request) => new URL(request.url()).pathname === '/v1/browsers/pair'); const identityResponse = freshPage.waitForResponse((response) => new URL(response.url()).pathname === '/v1/devices/me' && response.request().method() === 'GET'); await freshPage.getByRole('button', { name: 'Pair browser' }).click();
+    assert.deepEqual((await pairRequest).postDataJSON(), { code: browserHandoff.code });
     const identity = await (await identityResponse).json(); assert.deepEqual({ deviceKind: identity.device.kind, deviceName: identity.device.name, actorId: identity.actor.id, actorAdmin: identity.actor.admin }, { deviceKind: 'coordinator', deviceName: 'Fresh browser', actorId: 'bootstrap', actorAdmin: true });
     await freshPage.locator('#app-shell').waitFor({ state: 'visible' });
     const browserCredential = await freshPage.evaluate(() => localStorage.getItem('viq.deviceCredential')); assert.equal(Boolean(browserCredential), true);
@@ -146,7 +147,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
-  await pair(secondCode.code, 'browser-two', 'Browser Two');
+  await pair(secondCode.code);
   await page.getByText('4 tickets shown').waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   await page.screenshot({ path: path.join(evidence, 'phone-390x844.png') }); await page.getByRole('button', { name: 'Machines' }).click(); await page.screenshot({ path: path.join(evidence, 'machines-phone-390x844.png') }); await page.getByRole('button', { name: 'Close' }).click();
@@ -165,7 +166,7 @@ try {
   assert.equal(await page.evaluate(() => localStorage.getItem('viq.deviceCredential')), null);
   assert.equal(await page.getByRole('heading', { name: 'Pair this browser' }).isVisible(), true);
   const repairCode = await api('POST', '/v1/pairing-codes', { actor_id: 'bootstrap', intended_kind: 'coordinator', device_id: 'browser-two', device_name: 'Browser Two', ttl_ms: 900000 });
-  await pair(repairCode.code, 'browser-two', 'Browser Two');
+  await pair(repairCode.code);
   await page.locator('#app-shell').waitFor({ state: 'visible' });
   const repairedCredential = await page.evaluate(() => localStorage.getItem('viq.deviceCredential'));
   assert.notEqual(repairedCredential, revokedCredential);

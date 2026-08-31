@@ -42,7 +42,7 @@ viq ticket create ABC "Fix parser" --assignee-role tower-pi --device-token COORD
 viq ticket claim-next --project ABC --device-token WORKER_CREDENTIAL
 ```
 
-The browser board shows a pairing form when no valid local pairing exists. New coordinator-issued codes bind actor, kind, device ID, and device name, so code-only clients need only the one-time code; the browser retains ID/name inputs for legacy nullable codes. The board verifies `/v1/devices/me` and stores only the returned credential in `localStorage['viq.deviceCredential']`. Invalid/revoked credentials are cleared automatically, and **Disconnect this device** clears only browser-local state without revoking the server-side device.
+The browser board shows a code-only pairing form when no valid local pairing exists. Browser redemption accepts only a server-bound coordinator-kind intent and resolves its actor, device ID, and device name on the server; legacy nullable and Worker intents fail closed on the Browser route. The board verifies the returned identity through `/v1/devices/me` and stores only the returned credential in `localStorage['viq.deviceCredential']`. Generic `/v1/devices/pair` accepts exactly `{code}` for a server-bound Worker intent; coordinator intents and ambiguous unbound legacy intents fail closed. Invalid/revoked credentials are cleared automatically, and **Disconnect this device** clears only browser-local state without revoking the server-side device.
 
 MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/status views; it cannot acquire or mutate claims. Install the existing package in a user's Pi profile with `pi install <Viq package>`. Subsequent Pi sessions for that Unix user discover:
 

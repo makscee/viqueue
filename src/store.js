@@ -437,11 +437,14 @@ export class Store {
       throw error;
     }
   }
-  async pairDevice({ code, id, name }) { return this.#transaction(() => {
+  async pairDevice({ code, id, name }, { requiredKind = null, requireBoundIdentity = false, requireBoundActor = false } = {}) { return this.#transaction(() => {
     if (typeof code !== 'string' || !code) throw new DomainError(400, 'invalid_pairing_code', 'pairing code is required');
     const codeHash = hash(code), row = this.#db.prepare("SELECT pc.* FROM pairing_codes pc JOIN devices issuer ON issuer.id=pc.created_by_device_id AND issuer.status='active' WHERE pc.code_hash=?").get(codeHash);
     if (!row || row.used_at !== null) throw new DomainError(409, 'pairing_code_used_or_invalid', 'pairing code is invalid or already used');
     if (row.expires_at <= this.#now()) throw new DomainError(409, 'pairing_code_expired', 'pairing code expired');
+    if (requiredKind && row.intended_kind !== requiredKind) throw new DomainError(409, 'pairing_kind_mismatch', `pairing code is not valid for ${requiredKind} devices`);
+    if (requireBoundIdentity && (!row.device_id || !row.device_name)) throw new DomainError(409, 'pairing_device_binding_required', 'pairing requires a server-bound device identity');
+    if (requireBoundActor && !row.actor_id) throw new DomainError(409, 'pairing_actor_binding_required', 'browser pairing requires a server-bound actor');
     if (row.device_id && ((id != null && stableId(id) !== row.device_id) || (name != null && cleanOptional(name, 'name') !== row.device_name))) throw new DomainError(409, 'pairing_device_mismatch', 'pairing code is bound to a different device');
     const selectedId = row.device_id ?? id, selectedName = row.device_name ?? name, key = stableId(selectedId), label = cleanOptional(selectedName, 'name');
     if (!key || !label) throw new DomainError(400, 'invalid_device', 'legacy pairing code requires explicit device id and name');

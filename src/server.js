@@ -29,7 +29,8 @@ export async function createApp({ storage, now } = {}) {
       const url = new URL(request.url, 'http://localhost'); let match;
       if (request.method === 'GET' && assets[url.pathname]) { const [file, contentType] = assets[url.pathname]; response.statusCode = 200; response.setHeader('content-type', contentType); response.setHeader('cache-control', 'no-store'); response.end(await readFile(path.join(webRoot, file))); return; }
       if (request.method === 'GET' && url.pathname === '/health') return send(response, 200, { ok: true });
-      if (request.method === 'POST' && url.pathname === '/v1/devices/pair') return send(response, 201, await store.pairDevice(await json(request)));
+      if (request.method === 'POST' && url.pathname === '/v1/devices/pair') { const body = await json(request); if (!body || Object.keys(body).length !== 1 || typeof body.code !== 'string' || !body.code) throw new DomainError(400, 'invalid_worker_pairing_request', 'worker pairing accepts exactly one code'); return send(response, 201, await store.pairDevice(body, { requiredKind: 'worker', requireBoundIdentity: true })); }
+      if (request.method === 'POST' && url.pathname === '/v1/browsers/pair') { const body = await json(request); if (!body || Object.keys(body).length !== 1 || typeof body.code !== 'string' || !body.code) throw new DomainError(400, 'invalid_browser_pairing_request', 'browser pairing accepts exactly one code'); return send(response, 201, await store.pairDevice(body, { requiredKind: 'coordinator', requireBoundIdentity: true, requireBoundActor: true })); }
 
       const device = await store.authenticateDevice(bearer(request));
       if (request.method === 'GET' && url.pathname === '/v1/devices/me') return send(response, 200, { device: await store.getDevice(device.id), actor: await store.getActor(device.actor_id) });
