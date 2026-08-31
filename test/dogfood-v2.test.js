@@ -44,14 +44,12 @@ test('one-project tickets reject legacy memberships and preserve claim authority
   await f.store.close();
 });
 
-test('unscoped claimNext crosses projects but only for the paired actor exact assignment', async () => {
+test('unscoped claimNext crosses projects for generic Agent work and exact creation is retired', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
-  await f.store.createTicket({ project: 'ONE', title: 'free pool must stay open', assignment: 'Agent', actor: 'mair' });
-  await f.store.createTicket({ project: 'ONE', title: 'other actor must stay open', assignment: 'Agent', worker_actor_id: 'other', actor: 'mair' });
-  const exact = await f.store.createTicket({ project: 'TWO', title: 'exact cross-project work', assignment: 'Agent', worker_actor_id: 'worker', actor: 'mair' });
+  await assert.rejects(f.store.createTicket({ project: 'ONE', title: 'exact', assignment: 'Agent', worker_actor_id: 'other', actor: 'mair' }), (error) => error.code === 'invalid_ticket_fields');
+  const generic = await f.store.createTicket({ project: 'TWO', title: 'generic cross-project work', assignment: 'Agent', actor: 'mair' });
   const claim = await claimNextWithSession(f.store, { device: 'worker-one' });
-  assert.equal(claim.ticket.id, exact.id); assert.equal(claim.ticket.project, 'TWO');
-  assert.equal((await f.store.getTicket('ONE-1')).claim, null); assert.equal((await f.store.getTicket('ONE-2')).claim, null);
+  assert.equal(claim.ticket.id, generic.id); assert.equal(claim.ticket.project, 'TWO');
   await f.store.close();
 });
 
