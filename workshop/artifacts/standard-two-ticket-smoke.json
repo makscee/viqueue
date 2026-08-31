@@ -1,0 +1,25 @@
+{
+  "root": "/var/folders/ld/nkxgmqj50854_0pq4dk3ck0m0000gn/T/viq-two-ticket-EqdpMC",
+  "firstTicket": "SMOKE-1",
+  "secondTicket": "SMOKE-2",
+  "claimNext": 2,
+  "workerSessions": [
+    "worker-session-1",
+    "worker-session-2"
+  ],
+  "piSessions": [
+    {
+      "id": "01a059fa-c94f-78d7-b1d3-b6deb761269f",
+      "file": "/var/folders/ld/nkxgmqj50854_0pq4dk3ck0m0000gn/T/viq-two-ticket-EqdpMC/sessions/2026-08-31T22-40-02-895Z_01a059fa-c94f-78d7-b1d3-b6deb761269f.jsonl"
+    },
+    {
+      "id": "01a059fa-c952-7846-ac77-3de96d6902fc",
+      "file": "/var/folders/ld/nkxgmqj50854_0pq4dk3ck0m0000gn/T/viq-two-ticket-EqdpMC/sessions/2026-08-31T22-40-02-898Z_01a059fa-c952-7846-ac77-3de96d6902fc.jsonl",
+      "parentSession": "/var/folders/ld/nkxgmqj50854_0pq4dk3ck0m0000gn/T/viq-two-ticket-EqdpMC/sessions/2026-08-31T22-40-02-895Z_01a059fa-c94f-78d7-b1d3-b6deb761269f.jsonl"
+    }
+  ],
+  "oldSessionPreserved": true,
+  "freshContext": true,
+  "parentLinked": true,
+  "credentialRedacted": true
+}
