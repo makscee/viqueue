@@ -19,7 +19,7 @@ async function fixture(t) {
 
 test('Machines is the only routine provenance administration surface', async (t) => {
   const { base } = await fixture(t); const html = await (await fetch(base)).text(); const js = await (await fetch(`${base}/app.js`)).text();
-  assert.match(html, />Machines</); assert.match(js, /openMachines/); assert.match(js, /Human.*Agent/s);
+  assert.match(html, />Machines</); assert.match(js, /openMachines/); assert.match(js, /Role.*Human.*Agent.*Name/s); assert.doesNotMatch(js, /machines\/actors|worker_actor_id/);
   assert.doesNotMatch(`${html}\n${js}`, />Admin<|Create actor|Create assignment role|role-membership|actor-create|machine filter/i);
   assert.doesNotMatch(js, /\/v1\/(actors|roles)/); assert.match(js, /\/v1\/machines/);
 });
@@ -28,7 +28,7 @@ test('Machines lists active server-derived provenance, pairs once, and revokes a
   const { call } = await fixture(t);
   const issued = await call('POST', '/v1/machines/pairing-codes', { role: 'Agent', name: 'Disposable runner' }); assert.equal(issued.response.status, 201); assert.equal(issued.body.role, 'Agent');
   const paired = await call('POST', '/v1/devices/pair', { code: issued.body.code }, null); assert.equal(paired.response.status, 201); assert.equal(paired.body.device.name, 'Disposable runner');
-  const machines = await call('GET', '/v1/machines'); const item = machines.body.machines.find(({ id }) => id === issued.body.id); assert.deepEqual(item, { id: issued.body.id, name: 'Disposable runner', role: 'Agent', actor_id: issued.body.id, actor_name: 'Disposable runner' });
+  const machines = await call('GET', '/v1/machines'); const item = machines.body.machines.find(({ id }) => id === issued.body.id); assert.deepEqual(item, { id: issued.body.id, name: 'Disposable runner', role: 'Agent' });
   assert.equal((await call('POST', '/v1/machines/pairing-codes', { role: 'Machine', name: 'Spoof' })).response.status, 400);
   assert.equal((await call('POST', `/v1/machines/${encodeURIComponent(item.id)}/revoke`, {})).response.status, 200);
   assert.equal((await call('GET', '/v1/devices/me', undefined, paired.body.credential)).response.status, 401);

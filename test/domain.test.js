@@ -104,14 +104,15 @@ test('Agent assignment is launch authorization and atomic claimNext skips Unassi
   assert.equal(outcomes.filter(Boolean).length, 1); assert.equal(outcomes.find(Boolean).ticket.id, 'ABC-3'); await other.close();
 });
 
-test('claimNext accepts absent project for identity scope but rejects malformed explicit projects without mutation', async () => {
+test('claimNext accepts absent project for generic Agent work but rejects malformed explicit projects without mutation', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  const ticket = await store.createTicket({ project: 'ABC', title: 'Untouched free-pool work', assignment: 'Agent', actor: 'maks' });
+  const generic = await store.createTicket({ project: 'ABC', title: 'Generic Agent work', assignment: 'Agent', actor: 'maks' });
+  const firstSession = await store.openWorkerSession('worker-b');
+  assert.equal((await store.claimNext({ device: 'worker-b', session_capability: firstSession.session_capability })).ticket.id, generic.id);
+  const ticket = await store.createTicket({ project: 'ABC', title: 'Untouched work', assignment: 'Agent', actor: 'maks' });
   const session = await store.openWorkerSession('worker-a');
   const authority = { device: 'worker-a', session_capability: session.session_capability };
   const before = { ticket: await store.getTicket(ticket.id), events: await store.listEvents({ ticket: ticket.id }) };
-  assert.equal(await store.claimNext(authority), null);
-  assert.deepEqual(await store.getTicket(ticket.id), before.ticket);
   for (const project of [undefined, null, '', '   ', 'bad key!', 'UNKNOWN']) {
     await assert.rejects(store.claimNext({ ...authority, project }), (error) => ['invalid_project','project_not_found'].includes(error.code));
     assert.deepEqual(await store.getTicket(ticket.id), before.ticket);
@@ -130,20 +131,12 @@ test('project-scoped claimNext contention grants exactly one claim and never cro
   assert.equal((await store.getTicket(outside.id)).claim, null); await other.close();
 });
 
-test('exact worker assignment restricts poll and direct claim to the selected paired actor', async () => {
+test('exact-worker creation is retired while any paired Agent can directly claim generic work', async () => {
   const { store } = await fixture(); await store.createProject('ABC');
-  const selected = await store.createTicket({ project: 'ABC', title: 'Selected worker', assignment: 'Agent', worker_actor_id: 'worker-a', actor: 'maks' });
-  const other = await store.createTicket({ project: 'ABC', title: 'Other worker', assignment: 'Agent', worker_actor_id: 'worker-b', actor: 'maks' });
-  assert.deepEqual(selected.assigned_worker, { id: 'worker-a', name: 'worker-a' });
-  assert.equal((await claimNextWithSession(store, { project: 'ABC', device: 'worker-a' })).ticket.id, selected.id);
-  await assert.rejects(claimWithSession(store, other.id, { device: 'worker-a' }), (error) => error.code === 'ticket_ineligible');
-});
-
-test('exact direct claim can select an eligible Open ticket without claim-next ordering', async () => {
-  const { store } = await fixture(); await store.createProject('ABC');
-  await store.createTicket({ project: 'ABC', title: 'Broad first', assignment: 'Agent', actor: 'maks' });
-  const exact = await store.createTicket({ project: 'ABC', title: 'Exact rework', assignment: 'Agent', worker_actor_id: 'worker-a', actor: 'maks' });
-  assert.equal((await claimWithSession(store, exact.id, { device: 'worker-a' })).ticket.id, exact.id);
+  await assert.rejects(store.createTicket({ project: 'ABC', title: 'Selected worker', assignment: 'Agent', worker_actor_id: 'worker-a', actor: 'maks' }), (error) => error.code === 'invalid_ticket_fields');
+  const generic = await store.createTicket({ project: 'ABC', title: 'Generic work', assignment: 'Agent', actor: 'maks' });
+  assert.equal(generic.assigned_worker, null);
+  assert.equal((await claimWithSession(store, generic.id, { device: 'worker-b' })).ticket.id, generic.id);
 });
 
 test('assignment category changes eligibility without exposing identity authority', async () => {

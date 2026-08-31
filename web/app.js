@@ -3,7 +3,7 @@ import { activityFact, applyActivityFilters, applyTicketFilters, createModalCont
 const $ = (selector) => document.querySelector(selector);
 const credentialKey = 'viq.deviceCredential';
 const lanes = ['Open', 'Working', 'Waiting', 'Done'];
-const state = { projects: [], tickets: [], events: [], questions: [], machines: [], actors: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null, admin: false, vcWriter: false };
+const state = { projects: [], tickets: [], events: [], questions: [], machines: [], selectedProjects: new Set(), selectedRoles: new Set(), allProjects: true, active: 'Activity', drag: null, admin: false, vcWriter: false };
 const modal = createModalController($('#modal'));
 const request = async (path, options = {}) => {
   const credential = localStorage.getItem(credentialKey);
@@ -42,7 +42,7 @@ function cardFor(ticket, laneTickets, index) {
   card.setAttribute('aria-label', `${ticket.id}, ${ticket.title}, ${ticket.assignment}, ${ticket.state}, position ${index + 1} of ${laneTickets.length}`);
   card.innerHTML = '<button type="button" class="ticket-open"><small></small><strong></strong><span class="card-meta"></span></button>';
   const summary = card.querySelector('.ticket-open'); summary.dataset.id = ticket.id; summary.children[0].textContent = ticket.id; summary.children[1].textContent = ticket.title;
-  summary.children[2].textContent = `${ticket.assigned_worker ? `Agent · assigned to ${ticket.assigned_worker.name}` : ticket.assignment}${ticket.open_questions ? ` · ${ticket.open_questions} open question${ticket.open_questions === 1 ? '' : 's'}` : ''}${ticket.claim?.device_id ? ` · active on ${ticket.claim.device_id}` : ''}`;
+  summary.children[2].textContent = `${ticket.assignment}${ticket.open_questions ? ` · ${ticket.open_questions} open question${ticket.open_questions === 1 ? '' : 's'}` : ''}${ticket.claim?.machine ? ` · claimed by ${ticket.claim.machine}` : ''}`;
   summary.addEventListener('click', (event) => { event.stopPropagation(); showDetail(ticket.id, card).catch(report); });
   if (state.vcWriter && ticket.project === 'VC' && /^VC-[1-5]$/.test(ticket.id)) { const control = document.createElement('select'); control.className = 'vc-state-control'; control.setAttribute('aria-label', `Change ${ticket.id} state`); for (const lane of lanes) control.append(new Option(lane, lane)); control.value = ticket.state; control.addEventListener('click', event => event.stopPropagation()); control.addEventListener('change', safely(async event => { event.stopPropagation(); control.disabled = true; await request(`/v1/tickets/${ticket.id}/state`, { method: 'POST', body: JSON.stringify({ state: control.value }) }); await refresh(ticket.id); announce(`${ticket.id} moved to ${control.value}.`); })); card.append(control); }
   card.addEventListener('click', (event) => { if (event.target === card) showDetail(ticket.id, card).catch(report); });
@@ -146,7 +146,6 @@ async function showDetail(id, trigger, intent = modal.begin()) {
 }
 
 async function openMachines(trigger) {
-  state.actors = (await request('/v1/machines/actors')).actors;
   const panel = document.createElement('div'); panel.className = 'machines-panel';
   const list = document.createElement('section'); list.className = 'machine-list'; list.innerHTML = '<h3>Active machines</h3>';
   if (!state.machines.length) list.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: 'No active machines.' }));
@@ -160,13 +159,12 @@ async function openMachines(trigger) {
     confirm.addEventListener('submit', safely(async (event) => { event.preventDefault(); await request(`/v1/machines/${encodeURIComponent(machine.id)}/revoke`, { method: 'POST', body: '{}' }); await refresh(); openMachines(trigger); announce('Machine revoked'); }));
     row.append(identity, revoke, confirm); list.append(row);
   }
-  const pairing = document.createElement('form'); pairing.className = 'modal-form machine-pair-form'; pairing.innerHTML = '<h3>Pair device</h3><fieldset><legend>Device type</legend><label><input type="radio" name="type" value="browser" checked> Browser</label><label><input type="radio" name="type" value="worker"> Worker</label></fieldset><label>Name<input name="name" required maxlength="100" autocomplete="off"></label><label class="worker-actor" hidden>Actor<select name="actor_id"></select></label><button>Create code</button><div class="pairing-code-result" aria-live="polite"></div>';
-  const actorLabel = pairing.querySelector('.worker-actor'), actorSelect = pairing.elements.actor_id, workerRadio = pairing.querySelector('[value="worker"]'); actorSelect.replaceChildren(...state.actors.map((actor) => new Option(actor.name, actor.id))); workerRadio.disabled = state.actors.length === 0; workerRadio.title = state.actors.length ? '' : 'No active worker actors are available'; const updateType = () => { const worker = pairing.elements.type.value === 'worker'; actorLabel.hidden = !worker; actorSelect.required = worker; }; pairing.elements.type.forEach((radio) => radio.addEventListener('change', updateType)); updateType();
+  const pairing = document.createElement('form'); pairing.className = 'modal-form machine-pair-form'; pairing.innerHTML = '<h3>Pair device</h3><fieldset><legend>Role</legend><label><input type="radio" name="role" value="Human" checked> Human</label><label><input type="radio" name="role" value="Agent"> Agent</label></fieldset><label>Name<input name="name" required maxlength="100" autocomplete="off"></label><button>Create code</button><div class="pairing-code-result" aria-live="polite"></div>';
   let expiryTimer; const clearCode = () => { clearTimeout(expiryTimer); pairing.querySelector('.pairing-code-result').replaceChildren(); }; $('#modal').addEventListener('close', clearCode, { once: true });
   pairing.addEventListener('submit', safely(async (event) => {
     event.preventDefault(); clearCode();
-    const name = pairing.elements.name.value.trim(), worker = pairing.elements.type.value === 'worker';
-    const issued = worker ? await request('/v1/pairing-codes', { method: 'POST', body: JSON.stringify({ actor_id: actorSelect.value, intended_kind: 'worker', device_id: `worker-${crypto.randomUUID()}`, device_name: name }) }) : await request('/v1/machines/pairing-codes', { method: 'POST', body: JSON.stringify({ role: 'Human', name }) });
+    const name = pairing.elements.name.value.trim(), worker = pairing.elements.role.value === 'Agent';
+    const issued = await request('/v1/machines/pairing-codes', { method: 'POST', body: JSON.stringify({ role: pairing.elements.role.value, name }) });
     const expiryValue = issued.expires ?? issued.expires_at, expiresAt = typeof expiryValue === 'number' || (typeof expiryValue === 'string' && expiryValue.trim()) ? new Date(expiryValue).getTime() : Number.NaN, result = pairing.querySelector('.pairing-code-result');
     if (!Number.isFinite(expiresAt)) throw new Error('Pairing code response contained an invalid expiry');
     const copyButton = (label, value) => { const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary', textContent: `Copy ${label}` }); copy.addEventListener('click', safely(async () => { await navigator.clipboard.writeText(value); announce(`${label} copied`); })); return copy; };
@@ -188,7 +186,7 @@ async function openMachines(trigger) {
     }
     expiryTimer = setTimeout(clearCode, Math.max(0, expiresAt - Date.now()));
   }));
-  panel.append(list, pairing); openModal({ title: 'Machines', eyebrow: 'Execution provenance', content: panel, trigger, initialFocus: pairing.elements.type[0] });
+  panel.append(list, pairing); openModal({ title: 'Machines', eyebrow: 'Execution provenance', content: panel, trigger, initialFocus: pairing.elements.role[0] });
 }
 
 
@@ -202,9 +200,9 @@ function openProjectCreate(trigger) {
 
 function openTicketCreate(trigger, projectKey = null) {
   if (!state.projects.length) return openProjectCreate(trigger);
-  const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Project<select name="project" required></select></label><label>Ticket title<input name="title" required></label><label>Description (optional)<textarea name="description" rows="4"></textarea></label><label>Assignment<select name="assignment"><option value="Unassigned">Unassigned</option><option value="Human">Human</option></select></label><p class="assignment-help">Assigning work authorizes a paired worker to claim it. Viq never starts Pi.</p><button>Create ticket</button>'; const workers = new Map(state.machines.filter((machine) => machine.role === 'Agent' && machine.actor_id).map((machine) => [machine.actor_id, machine.actor_name || machine.name])); for (const [id, name] of workers) form.elements.assignment.append(new Option(`Agent · ${name}`, `worker:${id}`));
+  const form = document.createElement('form'); form.className = 'modal-form'; form.innerHTML = '<label>Project<select name="project" required></select></label><label>Ticket title<input name="title" required></label><label>Description (optional)<textarea name="description" rows="4"></textarea></label><label>Assignment<select name="assignment"><option value="Unassigned">Unassigned</option><option value="Human">Human</option><option value="Agent">Agent</option></select></label><p class="assignment-help">Agent work may be claimed by any active paired Agent machine. Viq never starts Pi.</p><button>Create ticket</button>';
   form.elements.project.replaceChildren(new Option('Choose a project', ''), ...state.projects.map(({ key }) => new Option(key, key))); const selected = projectKey ? [projectKey] : [...state.selectedProjects]; if (selected.length === 1) form.elements.project.value = selected[0];
-  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); if (data.assignment.startsWith('worker:')) { data.worker_actor_id = data.assignment.slice(7); data.assignment = 'Agent'; } const result = await request('/v1/tickets', { method: 'POST', body: JSON.stringify(data) }); modal.dismiss(); await refresh(result.ticket.id); announce(result.ticket.assigned_worker ? `${result.ticket.id} assigned to ${result.ticket.assigned_worker.name}. Start Pi independently, then run /viq claim ${result.ticket.id}. Use /viq continue only after an answered blocking question.` : `${result.ticket.id} created.`); }));
+  form.addEventListener('submit', safely(async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(form)); const result = await request('/v1/tickets', { method: 'POST', body: JSON.stringify(data) }); modal.dismiss(); await refresh(result.ticket.id); announce(`${result.ticket.id} created.`); }));
   $('#modal-title').textContent = 'Create ticket'; $('#modal-eyebrow').textContent = 'Quick capture'; $('#modal-content').replaceChildren(form); modal.open({ trigger, initialFocus: selected.length === 1 ? form.elements.title : form.elements.project });
 }
 $('#pairing-form').addEventListener('submit', async (event) => { event.preventDefault(); const form = event.currentTarget; $('#pairing-status').textContent = 'Pairing…'; try { const response = await fetch('/v1/browsers/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: form.elements.code.value }) }); const body = await response.json(); if (!response.ok) throw new Error(body?.error?.message || 'Pairing failed'); localStorage.setItem(credentialKey, body.credential); const identity = await request('/v1/devices/me'); $('#actor-select').replaceChildren(new Option(identity.actor.name, identity.actor.id)); showBoard(identity); await refresh(); } catch (error) { localStorage.removeItem(credentialKey); showPairing(error.message); } });
