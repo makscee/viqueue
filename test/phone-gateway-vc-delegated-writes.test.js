@@ -16,10 +16,10 @@ const ATTRIBUTION = '[via gateway: artem@artems-macbook-pro]';
 const DELEGATED_AUDIT = { actor_id: 'artem', device_id: 'artems-macbook-pro', upstream_actor: 'maks', attribution: 'gateway-delegated via shared admin credential' };
 const MAX_NOTE = 8000;
 const writes = [['POST', '/v1/tickets', { project: 'VC', title: 'x' }], ['PATCH', '/v1/tickets/VC-1', { title: 'x' }], ['POST', '/v1/tickets/VC-1/notes', { message: 'x' }], ['POST', '/v1/tickets/VC-1/state', { state: 'Done' }]];
-// Only the fields the spec names. A key that is absent stays absent, so deepEqual pins presence both ways.
-const SPEC_AUDIT_KEYS = ['auth_mode', 'operation', 'actor_id', 'device_id', 'ticket_id', 'state', 'upstream_actor', 'attribution'];
-const auditShape = (detail) => Object.fromEntries(SPEC_AUDIT_KEYS.filter((key) => key in detail).map((key) => [key, detail[key]]));
+// The whole detail, never a projection of it: a leaked extra key must fail the comparison.
 const writtenAudit = (operation, extra = {}) => ({ operation, ...DELEGATED_AUDIT, ...extra });
+const stateAudit = (extra) => ({ actor_id: 'artem', upstream_actor: 'maks', ...extra });
+const metadataOfBytes = (total) => ({ note: 'x'.repeat(total - JSON.stringify({ note: '' }).length) });
 
 const seedTickets = () => new Map([
   ...Array.from({ length: 5 }, (_, i) => [`VC-${i + 1}`, { id: `VC-${i + 1}`, project: 'VC', title: `Ticket ${i + 1}`, description: '', assignment: 'Human', state: 'Open' }]),
@@ -41,10 +41,10 @@ const bearerFieldVariants = [
 ].map(([field, group, key, value]) => ({ field, token: `off_${group}_${key}_token`, identity: { ...FROZEN_IDENTITY, [group]: { ...FROZEN_IDENTITY[group], [key]: value } } }));
 const bearerIdentities = new Map([['core_artem_token', FROZEN_IDENTITY], ...bearerFieldVariants.map(({ token, identity }) => [token, identity])]);
 
-async function fixture() {
+async function fixture({ requestTimeoutMs } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-vc-writes-'));
   const tickets = seedTickets(); const upstreamRequests = []; const notes = [];
-  let mutationHits = 0, ticketReads = 0, nextNumber = 6, noteCursor = 0, failNext = null;
+  let mutationHits = 0, ticketReads = 0, nextNumber = 6, noteCursor = 0, failNext = null, lookupFailure = null;
   const upstream = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const rawBody = Buffer.concat(chunks).toString();
@@ -61,22 +61,27 @@ async function fixture() {
       return res.end(JSON.stringify(identity));
     }
     if (req.method === 'GET' && (match = req.url.match(/^\/v1\/tickets\/([^/?]+)$/))) {
+      if (lookupFailure === 'status503') { res.statusCode = 503; return res.end(JSON.stringify({ error: { code: 'unavailable' } })); }
+      if (lookupFailure === 'badjson') return res.end('{ this is not json');
+      if (lookupFailure === 'transport') return req.socket.destroy();
+      if (lookupFailure === 'hang') return;
       const ticket = tickets.get(idOf(match[1]));
       if (!ticket) { res.statusCode = 404; return res.end(JSON.stringify({ error: { code: 'ticket_not_found' } })); }
       return res.end(JSON.stringify({ ticket }));
     }
     if (req.method === 'POST' && req.url === '/v1/tickets') {
-      const id = `VC-${nextNumber++}`; const ticket = { id, project: parsed.project, title: parsed.title, description: parsed.description ?? '', assignment: parsed.assignment ?? 'Unassigned', state: 'Open' };
+      const id = `VC-${nextNumber++}`; const ticket = { id, project: parsed.project, title: String(parsed.title).trim(), description: String(parsed.description ?? '').trim(), assignment: parsed.assignment ?? 'Unassigned', state: 'Open' };
       tickets.set(id, ticket); res.statusCode = 201; return res.end(JSON.stringify({ ticket }));
     }
     if (req.method === 'PATCH' && (match = req.url.match(/^\/v1\/tickets\/([^/?]+)$/))) {
       const ticket = tickets.get(idOf(match[1]));
       if (!ticket) { res.statusCode = 404; return res.end(JSON.stringify({ error: { code: 'ticket_not_found' } })); }
-      for (const field of ['title', 'description', 'assignment']) if (field in parsed) ticket[field] = parsed[field];
+      for (const field of ['title', 'description']) if (field in parsed) ticket[field] = String(parsed[field]).trim();
+      if ('assignment' in parsed) ticket.assignment = parsed.assignment;
       return res.end(JSON.stringify({ ticket }));
     }
     if (req.method === 'POST' && (match = req.url.match(/^\/v1\/tickets\/([^/?]+)\/notes$/))) {
-      const cursor = ++noteCursor; const event = { cursor, type: 'progress', text: parsed.message, metadata: parsed.metadata ?? null };
+      const cursor = ++noteCursor; const event = { cursor, type: 'progress', text: String(parsed.message).trim(), metadata: parsed.metadata ?? null };
       notes.push({ ticket: idOf(match[1]), event }); res.statusCode = 201; return res.end(JSON.stringify({ event, cursor }));
     }
     if (req.method === 'POST' && (match = req.url.match(/^\/v1\/tickets\/([^/?]+)\/state$/))) {
@@ -86,7 +91,7 @@ async function fixture() {
     return res.end(JSON.stringify({ ok: true }));
   });
   await listen(upstream); const origin = 'https://phone.test';
-  const gateway = await createPhoneGateway({ authDb: path.join(dir, 'auth.sqlite'), origin, upstream: `http://127.0.0.1:${upstream.address().port}`, upstreamAuthorization: 'test_upstream_admin_credential', testMode: true });
+  const gateway = await createPhoneGateway({ authDb: path.join(dir, 'auth.sqlite'), origin, upstream: `http://127.0.0.1:${upstream.address().port}`, upstreamAuthorization: 'test_upstream_admin_credential', testMode: true, ...(requestTimeoutMs === undefined ? {} : { testHooks: { requestTimeoutMs } }) });
   await listen(gateway); const base = `http://127.0.0.1:${gateway.address().port}`;
   const pair = ({ actorId, actorName, admin = false, kind = 'coordinator', actorActive = true, deviceId }) => {
     const device = deviceId ?? `device_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -113,6 +118,7 @@ async function fixture() {
     dir, upstream, gateway, base, pair, prepare, signed, bearer, bearerAs, upstreamRequests, notes, tickets,
     exact: () => pair({ actorId: 'artem', actorName: 'Artem', deviceId: 'artems-macbook-pro' }),
     failNextMutation(status) { failNext = status; },
+    failLookup(mode) { lookupFailure = mode; },
     auditOf(action) { return gateway.authStore.status().audit.filter((row) => row.action === action); },
     get mutationHits() { return mutationHits; },
     get ticketReads() { return ticketReads; },
@@ -165,12 +171,14 @@ test('frozen Artem browser creates, edits and comments VC tickets through the br
 
 test('the attribution prefix is the first line and the note text below it is untouched', async (t) => {
   const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
-  for (const message of ['Preflight green.', 'Строка один.\nСтрока два.\n\nХвост.', '  ведущие пробелы значимы  ']) {
+  for (const message of ['Preflight green.', 'Строка один.\nСтрока два.\n\nХвост.', 'хвостовые пробелы срезает апстрим   ']) {
     const response = await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', { message });
     assert.equal(response.status, 201, message);
     const sent = JSON.parse(f.upstreamRequests.at(-1).body);
+    // The broker's contract is what it sends: prefix, newline, then the author's text byte for byte.
     assert.equal(sent.message, `${ATTRIBUTION}\n${message}`, 'prefix must be the whole first line, then the original text unchanged');
-    assert.equal((await response.json()).event.text, sent.message);
+    // What is stored is the upstream's business: #appendManualEvent runs cleanOptional, which trims (store.js:12).
+    assert.equal((await response.json()).event.text, sent.message.trim());
   }
 });
 
@@ -228,7 +236,8 @@ test('delegated VC writes are audited under operation, and only after upstream a
   const audit = f.auditOf('vc_ticket_written'); assert.equal(audit.length, 3);
   for (const row of audit) { assert.equal(row.device_id, 'artems-macbook-pro'); assert.equal('action' in JSON.parse(row.detail), false, 'the key is operation, not action'); }
   // Newest first. The signed path carries no auth_mode, and create has no ticket id before the upstream answer.
-  assert.deepEqual(audit.map((row) => auditShape(JSON.parse(row.detail))), [writtenAudit('note', { ticket_id: 'VC-2' }), writtenAudit('edit', { ticket_id: 'VC-2' }), writtenAudit('create')]);
+  // Compared whole: nothing the spec does not name may ride along in a delegation trail.
+  assert.deepEqual(audit.map((row) => JSON.parse(row.detail)), [writtenAudit('note', { ticket_id: 'VC-2' }), writtenAudit('edit', { ticket_id: 'VC-2' }), writtenAudit('create')]);
   f.failNextMutation(500);
   assert.notEqual((await f.signed(artem, 'POST', '/v1/tickets/VC-2/notes', { message: 'Refused upstream' })).status, 201);
   assert.equal(f.auditOf('vc_ticket_written').length, 3);
@@ -329,15 +338,16 @@ test('the frozen Artem Bearer delegates all four VC writes without a browser', a
   for (const request of f.upstreamRequests.filter(({ method }) => method !== 'GET')) assert.equal(request.authorization, 'Bearer test_upstream_admin_credential');
   const written = f.auditOf('vc_ticket_written'); assert.equal(written.length, 3);
   const bearer = { auth_mode: 'bearer-delegation' };
-  assert.deepEqual(written.map((row) => auditShape(JSON.parse(row.detail))), [ // newest first
+  assert.deepEqual(written.map((row) => JSON.parse(row.detail)), [ // newest first
     { ...bearer, ...writtenAudit('note', { ticket_id: 'VC-6' }) }, { ...bearer, ...writtenAudit('edit', { ticket_id: 'VC-6' }) }, { ...bearer, ...writtenAudit('create') }
   ]);
   for (const row of written) assert.equal(row.device_id, 'artems-macbook-pro');
   const moved = f.auditOf('vc_state_changed'); assert.equal(moved.length, 2);
-  assert.deepEqual(moved.map((row) => auditShape(JSON.parse(row.detail))), [ // newest first
-    { ...bearer, actor_id: 'artem', device_id: 'artems-macbook-pro', ticket_id: 'VC-1', state: 'Done', upstream_actor: 'maks' },
-    { ...bearer, actor_id: 'artem', device_id: 'artems-macbook-pro', ticket_id: 'VC-6', state: 'Working', upstream_actor: 'maks' }
+  assert.deepEqual(moved.map((row) => JSON.parse(row.detail)), [ // newest first
+    { ...bearer, ...stateAudit({ device_id: 'artems-macbook-pro', ticket_id: 'VC-1', state: 'Done' }) },
+    { ...bearer, ...stateAudit({ device_id: 'artems-macbook-pro', ticket_id: 'VC-6', state: 'Working' }) }
   ]);
+  assert.equal(f.auditOf('vc_delegation_denied').length, 0, 'a write that succeeded is not a denial');
 });
 
 test('Bearer delegation is refused when a single identity field differs from the frozen one', async (t) => {
@@ -361,7 +371,7 @@ test('Bearer delegation is refused when a single identity field differs from the
   }
 });
 
-test('Bearer delegated writes fail closed on body and object before the ticket lookup', async (t) => {
+test('Bearer delegated writes fail closed on body and object before any upstream request', async (t) => {
   const f = await fixture(); t.after(() => cleanup(f));
   const badBodies = [
     ['POST', '/v1/tickets', { project: 'VIQ', title: 'x' }], ['POST', '/v1/tickets', { project: 'VC', title: 'x', assignee: 'a' }], ['POST', '/v1/tickets', {}],
@@ -369,10 +379,10 @@ test('Bearer delegated writes fail closed on body and object before the ticket l
     ['POST', '/v1/tickets/VC-1/notes', {}], ['POST', '/v1/tickets/VC-1/notes', { message: '' }], ['POST', '/v1/tickets/VC-1/notes', { message: 'x'.repeat(MAX_NOTE + 1) }]
   ];
   for (const [method, target, value] of badBodies) {
-    const reads = f.ticketReads, mutations = f.mutationHits;
+    const before = f.upstreamHits;
     assert.equal((await f.bearerAs('core_artem_token', method, target, value)).status, 403, `${method} ${target} ${JSON.stringify(value).slice(0, 60)}`);
-    assert.equal(f.ticketReads, reads, `${method} ${target} looked the ticket up on a body it had already refused`);
-    assert.equal(f.mutationHits, mutations);
+    // Not even /v1/devices/me: forwarding the caller's token on a body we already refused makes the broker a credential oracle.
+    assert.equal(f.upstreamHits, before, `${method} ${target} went upstream on a body the broker had already refused`);
   }
   for (const id of ['VIQ-1', 'VC-99', 'VC-404', ...malformedIds]) for (const [method, target, value] of [['PATCH', `/v1/tickets/${id}`, { title: 'x' }], ['POST', `/v1/tickets/${id}/notes`, { message: 'x' }]]) {
     const before = f.mutationHits;
@@ -399,4 +409,129 @@ test('the project boundary is compared letter for letter', async (t) => {
     assert.equal((await f.signed(artem, 'POST', '/v1/tickets', { project, title: 'no' })).status, 403, `create in ${JSON.stringify(project)}`);
     assert.equal(f.upstreamHits, before, `create in ${JSON.stringify(project)}`);
   }
+});
+
+test('bearer mode is entered only when no signed header is present at all', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  // A partial set of signed headers is a broken signed request, never an invitation to trust the Bearer.
+  const partials = [
+    { 'x-viq-device': 'artems-macbook-pro' }, { 'x-viq-challenge': 'challenge_value_0001' }, { 'x-viq-signature': 'x'.repeat(86) },
+    { 'x-viq-challenge': 'challenge_value_0001', 'x-viq-signature': 'x'.repeat(86) },
+    { 'x-viq-device': 'artems-macbook-pro', 'x-viq-signature': 'x'.repeat(86) },
+    { 'x-viq-device': 'artems-macbook-pro', 'x-viq-challenge': 'challenge_value_0001' }
+  ];
+  for (const headers of partials) for (const [method, target, value] of writes) {
+    const before = f.upstreamHits;
+    const response = await fetch(`${f.base}${target}`, { method, headers: { 'content-type': 'application/json', authorization: 'Bearer core_artem_token', ...headers }, body: JSON.stringify(value) });
+    assert.equal(response.status, 403, `${Object.keys(headers)} ${method} ${target}`);
+    assert.equal(f.upstreamHits, before, `${Object.keys(headers)} ${method} ${target}`);
+  }
+});
+
+test('every declared body boundary refuses its far side before any upstream request', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
+  const accepted = [
+    ['title at the cap', 'POST', '/v1/tickets', { project: 'VC', title: 'x'.repeat(200) }, 201],
+    ['description at the cap', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', description: 'x'.repeat(20000) }, 201],
+    ['no description', 'POST', '/v1/tickets', { project: 'VC', title: 'ok' }, 201],
+    ['assignment Unassigned', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', assignment: 'Unassigned' }, 201],
+    ['assignment Human', 'PATCH', '/v1/tickets/VC-1', { assignment: 'Human' }, 200],
+    ['assignment Agent', 'PATCH', '/v1/tickets/VC-1', { assignment: 'Agent' }, 200],
+    ['edit title at the cap', 'PATCH', '/v1/tickets/VC-1', { title: 'x'.repeat(200) }, 200],
+    ['edit description at the cap', 'PATCH', '/v1/tickets/VC-1', { description: 'x'.repeat(20000) }, 200],
+    ['metadata object', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: { pr: '#46' } }, 201],
+    ['metadata null', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: null }, 201],
+    ['metadata at the cap', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: metadataOfBytes(2048) }, 201]
+  ];
+  for (const [label, method, target, value, status] of accepted) assert.equal((await f.signed(artem, method, target, value)).status, status, label);
+  const refused = [
+    ['title past the cap', 'POST', '/v1/tickets', { project: 'VC', title: 'x'.repeat(201) }],
+    ['description past the cap', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', description: 'x'.repeat(20001) }],
+    ['description not text', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', description: 42 }],
+    ['description null', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', description: null }],
+    ['assignment unknown', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', assignment: 'Blocked' }],
+    ['assignment wrong case', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', assignment: 'agent' }],
+    ['assignment not text', 'POST', '/v1/tickets', { project: 'VC', title: 'ok', assignment: 42 }],
+    ['title not text', 'POST', '/v1/tickets', { project: 'VC', title: 42 }],
+    ['edit title past the cap', 'PATCH', '/v1/tickets/VC-1', { title: 'x'.repeat(201) }],
+    ['edit description past the cap', 'PATCH', '/v1/tickets/VC-1', { description: 'x'.repeat(20001) }],
+    ['edit description not text', 'PATCH', '/v1/tickets/VC-1', { description: 42 }],
+    ['edit assignment unknown', 'PATCH', '/v1/tickets/VC-1', { assignment: 'Blocked' }],
+    ['metadata array', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: [] }],
+    ['metadata text', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: 'x' }],
+    ['metadata number', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: 42 }],
+    ['metadata past the cap', 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: metadataOfBytes(2049) }]
+  ];
+  for (const [label, method, target, value] of refused) {
+    const before = f.upstreamHits;
+    assert.equal((await f.signed(artem, method, target, value)).status, 403, label);
+    assert.equal(f.upstreamHits, before, `${label} went upstream`);
+  }
+});
+
+test('an upstream that cannot answer is reported as 502, not as a refused authorization', async (t) => {
+  for (const mode of ['status503', 'badjson', 'transport']) {
+    const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
+    f.failLookup(mode);
+    for (const [method, target, value] of [['PATCH', '/v1/tickets/VC-1', { title: 'x' }], ['POST', '/v1/tickets/VC-1/notes', { message: 'x' }], ['POST', '/v1/tickets/VC-1/state', { state: 'Done' }]]) {
+      const before = f.mutationHits;
+      const response = await f.signed(artem, method, target, value);
+      assert.equal(response.status, 502, `${mode} ${method} ${target}`);
+      assert.equal((await response.json()).error.code, 'upstream_unavailable', `${mode} ${method} ${target}`);
+      assert.equal(f.mutationHits, before, `${mode} ${method} ${target}`);
+    }
+    assert.equal((await f.bearerAs('core_artem_token', 'PATCH', '/v1/tickets/VC-1', { title: 'x' })).status, 502, `${mode} bearer`);
+  }
+});
+
+test('an upstream lookup that never answers is 502 once the request times out', async (t) => {
+  const f = await fixture({ requestTimeoutMs: 200 }); t.after(() => cleanup(f)); const artem = f.exact();
+  f.failLookup('hang');
+  const response = await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', { message: 'x' });
+  assert.equal(response.status, 502); assert.equal((await response.json()).error.code, 'upstream_unavailable');
+  assert.equal(f.mutationHits, 0);
+});
+
+test('a real boundary is still 403, not 502', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
+  // Project not VC, id mismatch is impossible to fake here, ticket absent upstream — each is a decision, not an outage.
+  for (const [label, target] of [['foreign project', '/v1/tickets/VIQ-1'], ['case-different project', '/v1/tickets/VC-201'], ['absent upstream', '/v1/tickets/VC-404']]) {
+    const response = await f.signed(artem, 'PATCH', target, { title: 'x' });
+    assert.equal(response.status, 403, label);
+    assert.equal((await response.json()).error.code, 'authorization_failed', label);
+  }
+});
+
+test('a refused Bearer delegation leaves a trail that tells the classes apart', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  const attempts = [
+    ['schema', () => f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-1/notes', {})],
+    ['identity', () => f.bearerAs('off_device_admin_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' })],
+    ['object', () => f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VIQ-1/notes', { message: 'x' })],
+    ['unknown credential', () => f.bearerAs('invalid_token_value', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' })]
+  ];
+  for (const [, attempt] of attempts) await attempt();
+  f.failLookup('status503');
+  await f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' });
+  f.failLookup(null);
+  const denied = f.auditOf('vc_delegation_denied');
+  assert.equal(denied.length, 5, 'every refused bearer attempt leaves one row');
+  for (const row of denied) {
+    const detail = JSON.parse(row.detail);
+    assert.equal(detail.auth_mode, 'bearer-delegation');
+    assert.equal(detail.method, 'POST'); assert.match(detail.target, /^\/v1\/tickets\/[^/]+\/notes$/);
+    assert.equal(typeof detail.reason, 'string'); assert.ok(detail.reason.length > 0);
+  }
+  // Newest first: outage, unknown credential, object, identity, schema — five classes, five distinct reasons.
+  assert.equal(new Set(denied.map((row) => JSON.parse(row.detail).reason)).size, 5, 'a trail that cannot tell an outage from a probe is not a trail');
+  assert.equal(JSON.parse(denied.at(-1).detail).target, '/v1/tickets/VC-1/notes');
+  assert.equal(denied.at(-1).device_id, null, 'a body refused before the identity lookup has no device to name');
+});
+
+test('the signed path keeps its existing trail and grows no denial rows', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
+  assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', {})).status, 403);
+  assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VIQ-1/notes', { message: 'x' })).status, 403);
+  assert.equal(f.auditOf('vc_delegation_denied').length, 0, 'store.authorize already records the signed attempt');
+  assert.ok(f.auditOf('authorized').length >= 2);
 });
