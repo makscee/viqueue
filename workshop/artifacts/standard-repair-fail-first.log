@@ -1,0 +1,23 @@
+Bounded fail-first proof for Cass S1 blockers
+Candidate under test: 9194f279b2474f4c3b96309436b3a42264e78886
+Command: node --test test/standard-phase.test.js
+Tests were added before product changes. The focused run failed at module instantiation because the candidate had no reviewSourceFacts UI behavior; therefore the new test covering distinct review/merge facts and safe source links could not run on the candidate.
+
+TAP version 13
+# import { reviewSourceFacts } from '../web/ui-core.js';
+#          ^^^^^^^^^^^^^^^^^
+# SyntaxError: The requested module '../web/ui-core.js' does not provide an export named 'reviewSourceFacts'
+# Subtest: test/standard-phase.test.js
+not ok 1 - test/standard-phase.test.js
+  ---
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# pass 0
+# fail 1
+# duration_ms 45.65775
+
+The added regression test also exercises Review Bundle normalization for independent review/merge fields, safe PR and commit hrefs before Human Accept, and unsafe commit-URI rejection. A second added test exercises submitted-bundle ledger projection plus independent coordinator review_recorded and merge_recorded transitions. Both pass after the bounded repair; see standard-repair-evidence.md.

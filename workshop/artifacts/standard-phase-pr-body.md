@@ -6,9 +6,9 @@ STANDARD: human review bundles and fresh-session persistent `/viq` lane
 
 ## What
 
-- Persist and safely render structured Review Bundles before Human Accept.
+- Persist and safely render structured Review Bundles before Human Accept, including clickable safe PR and commit URLs.
 - Require explicit acknowledgement when required visual proof is absent.
-- Separate Human Accept, release recording, and production verification.
+- Represent reviewed and merged facts independently from Human Accept, release recording, and production verification; coordinator APIs record references only and perform no Git/deploy action.
 - Add `/viq once`, `/viq unpair`, persistent idle backoff, richer status/recovery, and fresh-session rotation after terminal boundaries.
 - Keep Viq artifact-neutral and execution-neutral.
 
@@ -22,8 +22,8 @@ This repository has deterministic local bundle/install/rollback machinery only. 
 
 ## Review
 
-Run `npm test`, `npm run build`, and `npm run scan:secrets`. Inspect Review Bundle rendering and the proof-absence checkbox in an approval card. Exercise `/viq status`, `/viq once`, `/viq poll`, pause/resume/stop, and a two-ticket submit rotation in a disposable Pi profile. Confirm the credential canary appears only in Authorization headers, never events/prompts/status/session files.
+Run `npm test`, `npm run build`, and `npm run scan:secrets`. Inspect distinct Acceptance, Reviewed, Merged, Release, and Production verification rows plus clickable PR/commit URLs in the Review Bundle before Human Accept, and inspect the proof-absence checkbox in an approval card. Exercise `/viq status`, `/viq once`, `/viq poll`, pause/resume/stop, and a two-ticket submit rotation in a disposable Pi profile. Confirm the credential canary appears only in Authorization headers, never events/prompts/status/session files.
 
 ## Risk
 
-The schema adds compatible policy/deployment facts. Older binaries require snapshot-paired rollback. Browser thumbnails depend on externally supplied safe HTTP(S) references; Viq does not fetch or render artifacts server-side. Production release remains an explicit external authority gap.
+The schema adds compatible policy/deployment facts and explicit Review Bundle review/merge facts. Older binaries require snapshot-paired rollback. Browser thumbnails depend on externally supplied safe HTTP(S) references; Viq does not fetch or render artifacts server-side. Production release remains an explicit external authority gap.

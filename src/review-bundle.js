@@ -13,6 +13,12 @@ const safeUri = (raw, name = 'evidence_uri') => {
   return value;
 };
 const optionalUri = (value, name) => value == null || value === '' ? null : safeUri(value, name);
+const sourceCommit = (value) => { const commit = text(value, 'commit', 200); return /^[a-z][a-z0-9+.-]*:/i.test(commit) ? safeUri(commit, 'commit_uri') : commit; };
+const sourceFact = (value, name, absent, present) => {
+  value ??= { status: absent };
+  if (!value || typeof value !== 'object' || Array.isArray(value) || ![absent, present].includes(value.status)) throw new Error(`invalid_${name}_status`);
+  return { status: value.status, ...(value.reference ? { reference: safeUri(value.reference, `${name}_reference`) } : {}) };
+};
 
 export function normalizeReviewBundle(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input) || input.version !== 1) throw new Error('invalid_review_bundle');
@@ -42,7 +48,7 @@ export function normalizeReviewBundle(input) {
     verification_steps: list(input.verification_steps, 'verification_steps', { min: 1 }), tests,
     caveats: list(input.caveats ?? [], 'caveats'), ui_change: Boolean(input.ui_change),
     preview_url: optionalUri(input.preview_url, 'preview_url'), screenshots,
-    source: { ...(source.commit ? { commit: text(source.commit, 'commit', 200) } : {}), ...(source.pr ? { pr: safeUri(source.pr, 'pr_uri') } : {}) },
+    source: { ...(source.commit ? { commit: sourceCommit(source.commit) } : {}), ...(source.pr ? { pr: safeUri(source.pr, 'pr_uri') } : {}), review: sourceFact(source.review, 'review', 'not-reviewed', 'reviewed'), merge: sourceFact(source.merge, 'merge', 'not-merged', 'merged') },
     release: { status: release.status, ...(release.build_id ? { build_id: text(release.build_id, 'build_id', 200) } : {}), ...(release.reference ? { reference: safeUri(release.reference, 'release_reference') } : {}) }
   };
 }
@@ -53,6 +59,6 @@ export function legacyReviewBundle({ summary, evidence }) {
     evidence: evidence.map((uri, index) => ({ kind: 'other', label: `Evidence ${index + 1}`, uri: /^(https?|urn|file):/i.test(uri) ? uri : `urn:viq:legacy:${encodeURIComponent(uri)}` })),
     verification_steps: ['Follow the submitted evidence reference and inspect the result.'],
     tests: [{ name: 'Legacy submission (test details not structured)', status: 'not-run' }],
-    caveats: ['Migrated legacy submission; structured fields were not supplied.'], ui_change: false, source: {}, release: { status: 'not-released' }
+    caveats: ['Migrated legacy submission; structured fields were not supplied.'], ui_change: false, source: { review: { status: 'not-reviewed' }, merge: { status: 'not-merged' } }, release: { status: 'not-released' }
   });
 }
