@@ -13,6 +13,7 @@ const safeUri = (raw, name = 'evidence_uri') => {
   return value;
 };
 const optionalUri = (value, name) => value == null || value === '' ? null : safeUri(value, name);
+const clickableUri = (raw, name) => { const value = safeUri(raw, name); if (!['https:', 'http:'].includes(new URL(value).protocol)) throw new Error(`invalid_${name}`); return value; };
 const sourceCommit = (value) => { const commit = text(value, 'commit', 200); return /^[a-z][a-z0-9+.-]*:/i.test(commit) ? safeUri(commit, 'commit_uri') : commit; };
 const sourceFact = (value, name, absent, present) => {
   value ??= { status: absent };
@@ -48,7 +49,7 @@ export function normalizeReviewBundle(input) {
     verification_steps: list(input.verification_steps, 'verification_steps', { min: 1 }), tests,
     caveats: list(input.caveats ?? [], 'caveats'), ui_change: Boolean(input.ui_change),
     preview_url: optionalUri(input.preview_url, 'preview_url'), screenshots,
-    source: { ...(source.commit ? { commit: sourceCommit(source.commit) } : {}), ...(source.pr ? { pr: safeUri(source.pr, 'pr_uri') } : {}), review: sourceFact(source.review, 'review', 'not-reviewed', 'reviewed'), merge: sourceFact(source.merge, 'merge', 'not-merged', 'merged') },
+    source: { ...(source.commit ? { commit: sourceCommit(source.commit) } : {}), ...(source.pr ? { pr: clickableUri(source.pr, 'pr_uri') } : {}), review: sourceFact(source.review, 'review', 'not-reviewed', 'reviewed'), merge: sourceFact(source.merge, 'merge', 'not-merged', 'merged') },
     release: { status: release.status, ...(release.build_id ? { build_id: text(release.build_id, 'build_id', 200) } : {}), ...(release.reference ? { reference: safeUri(release.reference, 'release_reference') } : {}) }
   };
 }

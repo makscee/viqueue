@@ -6,6 +6,7 @@ import test from 'node:test';
 import { Store } from '../src/store.js';
 import { claimWithSession } from './helpers/worker-session.js';
 import { normalizeReviewBundle } from '../extensions/viq-worker/review-bundle.mjs';
+import { normalizeReviewBundle as normalizeServerReviewBundle } from '../src/review-bundle.js';
 import { parseViqCommand, viqHelp, viqStatus, friendlyViqError } from '../extensions/viq-worker/command.mjs';
 import { ViqWorkerRuntime } from '../extensions/viq-worker/worker-runtime.mjs';
 import { reviewSourceFacts } from '../web/ui-core.js';
@@ -43,6 +44,7 @@ test('review and merge facts are independent and source URLs render as safe link
     {label:'Production verification',value:'not-verified',href:null}
   ]);
   assert.throws(()=>normalizeReviewBundle(bundle({source:{commit:'javascript:alert(1)',review:{status:'not-reviewed'},merge:{status:'not-merged'}}})),/invalid_commit_uri/);
+  for (const normalize of [normalizeReviewBundle,normalizeServerReviewBundle]) for (const pr of ['urn:pr:7','file:///tmp/pr-7']) assert.throws(()=>normalize(bundle({source:{pr,review:{status:'not-reviewed'},merge:{status:'not-merged'}}})),/invalid_pr_uri/);
 });
 
 test('visual proof policy requires a prominent explicit absence acknowledgement before human acceptance',async()=>{
@@ -77,6 +79,19 @@ test('reviewed and merged lifecycle facts have separate coordinator ledger trans
   await store.recordSourceLifecycle(ticket.id,{actor:'human',fact:'merge',status:'merged',reference:'https://github.com/acme/app/pull/7'});
   current=await store.getTicket(ticket.id);assert.equal(current.source_lifecycle.review.status,'reviewed');assert.equal(current.source_lifecycle.merge.status,'merged');assert.equal(current.deployment.status,'not-released');
   assert.deepEqual((await store.listEvents({ticket:ticket.id})).events.slice(-2).map(e=>e.type),['review_recorded','merge_recorded']);
+  await store.close();
+});
+
+test('review and merge lifecycle facts are scoped to the current resubmission',async()=>{
+  const {store,ticket}=await fixture();
+  let claim=await claimWithSession(store,ticket.id,{actor:'worker'});let submitted=await store.submit(ticket.id,{...authority(claim),reviewer:{type:'actor',id:'human'},review_bundle:bundle()});
+  await store.recordSourceLifecycle(ticket.id,{actor:'human',fact:'review',status:'reviewed',reference:'urn:review:first'});
+  await store.recordSourceLifecycle(ticket.id,{actor:'human',fact:'merge',status:'merged',reference:'urn:merge:first'});
+  await store.answerQuestion(ticket.id,submitted.question.id,{actor:'human',decision:'request_changes'});
+  claim=await claimWithSession(store,ticket.id,{actor:'worker'});submitted=await store.submit(ticket.id,{...authority(claim),reviewer:{type:'actor',id:'human'},review_bundle:bundle()});
+  const lifecycle=submitted.ticket.source_lifecycle;
+  assert.deepEqual({review:{status:lifecycle.review.status,reference:lifecycle.review.reference},merge:{status:lifecycle.merge.status,reference:lifecycle.merge.reference}},{review:{status:'not-reviewed',reference:null},merge:{status:'not-merged',reference:null}});
+  assert.equal(lifecycle.review.updated_at,lifecycle.merge.updated_at);
   await store.close();
 });
 
