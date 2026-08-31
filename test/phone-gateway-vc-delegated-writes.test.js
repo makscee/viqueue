@@ -8,7 +8,7 @@ import test from 'node:test';
 import { createPhoneGateway } from '../src/phone-gateway.js';
 import { b64url, pairRecord, proofRecord } from '../src/phone-auth-store.js';
 
-const listen = (server) => new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+const listen = (server, host = '127.0.0.1') => new Promise((resolve) => (host === null ? server.listen(0, resolve) : server.listen(0, host, resolve)));
 const close = (server) => new Promise((resolve) => server.close(resolve));
 const sha = (value) => createHash('sha256').update(value).digest();
 // Truth the board must show: the shared admin credential writes, this browser asked for it.
@@ -46,7 +46,7 @@ const bearerFieldVariants = [
 ].map(([field, group, key, value]) => ({ field, token: `off_${group}_${key}_token`, identity: { ...FROZEN_IDENTITY, [group]: { ...FROZEN_IDENTITY[group], [key]: value } } }));
 const bearerIdentities = new Map([['core_artem_token', FROZEN_IDENTITY], ...bearerFieldVariants.map(({ token, identity }) => [token, identity])]);
 
-async function fixture({ requestTimeoutMs } = {}) {
+async function fixture({ requestTimeoutMs, dualStack = false } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-vc-writes-'));
   const tickets = seedTickets(); const upstreamRequests = []; const notes = [];
   let mutationHits = 0, ticketReads = 0, nextNumber = 6, noteCursor = 0, failNext = null, lookupFailure = null, identityFailure = null;
@@ -102,7 +102,7 @@ async function fixture({ requestTimeoutMs } = {}) {
   });
   await listen(upstream); const origin = 'https://phone.test';
   const gateway = await createPhoneGateway({ authDb: path.join(dir, 'auth.sqlite'), origin, upstream: `http://127.0.0.1:${upstream.address().port}`, upstreamAuthorization: 'test_upstream_admin_credential', testMode: true, ...(requestTimeoutMs === undefined ? {} : { testHooks: { requestTimeoutMs } }) });
-  await listen(gateway); const base = `http://127.0.0.1:${gateway.address().port}`;
+  await listen(gateway, dualStack ? null : '127.0.0.1'); const base = `http://127.0.0.1:${gateway.address().port}`, base6 = `http://[::1]:${gateway.address().port}`;
   const pair = ({ actorId, actorName, admin = false, kind = 'coordinator', actorActive = true, deviceId }) => {
     const device = deviceId ?? `device_${crypto.randomUUID().replaceAll('-', '')}`;
     const intent = gateway.authStore.createPair({ deviceId: device, actorId, actorName, admin, kind, actorActive, label: `${actorName} browser` });
@@ -122,11 +122,12 @@ async function fixture({ requestTimeoutMs } = {}) {
   };
   const signed = (identity, method, target, value) => prepare(identity, method, target, value)();
   // Bearer delegation: no signed x-viq-* headers, the device credential itself is the claim.
+  const bearerAt = (at, token, method, target, value) => fetch(`${at}${target}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: value === undefined ? undefined : JSON.stringify(value) });
   const bearer = (method, target, value, authorization) => fetch(`${base}${target}`, { method, headers: { 'content-type': 'application/json', ...(authorization === undefined ? {} : { authorization }) }, body: value === undefined ? undefined : JSON.stringify(value) });
   const bearerAs = (token, method, target, value) => bearer(method, target, value, `Bearer ${token}`);
   const bearerRaw = (token, method, target, rawBody) => fetch(`${base}${target}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: rawBody });
   return {
-    dir, upstream, gateway, base, pair, prepare, signed, bearer, bearerAs, bearerRaw, upstreamRequests, notes, tickets,
+    dir, upstream, gateway, base, base6, pair, prepare, signed, bearer, bearerAs, bearerAt, bearerRaw, upstreamRequests, notes, tickets,
     lastDenial() { return this.auditOf('vc_delegation_denied')[0]; },
     exact: () => pair({ actorId: 'artem', actorName: 'Artem', deviceId: 'artems-macbook-pro' }),
     failNextMutation(status) { failNext = status; },
@@ -648,4 +649,30 @@ test('anonymous Bearer probing is capped, and the cap is spent only by identity 
     assert.equal(f.upstreamHits, spent, `capped probe ${n} must not ask upstream`);
   }
   assert.equal(f.auditOf('vc_delegation_denied').length, rows, 'twenty more capped probes in the same window add no rows');
+});
+
+test('the probe cap is charged per source address, not shared by every caller', async (t) => {
+  const f = await fixture({ dualStack: true }); t.after(() => cleanup(f));
+  const probe = (at) => f.bearerAt(at, 'unknown_credential_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' });
+  for (let n = 1; n <= 10; n++) assert.equal((await probe(f.base)).status, 403, `probe ${n} from the first address`);
+  assert.equal((await probe(f.base)).status, 429, 'the eleventh from that address is capped');
+  // A second address is a second bucket. One prober must not close the door on everybody else:
+  // a cap shared by all callers turns the anti-oracle measure into a denial of service anyone can trigger.
+  const before = f.upstreamHits;
+  assert.equal((await probe(f.base6)).status, 403, 'a different address is not capped by the first one');
+  assert.ok(f.upstreamHits > before, 'and its own identity question still reaches upstream');
+  assert.equal((await f.bearerAt(f.base6, 'core_artem_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'legitimate' })).status, 201, 'the frozen identity elsewhere keeps working while one address is capped');
+});
+
+test('a later window gets its own row: the cap goes quiet for a window, not for ever', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  const probe = () => f.bearerAs('unknown_credential_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' });
+  const capRows = () => f.auditOf('vc_delegation_denied').filter((row) => JSON.parse(row.detail).reason === 'rate_limited').length;
+  for (let n = 1; n <= 11; n++) await probe();
+  assert.equal(capRows(), 1, 'the first burst is one row');
+  // Age the bucket past the window rather than waiting a minute for it.
+  for (const [key, bucket] of f.gateway.rateLimitBuckets) if (key.startsWith('probe:')) bucket.t -= 60_001;
+  for (let n = 1; n <= 11; n++) await probe();
+  // A prober who keeps going for an hour must not look like one who stopped after the first minute.
+  assert.equal(capRows(), 2, 'a burst a window later is its own event and earns its own row');
 });
