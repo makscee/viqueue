@@ -21,7 +21,7 @@ const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }
 if (revision.status !== 0 || tree.status !== 0 || !/^[0-9a-f]{40}\n?$/.test(revision.stdout) || !/^[0-9a-f]{40}\n?$/.test(tree.stdout)) throw new Error(revision.stderr || tree.stderr || 'cannot determine source identity');
 await writeFile(path.join(stage, 'SOURCE_COMMIT'), `${revision.stdout.trim()}\n`);
 await writeFile(path.join(stage, 'SOURCE_TREE'), `${tree.stdout.trim()}\n`);
-for (const file of ['bin/viq.js', 'bin/viq-bootstrap.js', 'bin/viq-recover-coordinator.js', 'bin/viq-import.js', 'src/server.js', 'src/store.js', 'src/local-coordinator-recovery.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
+for (const file of ['bin/viq.js', 'bin/viq-bootstrap.js', 'bin/viq-recover-coordinator.js', 'bin/viq-import.js', 'src/server.js', 'src/operator-server.js', 'src/operator-cli.js', 'src/store.js', 'src/local-coordinator-recovery.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
   await cp(path.join('dist', file), path.join(stage, file));
 }
 await cp('dist/web', path.join(stage, 'web'), { recursive: true });
@@ -35,6 +35,7 @@ await cp('scripts/install-local.sh', path.join(stage, 'install-local.sh'));
 await cp('scripts/uninstall-local.sh', path.join(stage, 'uninstall-local.sh'));
 await cp('scripts/rollback-local.sh', path.join(stage, 'rollback-local.sh'));
 await cp('scripts/sqlite-backup.js', path.join(stage, 'sqlite-backup.js'));
+await cp('scripts/viqueue-alpha-operator.conf.in', path.join(stage, 'viqueue-alpha-operator.conf.in'));
 await chmod(path.join(stage, 'install-local.sh'), 0o755);
 await chmod(path.join(stage, 'uninstall-local.sh'), 0o755);
 await chmod(path.join(stage, 'rollback-local.sh'), 0o755);

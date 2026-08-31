@@ -12,6 +12,8 @@ await cp('bin/viq-import.js', 'dist/bin/viq-import.js');
 await cp('bin/viq-phone-auth.js', 'dist/bin/viq-phone-auth.js');
 await cp('bin/viq-trace-tailscale-upstream.js', 'dist/bin/viq-trace-tailscale-upstream.js');
 await cp('src/server.js', 'dist/src/server.js');
+await cp('src/operator-server.js', 'dist/src/operator-server.js');
+await cp('src/operator-cli.js', 'dist/src/operator-cli.js');
 await cp('src/phone-auth-store.js', 'dist/src/phone-auth-store.js');
 await cp('src/phone-gateway.js', 'dist/src/phone-gateway.js');
 await cp('src/store.js', 'dist/src/store.js');
