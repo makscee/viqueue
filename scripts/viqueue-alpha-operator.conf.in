@@ -1,0 +1,6 @@
+# Substitute @RELEASE@ with the reviewed immutable release ID before atomic install.
+[Service]
+RuntimeDirectory=viqueue-alpha
+RuntimeDirectoryMode=0700
+ExecStart=
+ExecStart=/usr/bin/node /opt/viqueue-alpha/releases/@RELEASE@/src/server.js --storage=/var/lib/viqueue-alpha/viqueue.sqlite --host=127.0.0.1 --port=17373 --operator-socket=/run/viqueue-alpha/operator.sock

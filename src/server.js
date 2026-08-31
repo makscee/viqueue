@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store, DomainError } from './store.js';
+import { createOperatorServer } from './operator-server.js';
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.css': ['app.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/ui-core.js': ['ui-core.js', 'text/javascript; charset=utf-8'] };
@@ -81,7 +82,8 @@ export async function createApp({ storage, now } = {}) {
       throw new DomainError(404, 'route_not_found', 'route not found');
     } catch (error) { if (error instanceof DomainError) return send(response, error.status, { error: { code: error.code, message: error.message } }); console.error(error); return send(response, 500, { error: { code: 'internal_error', message: 'internal server error' } }); }
   });
+  server.viqStore=store;
   server.on('close', () => { store.close().catch(() => {}); }); return server;
 }
-export async function runServer({ storage, host = '127.0.0.1', port = 7373 } = {}) { const server = await createApp({ storage }); server.listen(port, host, () => process.stdout.write(`${JSON.stringify({ event: 'listening', url: `http://${host}:${port}`, storage })}\n`)); return server; }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) { const options = Object.fromEntries(process.argv.slice(2).map((arg) => { const [key, ...rest] = arg.replace(/^--/, '').split('='); return [key.replaceAll('-', '_'), rest.join('=')]; })); await runServer({ storage: options.storage ?? process.env.VIQ_STORAGE ?? './viqueue.sqlite', host: options.host ?? process.env.VIQ_HOST ?? '127.0.0.1', port: Number(options.port ?? process.env.VIQ_PORT ?? 7373) }); }
+export async function runServer({ storage, host = '127.0.0.1', port = 7373, operatorSocket } = {}) { const server = await createApp({ storage }); let operator; try { if(operatorSocket)operator=await createOperatorServer({store:server.viqStore,socketPath:operatorSocket}); server.listen(port, host, () => process.stdout.write(`${JSON.stringify({ event: 'listening', url: `http://${host}:${port}`, storage,operator_socket:Boolean(operatorSocket) })}\n`)); server.once('close',()=>operator?.close()); return server; }catch(error){server.close();throw error} }
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) { const options = Object.fromEntries(process.argv.slice(2).map((arg) => { const [key, ...rest] = arg.replace(/^--/, '').split('='); return [key.replaceAll('-', '_'), rest.join('=')]; })); await runServer({ storage: options.storage ?? process.env.VIQ_STORAGE ?? './viqueue.sqlite', host: options.host ?? process.env.VIQ_HOST ?? '127.0.0.1', port: Number(options.port ?? process.env.VIQ_PORT ?? 7373),operatorSocket:options.operator_socket??process.env.VIQ_OPERATOR_SOCKET }); }
