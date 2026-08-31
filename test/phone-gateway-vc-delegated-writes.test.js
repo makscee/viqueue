@@ -19,7 +19,12 @@ const writes = [['POST', '/v1/tickets', { project: 'VC', title: 'x' }], ['PATCH'
 // The whole detail, never a projection of it: a leaked extra key must fail the comparison.
 const writtenAudit = (operation, extra = {}) => ({ operation, ...DELEGATED_AUDIT, ...extra });
 const stateAudit = (extra) => ({ actor_id: 'artem', upstream_actor: 'maks', ...extra });
-const metadataOfBytes = (total) => ({ note: 'x'.repeat(total - JSON.stringify({ note: '' }).length) });
+const metadataOfBytes = (total, { cyrillic = false } = {}) => {
+  const room = total - Buffer.byteLength(JSON.stringify({ note: '' })); const wide = cyrillic ? Math.floor(room / 2) : 0;
+  return { note: 'я'.repeat(wide) + 'x'.repeat(room - wide * 2) };
+};
+// Every reason the trail may name, and whether the device was established when the refusal happened.
+const DENIAL_DEVICE = { credential_malformed: null, body_unparsable: null, schema_refused: null, identity_unresolved: null, identity_lookup_failed: null, identity_mismatch: null, rate_limited: null, object_absent: 'artems-macbook-pro', object_outside_project: 'artems-macbook-pro', object_lookup_failed: 'artems-macbook-pro' };
 
 const seedTickets = () => new Map([
   ...Array.from({ length: 5 }, (_, i) => [`VC-${i + 1}`, { id: `VC-${i + 1}`, project: 'VC', title: `Ticket ${i + 1}`, description: '', assignment: 'Human', state: 'Open' }]),
@@ -44,7 +49,7 @@ const bearerIdentities = new Map([['core_artem_token', FROZEN_IDENTITY], ...bear
 async function fixture({ requestTimeoutMs } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'viq-vc-writes-'));
   const tickets = seedTickets(); const upstreamRequests = []; const notes = [];
-  let mutationHits = 0, ticketReads = 0, nextNumber = 6, noteCursor = 0, failNext = null, lookupFailure = null;
+  let mutationHits = 0, ticketReads = 0, nextNumber = 6, noteCursor = 0, failNext = null, lookupFailure = null, identityFailure = null;
   const upstream = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const rawBody = Buffer.concat(chunks).toString();
@@ -56,6 +61,11 @@ async function fixture({ requestTimeoutMs } = {}) {
     const idOf = (value) => decodeURIComponent(value);
     let match;
     if (req.url === '/v1/devices/me' && req.headers.authorization !== 'Bearer test_upstream_admin_credential') {
+      if (identityFailure === 'status503') { res.statusCode = 503; return res.end(JSON.stringify({ error: { code: 'unavailable' } })); }
+      if (identityFailure === 'status401' || identityFailure === 'status403') { res.statusCode = identityFailure === 'status401' ? 401 : 403; return res.end(JSON.stringify({ error: { code: 'device_unauthorized' } })); }
+      if (identityFailure === 'badjson') return res.end('{ this is not json');
+      if (identityFailure === 'transport') return req.socket.destroy();
+      if (identityFailure === 'hang') return;
       const identity = bearerIdentities.get(req.headers.authorization?.slice(7));
       if (!identity) { res.statusCode = 401; return res.end(JSON.stringify({ error: { code: 'device_unauthorized' } })); }
       return res.end(JSON.stringify(identity));
@@ -114,11 +124,14 @@ async function fixture({ requestTimeoutMs } = {}) {
   // Bearer delegation: no signed x-viq-* headers, the device credential itself is the claim.
   const bearer = (method, target, value, authorization) => fetch(`${base}${target}`, { method, headers: { 'content-type': 'application/json', ...(authorization === undefined ? {} : { authorization }) }, body: value === undefined ? undefined : JSON.stringify(value) });
   const bearerAs = (token, method, target, value) => bearer(method, target, value, `Bearer ${token}`);
+  const bearerRaw = (token, method, target, rawBody) => fetch(`${base}${target}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: rawBody });
   return {
-    dir, upstream, gateway, base, pair, prepare, signed, bearer, bearerAs, upstreamRequests, notes, tickets,
+    dir, upstream, gateway, base, pair, prepare, signed, bearer, bearerAs, bearerRaw, upstreamRequests, notes, tickets,
+    lastDenial() { return this.auditOf('vc_delegation_denied')[0]; },
     exact: () => pair({ actorId: 'artem', actorName: 'Artem', deviceId: 'artems-macbook-pro' }),
     failNextMutation(status) { failNext = status; },
     failLookup(mode) { lookupFailure = mode; },
+    failIdentity(mode) { identityFailure = mode; },
     auditOf(action) { return gateway.authStore.status().audit.filter((row) => row.action === action); },
     get mutationHits() { return mutationHits; },
     get ticketReads() { return ticketReads; },
@@ -351,17 +364,17 @@ test('the frozen Artem Bearer delegates all four VC writes without a browser', a
 });
 
 test('Bearer delegation is refused when a single identity field differs from the frozen one', async (t) => {
+  // A fixture per credential: identity failures spend the anonymous-probe bucket, and this test
+  // is about the 403 each field earns, not about the cap that arrives after ten of them.
+  for (const { field, token } of [...bearerFieldVariants, { field: 'unknown credential', token: 'invalid_token_value' }]) {
+    const f = await fixture(); t.after(() => cleanup(f));
+    for (const [method, target, value] of writes) {
+      const before = f.mutationHits;
+      assert.equal((await f.bearerAs(token, method, target, value)).status, 403, `${field} ${method} ${target}`);
+      assert.equal(f.mutationHits, before, `${field} ${method} ${target}`);
+    }
+  }
   const f = await fixture(); t.after(() => cleanup(f));
-  for (const { field, token } of bearerFieldVariants) for (const [method, target, value] of writes) {
-    const before = f.mutationHits;
-    assert.equal((await f.bearerAs(token, method, target, value)).status, 403, `${field} ${method} ${target}`);
-    assert.equal(f.mutationHits, before, `${field} ${method} ${target}`);
-  }
-  for (const [method, target, value] of writes) {
-    const before = f.mutationHits;
-    assert.equal((await f.bearerAs('invalid_token_value', method, target, value)).status, 403, `unknown credential ${method} ${target}`);
-    assert.equal(f.mutationHits, before);
-  }
   for (const [method, target, value] of writes) {
     for (const authorization of [undefined, 'Basic nope', 'Bearer', `Bearer ${'x'.repeat(513)}`]) {
       const before = f.mutationHits;
@@ -522,8 +535,10 @@ test('a refused Bearer delegation leaves a trail that tells the classes apart', 
     assert.equal(detail.method, 'POST'); assert.match(detail.target, /^\/v1\/tickets\/[^/]+\/notes$/);
     assert.equal(typeof detail.reason, 'string'); assert.ok(detail.reason.length > 0);
   }
-  // Newest first: outage, unknown credential, object, identity, schema — five classes, five distinct reasons.
-  assert.equal(new Set(denied.map((row) => JSON.parse(row.detail).reason)).size, 5, 'a trail that cannot tell an outage from a probe is not a trail');
+  // Newest first: outage, unknown credential, object, identity, schema — five classes, five distinct words from the agreed dictionary.
+  const reasons = denied.map((row) => JSON.parse(row.detail).reason);
+  assert.equal(new Set(reasons).size, 5, 'a trail that cannot tell an outage from a probe is not a trail');
+  for (const reason of reasons) assert.ok(reason in DENIAL_DEVICE, `${reason} is not a word the trail is allowed to use`);
   assert.equal(JSON.parse(denied.at(-1).detail).target, '/v1/tickets/VC-1/notes');
   assert.equal(denied.at(-1).device_id, null, 'a body refused before the identity lookup has no device to name');
 });
@@ -534,4 +549,95 @@ test('the signed path keeps its existing trail and grows no denial rows', async 
   assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VIQ-1/notes', { message: 'x' })).status, 403);
   assert.equal(f.auditOf('vc_delegation_denied').length, 0, 'store.authorize already records the signed attempt');
   assert.ok(f.auditOf('authorized').length >= 2);
+});
+
+test('an identity lookup that cannot answer is 502, and one that refuses is 403', async (t) => {
+  for (const mode of ['status503', 'badjson', 'transport']) {
+    const f = await fixture(); t.after(() => cleanup(f)); f.failIdentity(mode);
+    for (const [method, target, value] of writes) {
+      const before = f.mutationHits;
+      const response = await f.bearerAs('core_artem_token', method, target, value);
+      assert.equal(response.status, 502, `${mode} ${method} ${target}`);
+      assert.equal((await response.json()).error.code, 'upstream_unavailable', `${mode} ${method} ${target}`);
+      assert.equal(f.mutationHits, before);
+    }
+  }
+  // An answer outside 5xx is the credential's owner refusing it, not an outage.
+  for (const mode of ['status401', 'status403']) {
+    const f = await fixture(); t.after(() => cleanup(f)); f.failIdentity(mode);
+    const response = await f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' });
+    assert.equal(response.status, 403, mode);
+    assert.equal((await response.json()).error.code, 'authorization_failed', mode);
+  }
+});
+
+test('an identity lookup that never answers is 502 once the request times out', async (t) => {
+  const f = await fixture({ requestTimeoutMs: 200 }); t.after(() => cleanup(f)); f.failIdentity('hang');
+  const response = await f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-1/notes', { message: 'x' });
+  assert.equal(response.status, 502); assert.equal((await response.json()).error.code, 'upstream_unavailable');
+  assert.equal(f.mutationHits, 0);
+});
+
+test('every refusal class names itself in the trail with the agreed word', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  const target = '/v1/tickets/VC-1/notes', note = { message: 'x' };
+  const classes = [
+    ['credential_malformed', () => f.bearer('POST', target, note, 'Basic nope')],
+    ['body_unparsable', () => f.bearerRaw('core_artem_token', 'POST', target, '{ not json')],
+    ['schema_refused', () => f.bearerAs('core_artem_token', 'POST', target, {})],
+    ['identity_unresolved', () => f.bearerAs('unknown_credential_token', 'POST', target, note)],
+    ['identity_lookup_failed', () => { f.failIdentity('status503'); return f.bearerAs('core_artem_token', 'POST', target, note).finally(() => f.failIdentity(null)); }],
+    ['identity_mismatch', () => f.bearerAs('off_device_admin_token', 'POST', target, note)],
+    ['object_absent', () => f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VC-404/notes', note)],
+    ['object_outside_project', () => f.bearerAs('core_artem_token', 'POST', '/v1/tickets/VIQ-1/notes', note)],
+    ['object_lookup_failed', () => { f.failLookup('status503'); return f.bearerAs('core_artem_token', 'POST', target, note).finally(() => f.failLookup(null)); }]
+  ];
+  for (const [reason, attempt] of classes) {
+    const before = f.auditOf('vc_delegation_denied').length;
+    await attempt();
+    const row = f.lastDenial();
+    assert.equal(f.auditOf('vc_delegation_denied').length, before + 1, `${reason} left no row`);
+    const detail = JSON.parse(row.detail);
+    assert.deepEqual(detail, { auth_mode: 'bearer-delegation', method: 'POST', target: detail.target, reason }, reason);
+    // A device is named only once the identity lookup has actually established it.
+    assert.equal(row.device_id, DENIAL_DEVICE[reason], `${reason} device`);
+  }
+});
+
+test('the note ceiling counts characters while the metadata ceiling counts bytes', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f)); const artem = f.exact();
+  const wide = 'я'.repeat(MAX_NOTE);
+  assert.equal(Buffer.byteLength(wide), MAX_NOTE * 2, 'the fixture must actually be testing a two-byte alphabet');
+  assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', { message: wide })).status, 201, '8000 characters pass however many bytes they weigh');
+  const overByChars = f.upstreamHits;
+  assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', { message: 'я'.repeat(MAX_NOTE + 1) })).status, 403);
+  assert.equal(f.upstreamHits, overByChars);
+  const atCap = metadataOfBytes(2048, { cyrillic: true });
+  assert.equal(Buffer.byteLength(JSON.stringify(atCap)), 2048, 'the fixture must build to an exact byte length');
+  assert.ok(JSON.stringify(atCap).length < 2048, 'and that byte length must differ from its character length');
+  assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: atCap })).status, 201);
+  const overByBytes = f.upstreamHits;
+  assert.equal((await f.signed(artem, 'POST', '/v1/tickets/VC-1/notes', { message: 'ok', metadata: metadataOfBytes(2049, { cyrillic: true }) })).status, 403, 'a metadata under the character cap but over the byte cap is refused');
+  assert.equal(f.upstreamHits, overByBytes);
+});
+
+test('anonymous Bearer probing is capped, and the cap is spent only by identity failures', async (t) => {
+  const f = await fixture(); t.after(() => cleanup(f));
+  const probe = (token, target = '/v1/tickets/VC-1/notes', value = { message: 'x' }) => f.bearerAs(token, 'POST', target, value);
+  // Neither a legitimate write, nor a body refused before the lookup, nor a ticket outside VC asks the identity question.
+  for (let n = 0; n < 3; n++) assert.equal((await probe('core_artem_token')).status, 201);
+  for (let n = 0; n < 5; n++) assert.equal((await probe('core_artem_token', '/v1/tickets/VC-1/notes', {})).status, 403);
+  for (let n = 0; n < 2; n++) assert.equal((await probe('core_artem_token', '/v1/tickets/VIQ-1/notes')).status, 403);
+  for (let n = 1; n <= 10; n++) {
+    const before = f.upstreamHits;
+    assert.equal((await probe('unknown_credential_token')).status, 403, `probe ${n}`);
+    assert.ok(f.upstreamHits > before, `probe ${n} must still have reached upstream`);
+  }
+  const spent = f.upstreamHits;
+  const capped = await probe('unknown_credential_token');
+  assert.equal(capped.status, 429, 'the eleventh identity failure in a minute is refused');
+  assert.equal(f.upstreamHits, spent, 'a capped probe must not ask upstream: the point is to stop being an oracle');
+  const row = f.lastDenial();
+  assert.deepEqual(JSON.parse(row.detail), { auth_mode: 'bearer-delegation', method: 'POST', target: '/v1/tickets/VC-1/notes', reason: 'rate_limited' });
+  assert.equal(row.device_id, null);
 });
