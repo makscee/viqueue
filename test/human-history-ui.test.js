@@ -115,6 +115,15 @@ test('board declares a dark palette for browser chrome and every surface', async
   assert.doesNotMatch(css, /background:#(?:fff|f6f7f4|eef1ed|f0f3ef|f7f8f6)(?:[;}])/i);
 });
 
+test('ticket summaries stack identity, title, and metadata instead of rendering one long inline line', async () => {
+  const css = await readFile('web/app.css', 'utf8');
+  const summary = css.match(/\.ticket-open\{([^}]*)\}/)?.[1] ?? '';
+  assert.match(summary, /display:grid/);
+  assert.match(summary, /width:100%/);
+  assert.match(summary, /min-width:0/);
+  assert.match(summary, /text-align:left/);
+});
+
 test('danger buttons retain readable foreground contrast', async () => {
   const css = await readFile('web/app.css', 'utf8');
   const declarations = (selector) => css.match(new RegExp(`${selector}\\{([^}]*)\\}`))?.[1] ?? '';
