@@ -34,7 +34,7 @@ Submission releases the claim, moves the ticket to `Waiting`, creates the approv
 
 ## Safe stop, release, and rollback
 
-- `/viq pause` pauses polling only; it does **not** surrender a current claim. `/viq resume` resumes polling.
+- `/viq stop` cancels future pulls and explicitly releases active work; there is no pause/resume control path.
 - `/viq stop` safely stops polling and releases a current claim. Use it only when intentionally ending the live worker path.
 - Use `viq_release` with a non-secret reason when returning unfinished work to `Open`; it releases the claim and ends the turn.
 - If a release/stop reports failure, assume the fenced claim is still held. Do not retry work through another session or device; report the exact safe error and reconcile claim status first.
