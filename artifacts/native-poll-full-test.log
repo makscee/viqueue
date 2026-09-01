@@ -1,0 +1,1430 @@
+
+> viqueue@0.4.1 test
+> node --test test/*.test.js
+
+TAP version 13
+# (node:1984572) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ticket edit fails closed when paired coordinator is missing
+ok 1 - ticket edit fails closed when paired coordinator is missing
+  ---
+  duration_ms: 42.258744
+  type: 'test'
+  ...
+# Subtest: ticket edit rejects unknown and revoked devices
+ok 2 - ticket edit rejects unknown and revoked devices
+  ---
+  duration_ms: 18.672479
+  type: 'test'
+  ...
+# Subtest: paired worker cannot directly edit coordinator history
+ok 3 - paired worker cannot directly edit coordinator history
+  ---
+  duration_ms: 17.968753
+  type: 'test'
+  ...
+# Subtest: paired coordinator creator and editor are recorded canonically
+ok 4 - paired coordinator creator and editor are recorded canonically
+  ---
+  duration_ms: 23.133702
+  type: 'test'
+  ...
+# Subtest: immutable project rejection survives restart without fabricated history
+ok 5 - immutable project rejection survives restart without fabricated history
+  ---
+  duration_ms: 24.899865
+  type: 'test'
+  ...
+# (node:1984573) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Direction B board keeps Machines narrow and excludes execution authority
+ok 6 - Direction B board keeps Machines narrow and excludes execution authority
+  ---
+  duration_ms: 56.356572
+  type: 'test'
+  ...
+# (node:1984574) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: GET /v1/board reads populated v11 board orders larger than a safe integer
+ok 7 - GET /v1/board reads populated v11 board orders larger than a safe integer
+  ---
+  duration_ms: 60.065198
+  type: 'test'
+  ...
+# (node:1984607) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Browser intent is rejected unconsumed by generic route then uses exact server-bound identity once
+ok 8 - Browser intent is rejected unconsumed by generic route then uses exact server-bound identity once
+  ---
+  duration_ms: 90.716979
+  type: 'test'
+  ...
+# Subtest: Browser redemption rejects expiry, Worker kind, unbound legacy intent, and extra identity fields
+ok 9 - Browser redemption rejects expiry, Worker kind, unbound legacy intent, and extra identity fields
+  ---
+  duration_ms: 69.505124
+  type: 'test'
+  ...
+# Subtest: public issuance retains the prior five-minute default TTL
+ok 10 - public issuance retains the prior five-minute default TTL
+  ---
+  duration_ms: 30.098852
+  type: 'test'
+  ...
+# Subtest: generic route accepts only exact bound Worker codes and preserves expiry and replay fencing
+ok 11 - generic route accepts only exact bound Worker codes and preserves expiry and replay fencing
+  ---
+  duration_ms: 52.776253
+  type: 'test'
+  ...
+# (node:1984608) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: typed clean slate physically removes every project/ticket row and preserves identity/auth state
+ok 12 - typed clean slate physically removes every project/ticket row and preserves identity/auth state
+  ---
+  duration_ms: 41.781372
+  type: 'test'
+  ...
+# Subtest: confirmation is exact, public HTTP cannot invoke cleanup, and output is value-free
+ok 13 - confirmation is exact, public HTTP cannot invoke cleanup, and output is value-free
+  ---
+  duration_ms: 122.528947
+  type: 'test'
+  ...
+# Subtest: injected mid-cleanup failure rolls back data and immutable guards atomically
+ok 14 - injected mid-cleanup failure rolls back data and immutable guards atomically
+  ---
+  duration_ms: 43.946596
+  type: 'test'
+  ...
+# (node:1984620) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: CLI canonical assignment and worker direct claim use server predicate
+ok 15 - CLI canonical assignment and worker direct claim use server predicate
+  ---
+  duration_ms: 1226.20571
+  type: 'test'
+  ...
+# Subtest: CLI claim-next requires one valid normalized project and preserves server rejection
+ok 16 - CLI claim-next requires one valid normalized project and preserves server rejection
+  ---
+  duration_ms: 935.358814
+  type: 'test'
+  ...
+# (node:1984661) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: active non-admin coordinator completes the production board read journey
+ok 17 - active non-admin coordinator completes the production board read journey
+  ---
+  duration_ms: 136.940677
+  type: 'test'
+  ...
+# Subtest: board reads fail closed for anonymous, worker, inactive actor, and revoked device
+ok 18 - board reads fail closed for anonymous, worker, inactive actor, and revoked device
+  ---
+  duration_ms: 68.294708
+  type: 'test'
+  ...
+# Subtest: non-admin coordinator cannot perform admin-only mutations
+ok 19 - non-admin coordinator cannot perform admin-only mutations
+  ---
+  duration_ms: 96.718374
+  type: 'test'
+  ...
+# Subtest: production browser UI presents the non-admin coordinator read-only board journey
+ok 20 - production browser UI presents the non-admin coordinator read-only board journey
+  ---
+  duration_ms: 1239.562549
+  type: 'test'
+  ...
+# (node:1984668) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: bounded coordinator controls remain coordinator-only at the API boundary
+ok 21 - bounded coordinator controls remain coordinator-only at the API boundary
+  ---
+  duration_ms: 129.540918
+  type: 'test'
+  ...
+# Subtest: VIQ-13+ excluded: browser Admin, role, question, and block controls
+ok 22 - VIQ-13+ excluded: browser Admin, role, question, and block controls # SKIP
+  ---
+  duration_ms: 0.566215
+  type: 'test'
+  ...
+# (node:1984703) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: actor lifecycle coexists with canonical assignment categories and forbidden identity filters
+ok 23 - actor lifecycle coexists with canonical assignment categories and forbidden identity filters
+  ---
+  duration_ms: 45.710726
+  type: 'test'
+  ...
+# Subtest: questions accumulate without stopping claim; inbox authorization/cursor metadata and duplicate race
+ok 24 - questions accumulate without stopping claim; inbox authorization/cursor metadata and duplicate race
+  ---
+  duration_ms: 52.594842
+  type: 'test'
+  ...
+# Subtest: human questions join the same event history without requiring or creating a claim
+ok 25 - human questions join the same event history without requiring or creating a claim
+  ---
+  duration_ms: 27.25109
+  type: 'test'
+  ...
+# Subtest: paired workers cannot answer questions even with current claim credentials
+ok 26 - paired workers cannot answer questions even with current claim credentials
+  ---
+  duration_ms: 24.170959
+  type: 'test'
+  ...
+# Subtest: approval answers are human-only and denied agents create no answer or approval event or state change
+ok 27 - approval answers are human-only and denied agents create no answer or approval event or state change
+  ---
+  duration_ms: 31.537115
+  type: 'test'
+  ...
+# Subtest: deleted ticket questions leave normal inboxes and cannot be answered
+ok 28 - deleted ticket questions leave normal inboxes and cannot be answered
+  ---
+  duration_ms: 31.596085
+  type: 'test'
+  ...
+# Subtest: submit approval atomics, compatibility acceptance and reopen coherence
+ok 29 - submit approval atomics, compatibility acceptance and reopen coherence
+  ---
+  duration_ms: 33.74089
+  type: 'test'
+  ...
+# (node:1984743) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: actor-bound pairing, admin capability, role lifecycle, shared identity and immediate revocation
+ok 30 - actor-bound pairing, admin capability, role lifecycle, shared identity and immediate revocation
+  ---
+  duration_ms: 41.798242
+  type: 'test'
+  ...
+# Subtest: one-project tickets reject legacy memberships and preserve claim authority across paired devices
+ok 31 - one-project tickets reject legacy memberships and preserve claim authority across paired devices
+  ---
+  duration_ms: 33.083575
+  type: 'test'
+  ...
+# Subtest: unscoped claimNext crosses projects for generic Agent work and exact creation is retired
+ok 32 - unscoped claimNext crosses projects for generic Agent work and exact creation is retired
+  ---
+  duration_ms: 30.195682
+  type: 'test'
+  ...
+# Subtest: claimNext honors an explicit project while unscoped next keeps authoritative global order
+ok 33 - claimNext honors an explicit project while unscoped next keeps authoritative global order
+  ---
+  duration_ms: 34.696807
+  type: 'test'
+  ...
+# Subtest: VIQ-13+ excluded: legacy compact Admin/archive/question popup contract
+ok 34 - VIQ-13+ excluded: legacy compact Admin/archive/question popup contract # SKIP
+  ---
+  duration_ms: 0.307544
+  type: 'test'
+  ...
+# (node:1984764) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SQLite ticket fields, numbering, and event history survive store restart
+ok 35 - SQLite ticket fields, numbering, and event history survive store restart
+  ---
+  duration_ms: 44.208183
+  type: 'test'
+  ...
+# Subtest: durable claim survives arbitrary elapsed time and restart without liveness inference
+ok 36 - durable claim survives arbitrary elapsed time and restart without liveness inference
+  ---
+  duration_ms: 51.545801
+  type: 'test'
+  ...
+# Subtest: explicit release removes authority and makes open ticket ready
+ok 37 - explicit release removes authority and makes open ticket ready
+  ---
+  duration_ms: 39.2515
+  type: 'test'
+  ...
+# Subtest: submit review, accept done, and reopen open are explicit state transitions
+ok 38 - submit review, accept done, and reopen open are explicit state transitions
+  ---
+  duration_ms: 37.253451
+  type: 'test'
+  ...
+# Subtest: Agent assignment is launch authorization and atomic claimNext skips Unassigned work
+ok 39 - Agent assignment is launch authorization and atomic claimNext skips Unassigned work
+  ---
+  duration_ms: 32.486285
+  type: 'test'
+  ...
+# Subtest: claimNext accepts absent project for generic Agent work but rejects malformed explicit projects without mutation
+ok 40 - claimNext accepts absent project for generic Agent work but rejects malformed explicit projects without mutation
+  ---
+  duration_ms: 39.242126
+  type: 'test'
+  ...
+# Subtest: project-scoped claimNext contention grants exactly one claim and never crosses projects
+ok 41 - project-scoped claimNext contention grants exactly one claim and never crosses projects
+  ---
+  duration_ms: 37.243923
+  type: 'test'
+  ...
+# Subtest: exact-worker creation is retired while any paired Agent can directly claim generic work
+ok 42 - exact-worker creation is retired while any paired Agent can directly claim generic work
+  ---
+  duration_ms: 27.057096
+  type: 'test'
+  ...
+# Subtest: assignment category changes eligibility without exposing identity authority
+ok 43 - assignment category changes eligibility without exposing identity authority
+  ---
+  duration_ms: 33.685637
+  type: 'test'
+  ...
+# Subtest: structured blockers prevent relaunch until a human resolves them
+ok 44 - structured blockers prevent relaunch until a human resolves them
+  ---
+  duration_ms: 25.948684
+  type: 'test'
+  ...
+# Subtest: competing claims are atomic across independent SQLite connections
+ok 45 - competing claims are atomic across independent SQLite connections
+  ---
+  duration_ms: 28.320131
+  type: 'test'
+  ...
+# Subtest: takeover surface is absent; only explicit release permits another claim
+ok 46 - takeover surface is absent; only explicit release permits another claim
+  ---
+  duration_ms: 30.717757
+  type: 'test'
+  ...
+# Subtest: event cursor is global monotonic and polling after cursor filters project or ticket
+ok 47 - event cursor is global monotonic and polling after cursor filters project or ticket
+  ---
+  duration_ms: 24.095215
+  type: 'test'
+  ...
+# Subtest: human edits mutable ticket fields while project identity and active claim remain stable
+ok 48 - human edits mutable ticket fields while project identity and active claim remain stable
+  ---
+  duration_ms: 28.547038
+  type: 'test'
+  ...
+# Subtest: human direct state changes fence claims and progress stays in the ticket event chronology
+ok 49 - human direct state changes fence claims and progress stays in the ticket event chronology
+  ---
+  duration_ms: 23.815484
+  type: 'test'
+  ...
+# Subtest: direct state override resolves a pending approval instead of leaving a stale inbox question
+ok 50 - direct state override resolves a pending approval instead of leaving a stale inbox question
+  ---
+  duration_ms: 23.498553
+  type: 'test'
+  ...
+# Subtest: archive is reversible while confirmed delete tombstones without erasing history
+ok 51 - archive is reversible while confirmed delete tombstones without erasing history
+  ---
+  duration_ms: 47.2878
+  type: 'test'
+  ...
+# Subtest: archived tickets are immutable and leave inboxes until restored
+ok 52 - archived tickets are immutable and leave inboxes until restored
+  ---
+  duration_ms: 55.866927
+  type: 'test'
+  ...
+# Subtest: archive and delete checks remain correct when the clock returns zero
+ok 53 - archive and delete checks remain correct when the clock returns zero
+  ---
+  duration_ms: 23.604992
+  type: 'test'
+  ...
+# Subtest: deleted tombstones reject subsequent human mutations
+ok 54 - deleted tombstones reject subsequent human mutations
+  ---
+  duration_ms: 23.983694
+  type: 'test'
+  ...
+# Subtest: ticket edit and assignment retain the minimal canonical fields and record events
+ok 55 - ticket edit and assignment retain the minimal canonical fields and record events
+  ---
+  duration_ms: 25.648606
+  type: 'test'
+  ...
+# (node:1984896) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: store exact bound re-pair rotates credential and strips device authority atomically
+ok 56 - store exact bound re-pair rotates credential and strips device authority atomically
+  ---
+  duration_ms: 43.118406
+  type: 'test'
+  ...
+# Subtest: HTTP revoke then exact bound re-pair denies old credential and accepts replacement
+ok 57 - HTTP revoke then exact bound re-pair denies old credential and accepts replacement
+  ---
+  duration_ms: 97.117949
+  type: 'test'
+  ...
+# (node:1984922) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: HTTP paired lifecycle preserves claim fencing, submit, accept, and reopen
+ok 58 - HTTP paired lifecycle preserves claim fencing, submit, accept, and reopen
+  ---
+  duration_ms: 167.380212
+  type: 'test'
+  ...
+# Subtest: HTTP Agent assignment launches while workers cannot mutate assignment
+ok 59 - HTTP Agent assignment launches while workers cannot mutate assignment
+  ---
+  duration_ms: 62.085874
+  type: 'test'
+  ...
+# Subtest: HTTP unscoped claim-next crosses projects for generic Agent work and exact creation is rejected
+ok 60 - HTTP unscoped claim-next crosses projects for generic Agent work and exact creation is rejected
+  ---
+  duration_ms: 57.048366
+  type: 'test'
+  ...
+# Subtest: HTTP claim-next rejects invalid projects without lifecycle mutation
+ok 61 - HTTP claim-next rejects invalid projects without lifecycle mutation
+  ---
+  duration_ms: 76.769578
+  type: 'test'
+  ...
+# Subtest: HTTP direct claim shares category predicate and takeover route is absent
+ok 62 - HTTP direct claim shares category predicate and takeover route is absent
+  ---
+  duration_ms: 55.79809
+  type: 'test'
+  ...
+# Subtest: HTTP coordinator history, immutable project, archive, restore, notes, and delete remain explicit
+ok 63 - HTTP coordinator history, immutable project, archive, restore, notes, and delete remain explicit
+  ---
+  duration_ms: 52.678927
+  type: 'test'
+  ...
+# Subtest: HTTP rejects malformed JSON after paired authentication
+ok 64 - HTTP rejects malformed JSON after paired authentication
+  ---
+  duration_ms: 26.717428
+  type: 'test'
+  ...
+# Subtest: Markdown rendering preserves useful formatting and escapes executable HTML
+ok 65 - Markdown rendering preserves useful formatting and escapes executable HTML
+  ---
+  duration_ms: 2.237508
+  type: 'test'
+  ...
+# Subtest: reusable modal closes only from backdrop or Escape and restores trigger focus
+ok 66 - reusable modal closes only from backdrop or Escape and restores trigger focus
+  ---
+  duration_ms: 0.796861
+  type: 'test'
+  ...
+# Subtest: project chips toggle independently with left click
+ok 67 - project chips toggle independently with left click
+  ---
+  duration_ms: 1.495048
+  type: 'test'
+  ...
+# Subtest: semantic All projects includes projects discovered by refresh
+ok 68 - semantic All projects includes projects discovered by refresh
+  ---
+  duration_ms: 0.498922
+  type: 'test'
+  ...
+# Subtest: project and Human/Agent filters compose with OR within assignment choices
+ok 69 - project and Human/Agent filters compose with OR within assignment choices
+  ---
+  duration_ms: 0.56951
+  type: 'test'
+  ...
+# Subtest: filter chips expose accessible selected state and empty reset
+ok 70 - filter chips expose accessible selected state and empty reset
+  ---
+  duration_ms: 15.758824
+  type: 'test'
+  ...
+# Subtest: VIQ-13+ excluded: full history/archive/admin ticket mutation surface
+ok 71 - VIQ-13+ excluded: full history/archive/admin ticket mutation surface # SKIP
+  ---
+  duration_ms: 0.331344
+  type: 'test'
+  ...
+# Subtest: browser acceptance keeps full desktop coverage and a representative non-duplicative 390px smoke
+ok 72 - browser acceptance keeps full desktop coverage and a representative non-duplicative 390px smoke
+  ---
+  duration_ms: 2.917246
+  type: 'test'
+  ...
+# Subtest: VIQ-14 excluded: nested question/approval modal flows
+ok 73 - VIQ-14 excluded: nested question/approval modal flows # SKIP
+  ---
+  duration_ms: 0.427866
+  type: 'test'
+  ...
+# Subtest: VIQ-13+ excluded: Admin/project/question full modal surface
+ok 74 - VIQ-13+ excluded: Admin/project/question full modal surface # SKIP
+  ---
+  duration_ms: 0.346002
+  type: 'test'
+  ...
+# Subtest: board declares a dark palette for browser chrome and every surface
+ok 75 - board declares a dark palette for browser chrome and every surface
+  ---
+  duration_ms: 2.760043
+  type: 'test'
+  ...
+# Subtest: danger buttons retain readable foreground contrast
+ok 76 - danger buttons retain readable foreground contrast
+  ---
+  duration_ms: 3.559089
+  type: 'test'
+  ...
+# (node:1984953) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one-shot v0.2 JSON import preserves IDs, states, numbering, and claim fencing truth
+ok 77 - one-shot v0.2 JSON import preserves IDs, states, numbering, and claim fencing truth
+  ---
+  duration_ms: 101.505444
+  type: 'test'
+  ...
+# Subtest: import fails closed on incomplete or state-inconsistent legacy claims
+ok 78 - import fails closed on incomplete or state-inconsistent legacy claims
+  ---
+  duration_ms: 155.569588
+  type: 'test'
+  ...
+# Subtest: import rejection never alters or deletes an existing target
+ok 79 - import rejection never alters or deletes an existing target
+  ---
+  duration_ms: 68.373884
+  type: 'test'
+  ...
+# (node:1984959) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:1985218) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:1985598) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:1985626) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:1985654) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local bundle installs read-only MCP and performs WAL-consistent fail-closed rollback
+ok 80 - local bundle installs read-only MCP and performs WAL-consistent fail-closed rollback
+  ---
+  duration_ms: 1946.418404
+  type: 'test'
+  ...
+# Subtest: failed database validation cleans staged immutable release for retry
+ok 81 - failed database validation cleans staged immutable release for retry
+  ---
+  duration_ms: 232.25109
+  type: 'test'
+  ...
+# (node:1985037) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local recovery emits only a standard one-use coordinator pairing code to fd3
+ok 82 - local recovery emits only a standard one-use coordinator pairing code to fd3
+  ---
+  duration_ms: 112.682967
+  type: 'test'
+  ...
+# Subtest: recovery rejects actor, bootstrap, acknowledgement, TTL, and unknown argument errors without recovery mutation
+ok 83 - recovery rejects actor, bootstrap, acknowledgement, TTL, and unknown argument errors without recovery mutation
+  ---
+  duration_ms: 687.562457
+  type: 'test'
+  ...
+# Subtest: recovery storage preflight is read-only and rejects typo, unsafe, empty, non-SQLite, and non-Viq targets
+ok 84 - recovery storage preflight is read-only and rejects typo, unsafe, empty, non-SQLite, and non-Viq targets
+  ---
+  duration_ms: 545.228366
+  type: 'test'
+  ...
+# Subtest: recovery accepts only a pre-opened empty owner 0600 single-link regular fd above stderr
+ok 85 - recovery accepts only a pre-opened empty owner 0600 single-link regular fd above stderr
+  ---
+  duration_ms: 778.150484
+  type: 'test'
+  ...
+# Subtest: transaction, delivery, fsync-equivalent, and commit failures roll back and sanitize delivered material
+ok 86 - transaction, delivery, fsync-equivalent, and commit failures roll back and sanitize delivered material
+  ---
+  duration_ms: 71.434665
+  type: 'test'
+  ...
+# Subtest: recovery codes expire, concurrent invocations are unique, and device kind cannot be substituted
+ok 87 - recovery codes expire, concurrent invocations are unique, and device kind cannot be substituted
+  ---
+  duration_ms: 118.411532
+  type: 'test'
+  ...
+# Subtest: static recovery surface adds no HTTP route, bearer return, role selector, or secret argv/env seam
+ok 88 - static recovery surface adds no HTTP route, bearer return, role selector, or secret argv/env seam
+  ---
+  duration_ms: 2.235374
+  type: 'test'
+  ...
+# Subtest: MCP pairing surface is read-only and has no model-visible claim authority
+ok 89 - MCP pairing surface is read-only and has no model-visible claim authority
+  ---
+  duration_ms: 2.968082
+  type: 'test'
+  ...
+# Subtest: MCP validates closed read-only schemas and rejects mutation-shaped input
+ok 90 - MCP validates closed read-only schemas and rejects mutation-shaped input
+  ---
+  duration_ms: 1.26472
+  type: 'test'
+  ...
+# (node:1985089) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: accepted v0.3 SQLite migrates in place idempotently and preserves assignments claims events restart
+ok 91 - accepted v0.3 SQLite migrates in place idempotently and preserves assignments claims events restart
+  ---
+  duration_ms: 49.861227
+  type: 'test'
+  ...
+# Subtest: accepted v0.4 question events gain links while ticket and question history survives restart
+ok 92 - accepted v0.4 question events gain links while ticket and question history survives restart
+  ---
+  duration_ms: 41.494892
+  type: 'test'
+  ...
+# Subtest: canonical project name is lowercase everywhere in repository content
+ok 93 - canonical project name is lowercase everywhere in repository content
+  ---
+  duration_ms: 13.760689
+  type: 'test'
+  ...
+# (node:1985182) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: native poll is single-flight, heartbeats waiting/working, and requires a fresh runtime after terminal settlement
+ok 94 - native poll is single-flight, heartbeats waiting/working, and requires a fresh runtime after terminal settlement
+  ---
+  duration_ms: 202.917471
+  type: 'test'
+  ...
+# Subtest: worker presence rejects stale fenced ticket heartbeat
+ok 95 - worker presence rejects stale fenced ticket heartbeat
+  ---
+  duration_ms: 73.137996
+  type: 'test'
+  ...
+# (node:1985287) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: real Unix operator CLI emits exact tuple consumed once by ordinary public pairing
+ok 96 - real Unix operator CLI emits exact tuple consumed once by ordinary public pairing
+  ---
+  duration_ms: 102.107268
+  type: 'test'
+  ...
+# Subtest: server-local Browser handoff expires exactly one hour after issuance
+ok 97 - server-local Browser handoff expires exactly one hour after issuance
+  ---
+  duration_ms: 36.446918
+  type: 'test'
+  ...
+# Subtest: operator pairing expires and public TCP has no operator route
+ok 98 - operator pairing expires and public TCP has no operator route
+  ---
+  duration_ms: 41.456677
+  type: 'test'
+  ...
+# Subtest: local operator endpoint rejects caller TTL fields without pairing mutation
+ok 99 - local operator endpoint rejects caller TTL fields without pairing mutation
+  ---
+  duration_ms: 39.066547
+  type: 'test'
+  ...
+# Subtest: socket is 0600, safe stale socket is replaced, and unsafe paths fail closed
+ok 100 - socket is 0600, safe stale socket is replaced, and unsafe paths fail closed
+  ---
+  duration_ms: 88.235228
+  type: 'test'
+  ...
+# Subtest: CLI validates narrow options, redacts failures, and never overwrites output
+ok 101 - CLI validates narrow options, redacts failures, and never overwrites output
+  ---
+  duration_ms: 5.152952
+  type: 'test'
+  ...
+# (node:1985372) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clean PoC schema omits execution authorities while an existing rollback table is preserved unused
+ok 102 - clean PoC schema omits execution authorities while an existing rollback table is preserved unused
+  ---
+  duration_ms: 29.174018
+  type: 'test'
+  ...
+# Subtest: one-time pairing is code-authorized and rejects used, expired, inactive-issuer, unpaired, and revoked credentials
+ok 103 - one-time pairing is code-authorized and rejects used, expired, inactive-issuer, unpaired, and revoked credentials
+  ---
+  duration_ms: 160.099346
+  type: 'test'
+  ...
+# Subtest: hard-coded coordinator/worker permissions coexist with assignment categories
+ok 104 - hard-coded coordinator/worker permissions coexist with assignment categories
+  ---
+  duration_ms: 105.373563
+  type: 'test'
+  ...
+# Subtest: direct HTTP, claim-next, next, and client all use the same assigned-worker predicate
+ok 105 - direct HTTP, claim-next, next, and client all use the same assigned-worker predicate
+  ---
+  duration_ms: 83.786284
+  type: 'test'
+  ...
+# Subtest: blocker and active claim uniformly fence every claim ingress
+ok 106 - blocker and active claim uniformly fence every claim ingress
+  ---
+  duration_ms: 80.418904
+  type: 'test'
+  ...
+# Subtest: trusted CLI issues server-bound codes and requires an explicit revoke target
+ok 107 - trusted CLI issues server-bound codes and requires an explicit revoke target
+  ---
+  duration_ms: 339.48464
+  type: 'test'
+  ...
+# (node:1985660) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: code-only intent binds device, actor, admin, and label server-side
+ok 108 - code-only intent binds device, actor, admin, and label server-side
+  ---
+  duration_ms: 23.702617
+  type: 'test'
+  ...
+# Subtest: unpaired, expired, reused, and revoked requests fail closed
+ok 109 - unpaired, expired, reused, and revoked requests fail closed
+  ---
+  duration_ms: 9.101158
+  type: 'test'
+  ...
+# Subtest: request proof is one-use and substitutions fail
+ok 110 - request proof is one-use and substitutions fail
+  ---
+  duration_ms: 11.776369
+  type: 'test'
+  ...
+# Subtest: challenge expiry boundary and outstanding limit are enforced
+ok 111 - challenge expiry boundary and outstanding limit are enforced
+  ---
+  duration_ms: 8.551148
+  type: 'test'
+  ...
+# Subtest: distinct active devices and pending intents coexist while same-device conflicts fail closed
+ok 112 - distinct active devices and pending intents coexist while same-device conflicts fail closed
+  ---
+  duration_ms: 14.731333
+  type: 'test'
+  ...
+# Subtest: device-scoped revoke preserves unrelated devices and target intents
+ok 113 - device-scoped revoke preserves unrelated devices and target intents
+  ---
+  duration_ms: 9.032296
+  type: 'test'
+  ...
+# Subtest: legacy one-active index migrates idempotently and preserves authorization
+ok 114 - legacy one-active index migrates idempotently and preserves authorization
+  ---
+  duration_ms: 12.07646
+  type: 'test'
+  ...
+# Subtest: origin and filesystem permissions stay constrained
+ok 115 - origin and filesystem permissions stay constrained
+  ---
+  duration_ms: 5.703813
+  type: 'test'
+  ...
+# (node:1985724) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: credential loader accepts only a service-owned 0600 regular single-link file
+ok 116 - credential loader accepts only a service-owned 0600 regular single-link file
+  ---
+  duration_ms: 10.414081
+  type: 'test'
+  ...
+# Subtest: CLI startup rejects missing, empty, directory, FIFO, symlink, unsafe modes, hard links, oversized, multiline, NUL, and malformed credential inputs
+ok 117 - CLI startup rejects missing, empty, directory, FIFO, symlink, unsafe modes, hard links, oversized, multiline, NUL, and malformed credential inputs
+  ---
+  duration_ms: 1393.011693
+  type: 'test'
+  ...
+# Subtest: production ownership check is unconditional and wrong-owner seam is rejected
+ok 118 - production ownership check is unconditional and wrong-owner seam is rejected
+  ---
+  duration_ms: 8.062476
+  type: 'test'
+  ...
+# Subtest: descriptor read rejects a credential changed after validated fstat
+ok 119 - descriptor read rejects a credential changed after validated fstat
+  ---
+  duration_ms: 6.891119
+  type: 'test'
+  ...
+# (node:1985731) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: remote HTTP is denied regardless of address policy
+ok 120 - remote HTTP is denied regardless of address policy
+  ---
+  duration_ms: 10.210641
+  type: 'test'
+  ...
+# Subtest: remote HTTPS requires the single named tailscale policy
+ok 121 - remote HTTPS requires the single named tailscale policy
+  ---
+  duration_ms: 2.359348
+  type: 'test'
+  ...
+# Subtest: remote origin rejects literals and all authority/resource substitutions
+ok 122 - remote origin rejects literals and all authority/resource substitutions
+  ---
+  duration_ms: 6.702777
+  type: 'test'
+  ...
+# Subtest: Tailscale CIDR boundaries are exact for IPv4 and canonical IPv6 ULA
+ok 123 - Tailscale CIDR boundaries are exact for IPv4 and canonical IPv6 ULA
+  ---
+  duration_ms: 7.853315
+  type: 'test'
+  ...
+# Subtest: resolver rejects empty, outside, mixed, DNS errors, and family/type confusion
+ok 124 - resolver rejects empty, outside, mixed, DNS errors, and family/type confusion
+  ---
+  duration_ms: 132.966934
+  type: 'test'
+  ...
+# Subtest: validated answer is bound to the socket with no second resolution and every request gets a new connection
+ok 125 - validated answer is bound to the socket with no second resolution and every request gets a new connection
+  ---
+  duration_ms: 30.81417
+  type: 'test'
+  ...
+# Subtest: exact TLS fixture preserves target/method, ignores proxy env, strips authority headers, and does not follow redirects
+ok 126 - exact TLS fixture preserves target/method, ignores proxy env, strips authority headers, and does not follow redirects
+  ---
+  duration_ms: 485.762156
+  type: 'test'
+  ...
+# Subtest: standard CA and hostname verification reject untrusted and wrong-host certificates
+ok 127 - standard CA and hostname verification reject untrusted and wrong-host certificates
+  ---
+  duration_ms: 346.013447
+  type: 'test'
+  ...
+# (node:1985795) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: public gateway brokers a truthful read-only coordinator capability
+ok 128 - public gateway brokers a truthful read-only coordinator capability
+  ---
+  duration_ms: 196.183563
+  type: 'test'
+  ...
+# Subtest: exact Artem browser receives only the frozen VC state transition capability
+ok 129 - exact Artem browser receives only the frozen VC state transition capability
+  ---
+  duration_ms: 131.051102
+  type: 'test'
+  ...
+# Subtest: exact core Artem Bearer delegates only the frozen VC state mutation
+ok 130 - exact core Artem Bearer delegates only the frozen VC state mutation
+  ---
+  duration_ms: 82.280136
+  type: 'test'
+  ...
+# Subtest: Bearer VC delegation fails closed before admin mutation for every denied class
+ok 131 - Bearer VC delegation fails closed before admin mutation for every denied class
+  ---
+  duration_ms: 45.247261
+  type: 'test'
+  ...
+# Subtest: VC state capability fails closed for identity, object, schema, and project mismatch
+ok 132 - VC state capability fails closed for identity, object, schema, and project mismatch
+  ---
+  duration_ms: 71.369608
+  type: 'test'
+  ...
+# Subtest: admin path remains proxied while worker, inactive actor, revoked device, anonymous and invalid proof remain denied
+ok 133 - admin path remains proxied while worker, inactive actor, revoked device, anonymous and invalid proof remain denied
+  ---
+  duration_ms: 45.240241
+  type: 'test'
+  ...
+# Subtest: phone browser renders exact VC state controls without generic administration
+ok 134 - phone browser renders exact VC state controls without generic administration
+  ---
+  duration_ms: 2528.021116
+  type: 'test'
+  ...
+# (node:1985932) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unpaired API is denied before upstream
+ok 135 - unpaired API is denied before upstream
+  ---
+  duration_ms: 60.197387
+  type: 'test'
+  ...
+# Subtest: concurrent replay has exactly one winner/upstream request and strips request and response credentials
+ok 136 - concurrent replay has exactly one winner/upstream request and strips request and response credentials
+  ---
+  duration_ms: 41.141408
+  type: 'test'
+  ...
+# Subtest: signed browser self-revocation is device-scoped and never reaches upstream
+ok 137 - signed browser self-revocation is device-scoped and never reaches upstream
+  ---
+  duration_ms: 43.825305
+  type: 'test'
+  ...
+# Subtest: auth JSON is limited to 8KiB and application bodies to 1MiB
+ok 138 - auth JSON is limited to 8KiB and application bodies to 1MiB
+  ---
+  duration_ms: 20.358893
+  type: 'test'
+  ...
+# Subtest: body substitution fails before upstream
+ok 139 - body substitution fails before upstream
+  ---
+  duration_ms: 34.835398
+  type: 'test'
+  ...
+# Subtest: source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+ok 140 - source IP rate limit cannot be bypassed by unique device ids and state stays bounded
+  ---
+  duration_ms: 390.097795
+  type: 'test'
+  ...
+# Subtest: raw request-target rejects normalization hazards and binds exact target
+ok 141 - raw request-target rejects normalization hazards and binds exact target
+  ---
+  duration_ms: 20.792966
+  type: 'test'
+  ...
+# Subtest: API fails closed before upstream when confidential handoff authority is absent
+ok 142 - API fails closed before upstream when confidential handoff authority is absent
+  ---
+  duration_ms: 9.902125
+  type: 'test'
+  ...
+# Subtest: only fixed public targets pass and unknown non-v1 targets are denied
+ok 143 - only fixed public targets pass and unknown non-v1 targets are denied
+  ---
+  duration_ms: 16.222834
+  type: 'test'
+  ...
+# Subtest: TLS configuration requires a complete keypair or explicit termination mode
+ok 144 - TLS configuration requires a complete keypair or explicit termination mode
+  ---
+  duration_ms: 3.440203
+  type: 'test'
+  ...
+# (node:1985979) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: accepted private-alpha trust boundary is explicit and mapped to enforced implementation seams
+ok 145 - accepted private-alpha trust boundary is explicit and mapped to enforced implementation seams
+  ---
+  duration_ms: 12.046901
+  type: 'test'
+  ...
+# Subtest: agent progress fails closed without the complete current claim identity
+ok 146 - agent progress fails closed without the complete current claim identity
+  ---
+  duration_ms: 42.374986
+  type: 'test'
+  ...
+# Subtest: public-source metadata and canonical Apache-2.0 license are consistent
+ok 147 - public-source metadata and canonical Apache-2.0 license are consistent
+  ---
+  duration_ms: 7.1559
+  type: 'test'
+  ...
+# Subtest: packed npm surface includes the signed phone gateway and its operator CLIs
+ok 148 - packed npm surface includes the signed phone gateway and its operator CLIs
+  ---
+  duration_ms: 593.001406
+  type: 'test'
+  ...
+# (node:1986060) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: release legacy multi-project row migrates to its authoritative canonical project without identity or content loss
+ok 149 - release legacy multi-project row migrates to its authoritative canonical project without identity or content loss
+  ---
+  duration_ms: 51.424918
+  type: 'test'
+  ...
+# Subtest: release legacy project inference rejects conflicting, malformed, missing and ambiguous provenance atomically
+    # Subtest: conflicting event project
+    ok 1 - conflicting event project
+      ---
+      duration_ms: 27.368813
+      type: 'test'
+      ...
+    # Subtest: multiple event project candidates
+    ok 2 - multiple event project candidates
+      ---
+      duration_ms: 25.902076
+      type: 'test'
+      ...
+    # Subtest: missing canonical membership
+    ok 3 - missing canonical membership
+      ---
+      duration_ms: 27.120439
+      type: 'test'
+      ...
+    # Subtest: missing canonical project
+    ok 4 - missing canonical project
+      ---
+      duration_ms: 29.016684
+      type: 'test'
+      ...
+    # Subtest: malformed canonical identity
+    ok 5 - malformed canonical identity
+      ---
+      duration_ms: 26.191045
+      type: 'test'
+      ...
+    # Subtest: conflicting canonical tuple
+    ok 6 - conflicting canonical tuple
+      ---
+      duration_ms: 36.514935
+      type: 'test'
+      ...
+    1..6
+ok 150 - release legacy project inference rejects conflicting, malformed, missing and ambiguous provenance atomically
+  ---
+  duration_ms: 174.093307
+  type: 'test'
+  ...
+# (node:1986076) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: POST /v1/tickets creates a Human ticket with a persisted large board order
+ok 151 - POST /v1/tickets creates a Human ticket with a persisted large board order
+  ---
+  duration_ms: 86.302808
+  type: 'test'
+  ...
+# (node:1986088) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paired worker reads next and project tickets with a board order above Number.MAX_SAFE_INTEGER
+ok 152 - paired worker reads next and project tickets with a board order above Number.MAX_SAFE_INTEGER
+  ---
+  duration_ms: 79.867995
+  type: 'test'
+  ...
+# (node:1986094) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: signed active admin browser issues exact-schema browser code locally and it pairs a second live browser
+ok 153 - signed active admin browser issues exact-schema browser code locally and it pairs a second live browser
+  ---
+  duration_ms: 62.919825
+  type: 'test'
+  ...
+# Subtest: browser issuance denies unsigned revoked and non-admin, and rejects every extra authority field without intent
+ok 154 - browser issuance denies unsigned revoked and non-admin, and rejects every extra authority field without intent
+  ---
+  duration_ms: 79.902384
+  type: 'test'
+  ...
+# (node:1986112) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: VIQ-11 store capture uses immutable one-project identity and canonical defaults
+ok 155 - VIQ-11 store capture uses immutable one-project identity and canonical defaults
+  ---
+  duration_ms: 34.928719
+  type: 'test'
+  ...
+# Subtest: VIQ-11 project counter is atomic across connections and never reuses allocation
+ok 156 - VIQ-11 project counter is atomic across connections and never reuses allocation
+  ---
+  duration_ms: 40.641384
+  type: 'test'
+  ...
+# Subtest: VIQ-11 migration snapshot restores complete pre-migration identity and counters
+ok 157 - VIQ-11 migration snapshot restores complete pre-migration identity and counters
+  ---
+  duration_ms: 34.068148
+  type: 'test'
+  ...
+# Subtest: VIQ-11 retry preserves the first snapshot and rollback restores exact pre-migration identity
+ok 158 - VIQ-11 retry preserves the first snapshot and rollback restores exact pre-migration identity
+  ---
+  duration_ms: 47.502558
+  type: 'test'
+  ...
+# Subtest: VIQ-11 rejects a valid snapshot pair from another database family at the same path
+ok 159 - VIQ-11 rejects a valid snapshot pair from another database family at the same path
+  ---
+  duration_ms: 63.498662
+  type: 'test'
+  ...
+# Subtest: VIQ-11 fails closed on an exact unstamped source after the manifest-before-binding crash gap
+ok 160 - VIQ-11 fails closed on an exact unstamped source after the manifest-before-binding crash gap
+  ---
+  duration_ms: 50.036424
+  type: 'test'
+  ...
+# Subtest: VIQ-11 INTEGER-vs-REAL family probe rejects init and rollback without mutation
+ok 161 - VIQ-11 INTEGER-vs-REAL family probe rejects init and rollback without mutation
+  ---
+  duration_ms: 48.265588
+  type: 'test'
+  ...
+# Subtest: VIQ-11 rejects contradictory live family bindings before retry or rollback mutation
+ok 162 - VIQ-11 rejects contradictory live family bindings before retry or rollback mutation
+  ---
+  duration_ms: 47.87127
+  type: 'test'
+  ...
+# Subtest: VIQ-11 migration refuses stale or corrupted snapshot families instead of overwriting them
+ok 163 - VIQ-11 migration refuses stale or corrupted snapshot families instead of overwriting them
+  ---
+  duration_ms: 23.98995
+  type: 'test'
+  ...
+# Subtest: VIQ-11 migration fails closed on conflicting project provenance and leaves source unchanged
+ok 164 - VIQ-11 migration fails closed on conflicting project provenance and leaves source unchanged
+  ---
+  duration_ms: 34.428377
+  type: 'test'
+  ...
+# Subtest: VIQ-11 real CLI creates project and ticket then reads it back
+ok 165 - VIQ-11 real CLI creates project and ticket then reads it back
+  ---
+  duration_ms: 565.332127
+  type: 'test'
+  ...
+# (node:1986123) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: VIQ-12 global order is updated-first and filters reveal an OR subsequence
+ok 166 - VIQ-12 global order is updated-first and filters reveal an OR subsequence
+  ---
+  duration_ms: 31.492313
+  type: 'test'
+  ...
+# Subtest: VIQ-12 persists Human movement and manual reorder in every lane
+ok 167 - VIQ-12 persists Human movement and manual reorder in every lane
+  ---
+  duration_ms: 31.082128
+  type: 'test'
+  ...
+# Subtest: VIQ-12 filtered reorder changes the visible subsequence and preserves hidden relative order
+ok 168 - VIQ-12 filtered reorder changes the visible subsequence and preserves hidden relative order
+  ---
+  duration_ms: 20.067138
+  type: 'test'
+  ...
+# Subtest: VIQ-12 reorder preserves claimed and all other unaffected relative positions
+ok 169 - VIQ-12 reorder preserves claimed and all other unaffected relative positions
+  ---
+  duration_ms: 24.054114
+  type: 'test'
+  ...
+# Subtest: VIQ-12 Working reorder uses effective lane membership when a claimed Agent ticket is visible
+ok 170 - VIQ-12 Working reorder uses effective lane membership when a claimed Agent ticket is visible
+  ---
+  duration_ms: 29.50409
+  type: 'test'
+  ...
+# Subtest: VIQ-12 Activity obeys both scopes and projects only minimal facts
+ok 171 - VIQ-12 Activity obeys both scopes and projects only minimal facts
+  ---
+  duration_ms: 0.734205
+  type: 'test'
+  ...
+# (node:1986134) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: VIQ-13 Store claims fail closed without pre-existing session authority and do not mutate tickets
+ok 172 - VIQ-13 Store claims fail closed without pre-existing session authority and do not mutate tickets
+  ---
+  duration_ms: 50.790375
+  type: 'test'
+  ...
+# Subtest: VIQ-13 atomically claims authoritative first eligible Agent Open ticket and records machine/session provenance
+ok 173 - VIQ-13 atomically claims authoritative first eligible Agent Open ticket and records machine/session provenance
+  ---
+  duration_ms: 36.06526
+  type: 'test'
+  ...
+# Subtest: VIQ-13 concurrent stores cannot share one project-scoped eligible ticket
+ok 174 - VIQ-13 concurrent stores cannot share one project-scoped eligible ticket
+  ---
+  duration_ms: 33.760385
+  type: 'test'
+  ...
+# Subtest: VIQ-13 exact-session release reopens; stale and non-owning sessions cannot cross the fence
+ok 175 - VIQ-13 exact-session release reopens; stale and non-owning sessions cannot cross the fence
+  ---
+  duration_ms: 31.234608
+  type: 'test'
+  ...
+# Subtest: VIQ-13 HTTP rejects chosen IDs, cross-session, cross-machine, and revoked capabilities
+ok 176 - VIQ-13 HTTP rejects chosen IDs, cross-session, cross-machine, and revoked capabilities
+  ---
+  duration_ms: 146.772804
+  type: 'test'
+  ...
+# Subtest: VIQ-13 shutdown atomically records RELEASE and releases once, while failure retains the fenced claim
+ok 177 - VIQ-13 shutdown atomically records RELEASE and releases once, while failure retains the fenced claim
+  ---
+  duration_ms: 110.270987
+  type: 'test'
+  ...
+# Subtest: VIQ-13 shutdown failure rejects once with blocked status and a safe error
+ok 178 - VIQ-13 shutdown failure rejects once with blocked status and a safe error
+  ---
+  duration_ms: 53.217808
+  type: 'test'
+  ...
+# Subtest: VIQ-13 idle shutdown can restart, claim, and release exactly once on its next shutdown
+ok 179 - VIQ-13 idle shutdown can restart, claim, and release exactly once on its next shutdown
+  ---
+  duration_ms: 76.52683
+  type: 'test'
+  ...
+# Subtest: VIQ-13 real HTTP worker poll is project-scoped and its exact runtime session can release
+ok 180 - VIQ-13 real HTTP worker poll is project-scoped and its exact runtime session can release
+  ---
+  duration_ms: 45.891709
+  type: 'test'
+  ...
+# (node:1986166) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: VIQ-14 non-blocking and blocking questions have exact claim/state semantics and provenance
+ok 181 - VIQ-14 non-blocking and blocking questions have exact claim/state semantics and provenance
+  ---
+  duration_ms: 40.906751
+  type: 'test'
+  ...
+# Subtest: VIQ-14 final blocking answer alone reopens and non-blocking questions cannot be promoted
+ok 182 - VIQ-14 final blocking answer alone reopens and non-blocking questions cannot be promoted
+  ---
+  duration_ms: 32.301164
+  type: 'test'
+  ...
+# Subtest: VIQ-14 deterministic answer retry and cross-store concurrency append lifecycle events once
+ok 183 - VIQ-14 deterministic answer retry and cross-store concurrency append lifecycle events once
+  ---
+  duration_ms: 32.607519
+  type: 'test'
+  ...
+# Subtest: VIQ-14 Store submission fingerprint rejects every altered fence without mutation and preserves provenance
+ok 184 - VIQ-14 Store submission fingerprint rejects every altered fence without mutation and preserves provenance
+  ---
+  duration_ms: 35.006861
+  type: 'test'
+  ...
+# Subtest: VIQ-14 real HTTP submission retry is exactly-once and altered authority fails closed without private output
+ok 185 - VIQ-14 real HTTP submission retry is exactly-once and altered authority fails closed without private output
+  ---
+  duration_ms: 170.25942
+  type: 'test'
+  ...
+# (node:1986195) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: shared exclusion rejects apply contention and queued rollback acquires after release
+ok 186 - shared exclusion rejects apply contention and queued rollback acquires after release
+  ---
+  duration_ms: 36.793322
+  type: 'test'
+  ...
+# Subtest: automatic rollback lock wait cannot be killed by systemd start timeout
+ok 187 - automatic rollback lock wait cannot be killed by systemd start timeout
+  ---
+  duration_ms: 2.194894
+  type: 'test'
+  ...
+# Subtest: legitimate unrelated live ticket/event/role counts pass apply and rollback global CAS
+ok 188 - legitimate unrelated live ticket/event/role counts pass apply and rollback global CAS
+  ---
+  duration_ms: 152.230326
+  type: 'test'
+  ...
+# Subtest: global CAS still rejects integrity and exact schema drift
+ok 189 - global CAS still rejects integrity and exact schema drift
+  ---
+  duration_ms: 331.043401
+  type: 'test'
+  ...
+# Subtest: SQLite-consistent backup retains enforced source/backup schema and count equality
+ok 190 - SQLite-consistent backup retains enforced source/backup schema and count equality
+  ---
+  duration_ms: 86.536721
+  type: 'test'
+  ...
+# Subtest: rollback authenticates backup and helper bytes in a deterministic complete manifest before its first mutation
+ok 191 - rollback authenticates backup and helper bytes in a deterministic complete manifest before its first mutation
+  ---
+  duration_ms: 408.161853
+  type: 'test'
+  ...
+# Subtest: systemd unit install is same-directory fsynced atomic replacement
+ok 192 - systemd unit install is same-directory fsynced atomic replacement
+  ---
+  duration_ms: 12.058824
+  type: 'test'
+  ...
+# Subtest: deadline is sealed as canonical absolute UTC and timer readback is calendar-persistent
+ok 193 - deadline is sealed as canonical absolute UTC and timer readback is calendar-persistent
+  ---
+  duration_ms: 25.801808
+  type: 'test'
+  ...
+# Subtest: corrupt SQLite family restore retries after every rename boundary
+    # Subtest: preserve-main
+    ok 1 - preserve-main
+      ---
+      duration_ms: 662.361235
+      type: 'test'
+      ...
+    # Subtest: preserve-wal
+    ok 2 - preserve-wal
+      ---
+      duration_ms: 694.310522
+      type: 'test'
+      ...
+    # Subtest: preserve-shm
+    ok 3 - preserve-shm
+      ---
+      duration_ms: 612.707471
+      type: 'test'
+      ...
+    # Subtest: install-main
+    ok 4 - install-main
+      ---
+      duration_ms: 717.778887
+      type: 'test'
+      ...
+    1..4
+ok 194 - corrupt SQLite family restore retries after every rename boundary
+  ---
+  duration_ms: 2688.638438
+  type: 'test'
+  ...
+# (node:1986202) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: existing event ledgers gain best-effort provenance snapshots and immutable triggers
+ok 195 - existing event ledgers gain best-effort provenance snapshots and immutable triggers
+  ---
+  duration_ms: 42.309438
+  type: 'test'
+  ...
+# (node:1986230) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: exact preflight classifies two claims and eight questions without row content
+ok 196 - exact preflight classifies two claims and eight questions without row content
+  ---
+  duration_ms: 7.423249
+  type: 'test'
+  ...
+# Subtest: reconciliation inspect fails closed on exact active-claim identity drift
+ok 197 - reconciliation inspect fails closed on exact active-claim identity drift
+  ---
+  duration_ms: 5.048542
+  type: 'test'
+  ...
+# Subtest: reconciliation inspect fails closed on exact open-question drift
+ok 198 - reconciliation inspect fails closed on exact open-question drift
+  ---
+  duration_ms: 5.198051
+  type: 'test'
+  ...
+# Subtest: reconciliation inspect fails closed on exact assignment drift for claim and question tickets
+ok 199 - reconciliation inspect fails closed on exact assignment drift for claim and question tickets
+  ---
+  duration_ms: 8.620987
+  type: 'test'
+  ...
+# Subtest: reconciliation inspect fails closed on exact claim timestamp drift before apply
+ok 200 - reconciliation inspect fails closed on exact claim timestamp drift before apply
+  ---
+  duration_ms: 6.481972
+  type: 'test'
+  ...
+# Subtest: apply refuses the authoritative live database path before opening it
+ok 201 - apply refuses the authoritative live database path before opening it
+  ---
+  duration_ms: 0.323313
+  type: 'test'
+  ...
+# Subtest: one-shot reconciliation releases only exact claims and preserves resumable questions
+ok 202 - one-shot reconciliation releases only exact claims and preserves resumable questions
+  ---
+  duration_ms: 14.604202
+  type: 'test'
+  ...
+# (node:1986237) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: VIQ-15 immutable detail, shared factual-event provenance, stable history, and permanent deletion
+ok 203 - VIQ-15 immutable detail, shared factual-event provenance, stable history, and permanent deletion
+  ---
+  duration_ms: 388.643987
+  type: 'test'
+  ...
+# (node:1986258) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Machines is the only routine provenance administration surface
+ok 204 - Machines is the only routine provenance administration surface
+  ---
+  duration_ms: 71.723628
+  type: 'test'
+  ...
+# Subtest: Machines lists active server-derived provenance, pairs once, and revokes authentication
+ok 205 - Machines lists active server-derived provenance, pairs once, and revokes authentication
+  ---
+  duration_ms: 79.985352
+  type: 'test'
+  ...
+# Subtest: legacy actor role and membership product routes are absent
+ok 206 - legacy actor role and membership product routes are absent
+  ---
+  duration_ms: 42.153551
+  type: 'test'
+  ...
+# Subtest: semantic All projects includes projects discovered by refresh
+ok 207 - semantic All projects includes projects discovered by refresh
+  ---
+  duration_ms: 1.617704
+  type: 'test'
+  ...
+# (node:1986327) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: direct history edit is human-only while agent progress remains claim-authorized
+ok 208 - direct history edit is human-only while agent progress remains claim-authorized
+  ---
+  duration_ms: 33.527613
+  type: 'test'
+  ...
+# Subtest: human ticket creator is validated and persisted on ticket_created
+ok 209 - human ticket creator is validated and persisted on ticket_created
+  ---
+  duration_ms: 21.98057
+  type: 'test'
+  ...
+# Subtest: archived ticket is immutable and absent from inbox until explicit restore
+ok 210 - archived ticket is immutable and absent from inbox until explicit restore
+  ---
+  duration_ms: 26.218951
+  type: 'test'
+  ...
+# Subtest: archive and delete timestamps use NULL semantics when clock is zero
+ok 211 - archive and delete timestamps use NULL semantics when clock is zero
+  ---
+  duration_ms: 28.68967
+  type: 'test'
+  ...
+1..211
+# tests 221
+# suites 0
+# pass 216
+# fail 0
+# cancelled 0
+# skipped 5
+# todo 0
+# duration_ms 12816.891293
