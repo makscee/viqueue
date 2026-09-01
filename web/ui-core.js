@@ -21,6 +21,26 @@ export function applyActivityFilters(events, visibleTickets, selectedProjects, s
   return events.filter((event) => event.ticket_id === null || visibleIds.has(event.ticket_id));
 }
 
+export function safeReviewLink(value) {
+  try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; } catch { return null; }
+}
+
+export function reviewSourceFacts(bundle, ticket = null) {
+  const source = bundle?.source ?? {}; const lifecycle = ticket?.source_lifecycle ?? source;
+  const deployment = ticket?.deployment?.status ?? bundle?.release?.status ?? 'not-released';
+  const facts = [];
+  if (source.commit) facts.push({ label: 'Commit', value: source.commit, href: safeReviewLink(source.commit) });
+  if (source.pr) facts.push({ label: 'Pull request', value: source.pr, href: safeReviewLink(source.pr) });
+  facts.push(
+    { label: 'Acceptance', value: ticket?.state === 'Done' ? 'accepted' : 'pending-human-accept', href: null },
+    { label: 'Reviewed', value: lifecycle.review?.status ?? 'not-reviewed', href: safeReviewLink(lifecycle.review?.reference) },
+    { label: 'Merged', value: lifecycle.merge?.status ?? 'not-merged', href: safeReviewLink(lifecycle.merge?.reference) },
+    { label: 'Release', value: deployment === 'not-released' ? 'not-released' : 'released', href: safeReviewLink(ticket?.deployment?.reference ?? bundle?.release?.reference) },
+    { label: 'Production verification', value: deployment === 'production-verified' ? 'production-verified' : 'not-verified', href: deployment === 'production-verified' ? safeReviewLink(ticket?.deployment?.reference ?? bundle?.release?.reference) : null }
+  );
+  return facts;
+}
+
 export function activityFact(event) {
   const subject = event.ticket_id || (event.project ? `Project ${event.project}` : 'System');
   const action = ({ role_created: 'assignment group created', role_granted: 'role membership added', role_revoked: 'role membership removed' })[event.type] || String(event.type).replaceAll('_', ' ');

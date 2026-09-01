@@ -17,6 +17,7 @@ await cp('src/operator-cli.js', 'dist/src/operator-cli.js');
 await cp('src/phone-auth-store.js', 'dist/src/phone-auth-store.js');
 await cp('src/phone-gateway.js', 'dist/src/phone-gateway.js');
 await cp('src/store.js', 'dist/src/store.js');
+await cp('src/review-bundle.js', 'dist/src/review-bundle.js');
 await cp('src/local-coordinator-recovery.js', 'dist/src/local-coordinator-recovery.js');
 await cp('src/http-client.js', 'dist/src/http-client.js');
 await cp('src/mcp-server.js', 'dist/src/mcp-server.js');
