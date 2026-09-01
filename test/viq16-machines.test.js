@@ -28,7 +28,7 @@ test('Machines lists active server-derived provenance, pairs once, and revokes a
   const { call } = await fixture(t);
   const issued = await call('POST', '/v1/machines/pairing-codes', { role: 'Agent', name: 'Disposable runner' }); assert.equal(issued.response.status, 201); assert.equal(issued.body.role, 'Agent');
   const paired = await call('POST', '/v1/devices/pair', { code: issued.body.code }, null); assert.equal(paired.response.status, 201); assert.equal(paired.body.device.name, 'Disposable runner');
-  const machines = await call('GET', '/v1/machines'); const item = machines.body.machines.find(({ id }) => id === issued.body.id); assert.deepEqual(item, { id: issued.body.id, name: 'Disposable runner', role: 'Agent' });
+  const machines = await call('GET', '/v1/machines'); const item = machines.body.machines.find(({ id }) => id === issued.body.id); assert.deepEqual(item, { id: issued.body.id, name: 'Disposable runner', role: 'Agent', state:'stale/offline', ticket_id:null, worker_heartbeat_at:null, ticket_heartbeat_at:null });
   assert.equal((await call('POST', '/v1/machines/pairing-codes', { role: 'Machine', name: 'Spoof' })).response.status, 400);
   assert.equal((await call('POST', `/v1/machines/${encodeURIComponent(item.id)}/revoke`, {})).response.status, 200);
   assert.equal((await call('GET', '/v1/devices/me', undefined, paired.body.credential)).response.status, 401);

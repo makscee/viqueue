@@ -4,7 +4,7 @@ This is the operator checklist for a bounded Viq worker canary. Viq coordinates 
 
 ## Prerequisites
 
-- Use a dedicated, owned workspace and the repository's required toolchain.
+- Use an ordinary interactive Pi session and the repository's required toolchain; no worker-root layout is required.
 - Confirm the worker is already paired and authorized for the intended assignment with `/viq status`. Pairing is an operator-controlled, one-time setup and **must not be repeated during this canary**.
 - Confirm no credential, pairing code, private endpoint, or private provenance will enter source, prompts, progress, questions, or evidence.
 - Read the ticket contract and history before changing files. Treat the claim as fenced execution authority, not proof of worker health.
@@ -13,8 +13,8 @@ This is the operator checklist for a bounded Viq worker canary. Viq coordinates 
 
 Choose exactly one entry path:
 
-- **Persistent pool:** run `/viq poll` once. It atomically considers only tickets exactly assigned to this paired worker across all projects, never unassigned/free-pool work, and keeps this ordinary Pi process in worker mode across fresh model-session boundaries. Inspect `/viq status` and the delivered contract before work.
-- **Answered blocking question:** no operator command is needed. The worker checkpoints the exact ticket outside the transcript, rotates to a fresh Pi session, waits for the answer, then re-reads that ticket, its questions, and history and directly claims only that ticket. It never falls back to claim-next while that continuation is pending. `/viq continue TICKET-ID` remains available for compatibility and manual recovery.
+- **Persistent lane:** run `/viq poll` once. It atomically considers eligible generic Agent tickets across all projects and keeps this ordinary Pi process in worker mode across fresh preserved model sessions. Inspect `/viq status` and the delivered contract before work.
+- **Answered blocking question:** the blocking release ends its session. When canonical state makes work eligible again, a later pull claims it in a new session reconstructed from Viq history; no local checkpoint or special continuation command exists.
 
 Expected initial state is `Open` with no claim. A successful claim projects as `Working` and carries a durable, generation-fenced claim bound to the worker session. If acquisition fails or returns an unexpected ticket, make no changes and stop; never take over or work without the exact claim.
 
@@ -34,7 +34,7 @@ Submission releases the claim, moves the ticket to `Waiting`, creates the approv
 
 ## Safe stop, release, and rollback
 
-- `/viq pause` pauses polling only; it does **not** surrender a current claim. `/viq resume` resumes polling.
+- `/viq stop` cancels future pulls and explicitly releases active work; there is no pause/resume control path.
 - `/viq stop` safely stops polling and releases a current claim. Use it only when intentionally ending the live worker path.
 - Use `viq_release` with a non-secret reason when returning unfinished work to `Open`; it releases the claim and ends the turn.
 - If a release/stop reports failure, assume the fenced claim is still held. Do not retry work through another session or device; report the exact safe error and reconcile claim status first.

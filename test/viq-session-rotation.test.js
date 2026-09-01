@@ -1,8 +1,0 @@
-import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import test from 'node:test';
-import { rememberRotationContext, rotateToFreshSession } from '../extensions/viq-worker/session-rotation.mjs';
-
-test('terminal rotation calls supported newSession after idle and carries a fresh command context',async()=>{const calls=[],fresh={newSession(){},waitForIdle(){},sessionManager:{getSessionFile:()=>'/fresh.jsonl'}},ctx={sessionManager:{getSessionFile:()=>'/old.jsonl'},async waitForIdle(){calls.push('idle')},async newSession(options){calls.push(['new',options.parentSession]);await options.withSession(fresh);return{cancelled:false}}};rememberRotationContext(ctx);await rotateToFreshSession();assert.deepEqual(calls,['idle',['new','/old.jsonl']]);fresh.waitForIdle=async()=>calls.push('fresh-idle');fresh.newSession=async()=>{calls.push('fresh-new');return{cancelled:false}};await rotateToFreshSession();assert.deepEqual(calls.slice(-2),['fresh-idle','fresh-new'])});
-
-test('terminal tools persist rotation state and never inject slash text into model input',async()=>{const source=await readFile(new URL('../extensions/viq-worker/index.ts',import.meta.url),'utf8');assert.match(source,/savePoolState\(poolState\(ticket\)\);rotationPending=true/);assert.match(source,/agent_settled/);assert.match(source,/setTimeout\(\(\)=>void rotateToFreshSession\(\)/);assert.doesNotMatch(source,/sendUserMessage\(['"]\/viq-worker-rotate/);assert.doesNotMatch(source,/registerCommand\(['"]viq-worker-rotate/);for(const tool of['viq_question','viq_submit','viq_release'])assert.match(source,new RegExp(`name:'${tool}'.*rotate\\(`))});
