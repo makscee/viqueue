@@ -1,34 +1,43 @@
-# ADR 0014: STANDARD review boundary and persistent Pi lane
+# ADR 0014: Native Pi pull worker lane
 
-Status: candidate for review
+Status: accepted (supersedes the worker-controller portions of the previous candidate ADR 0014)
 
 ## Decision
 
-Viq remains a coordinator/ledger. A submission records a versioned, backend-neutral Review Bundle (summary, immutable evidence references, verification steps, tests, caveats, optional preview/screenshots/source identity, and factual release status). It does not build previews, render screenshots, push Git, merge, publish, release, deploy, or verify production. Human Accept decides review correctness only. `not-released`, `released`, and `production-verified` are separate ticket facts and separate ledger events.
+A single ordinary interactive Pi process with the Viq extension installed is one persistent pull-worker controller/lane. `/viq poll` starts it; `/viq stop` cancels future waits and drains rather than silently abandoning an active claim; `/viq status` reports it. `/viq once` is retained as the small useful one-shot diagnostic. Viq does not start Pi, require Herdr, tmux, a daemon, a special worker root/workspace, WebSocket/SSE, or a second queue. Herdr may observe or launch Pi externally but has no worker execution authority.
 
-A project may require `human-readable` or `visual` proof. UI work and visual-policy work without a preview/screenshot shows a prominent warning and the server requires an explicit proof-absence acknowledgement before Human Accept. Existing projects default to human-readable; legacy submissions remain reviewable.
+Model context is disposable. Before the first claim after `/viq poll`, and before every different ticket, the controller switches to a clean Pi session using Pi's supported session API, then injects only the canonical ticket contract/history. A Pi session contains one ticket ID only. Sessions are named with ticket key/title where Pi supports naming and are never deleted: they remain inspectable and resumable through `/resume` across controller rotation/restart. Persistent controller state is deliberately small: enabled/mode, worker identity, active claim reference, lease generation, cancellation/rotation guards. It never stores prompts, model messages, tool outputs, or summaries.
 
-`/viq poll` is a persistent lane in the visible Pi process. The extension is the controller. It atomically calls the coordinator's claim-next endpoint; only after a verified response does it deliver the ticket contract to the model. It retains one Pi context while that claim is active. Submit, release, or a blocking question durably records the boundary in Viq, closes claim/session authority, checkpoints pool state in an owner-only atomic file, and uses Pi 0.83's supported `ExtensionCommandContext.newSession({parentSession, withSession})`. The new session header links the preserved old JSONL file. A fresh extension runtime then claims at most one new eligible ticket. `/viq once [ticket]` does not persist or rotate.
+Pi settlement is not completion. The controller waits for the latest supported settled lifecycle (`agent_settled`, with a tested compatibility fallback only when necessary), then reads Viq's canonical ticket state. If its same fenced claim remains active, it may continue only that ticket in its same session, subject to bounded stalled/continuation handling. It must not claim another ticket. Submit, explicit release, or a blocking question end the episode; an answered blocking ticket becomes eligible through canonical state and is claimed in a new session reconstructed from canonical Viq history.
 
-## Options considered
+Claim/pull is atomic and single-flight. Idle polling has bounded backoff and is cancellable; idle waiting creates no model turns. Worker and active-ticket heartbeats use lease/generation-fenced, idempotent mutations. A crashed/disappeared worker becomes recoverable after the documented lease/staleness threshold; stale-generation mutations are rejected. Waiting workers heartbeat too.
 
-1. **Same-context loop:** simplest, but leaks prior-ticket context and violates the fresh-context requirement.
-2. **Fresh-session extension controller (chosen):** preserves the visible process/controller and old JSONL files while using Pi's supported replacement API. It has the smallest authority surface.
-3. **Daemon/external supervisor:** robust across process exits, but adds process-launch/liveness authority that Viq must not own.
-4. **Subagent pool:** adds Pi/Herdr coupling, hidden lanes, and credential/context risks; rejected. Core code has no Herdr or pi-subagents dependency.
+The existing Machines web surface shows worker identity/name, derived `waiting`, `working`, or `stale/offline` state, a current-ticket link while working, worker heartbeat, and active ticket/claim heartbeat. A worker is stale/offline when its last worker heartbeat is older than 90 seconds (three normal 30-second heartbeat intervals). It exposes no credential, claim token, session capability, secret, or transcript.
 
-## State machine
+## Rejected alternatives
 
-`unpaired -> stopped -> idle(persistent) -> claimed -> {claimed_paused | submitted | released | waiting_for_answer} -> rotation_checkpoint -> fresh_session -> idle`.
+* A same-context ticket loop leaks ticket context.
+* The prior packaged worker-root/pool.json/checkpoint and continuation-timer design makes filesystem state an authority and is removed.
+* Global captured rotation context and special `/viq continue` recovery paths are removed; canonical history plus a normal fresh claim is sufficient.
+* Herdr/subagent pools, daemons and external supervisors add hidden lanes and authority.
+* Session-capability authentication remains a coordinator API security boundary, but is not Pi transcript/controller state.
 
-`idle -> paused -> idle`; `claimed -> claimed_paused -> claimed`; `idle|paused|claimed -> stop` (stop explicitly releases a claim); `stopped -> once_idle -> claimed_once|once_complete`; revoked credentials fail closed to unpaired. An orphan found before polling enters blocked and no work is delivered. An active claim prevents a second claim. Empty queues use bounded exponential idle backoff without notifications. Blocking questions release the ticket and allow a fresh lane session to consider other eligible work; `/viq continue TICKET` remains exact, provenance-fenced compatibility recovery.
+## Grounded migration audit
 
-## Production mechanism and authority gap
+| Existing subsystem | Exact paths | Decision and fence |
+| --- | --- | --- |
+| Native extension command/runtime | `extensions/viq-worker/index.ts`, `worker-runtime.mjs`, `command.mjs`, `credential-store.mjs`, `review-bundle.mjs` | Keep and replace controller flow with session-per-ticket, settlement barrier and heartbeat. These are the ordinary Pi install path. |
+| Session capability/claim fencing | `src/store.js`, `src/server.js` | Keep; extend with lease heartbeat and worker projection. It prevents cross-session stale mutations. |
+| Pool persistence/continuation recovery | `extensions/viq-worker/pool-state.mjs`, `session-rotation.mjs`, `test/viq-worker-pool.test.js`, `test/viq-session-rotation.test.js` | Delete/replace. It carried `continue_ticket` outside canonical history and captured global rotation context. |
+| Extra command paths | `command.mjs`, `index.ts`, `test/viq-command-v3.test.js`, `test/viq-worker-pairing.test.js` | Delete `start`, `claim`, `continue`, `pause`, `resume`; retain minimal poll/stop/status/once. |
+| Packaged worker release/install/rehearsal | `scripts/package-viq-worker.js`, `scripts/install-viq-worker.sh`, `scripts/rollback-viq-worker.sh`, `scripts/rehearse-viq-worker.sh`, `test/worker-package.test.js`, `test/worker-install.test.js` | Delete. They require `VIQ_WORKER_ROOT`, immutable releases and an external worker user, contradicting ordinary Pi installation. Git history preserves evidence. |
+| Worker browser coordinator harness | `scripts/run-coordinator-worker-browser-e2e.sh`, `test/coordinator-worker-browser-e2e.js`, `test/fixtures/pi-worker-discovery.mjs`, `test/fixtures/real-worker-helper.mjs` | Replace focused assertions with extension/runtime and API/UI tests; no worker-root/harness authority remains. |
+| Machine UI/API | `src/server.js`, `src/store.js`, `web/app.js`, `web/app.css`, `test/board-http.test.js` | Keep and minimally extend worker heartbeat projection. |
 
-Source inspection found CI only validates tests/build/e2e and deterministic local bundles. `scripts/install-local.sh` installs an immutable local release and atomically changes a local `current` symlink; ADR 0005 explicitly says this is not publication or production release. The repository contains no workflow or configuration that deploys `https://viq.makscee.ru`, no production credential contract, and no deploy authority. Therefore STANDARD records external release/build/verification references but cannot perform production actions.
+## Safe recovery and rollback
 
-Safe proposal (not implemented): an explicitly authorized external release owner consumes a reviewed commit, produces an immutable build, deploys outside Viq, then a human coordinator records the build reference as `released` and a distinct health/evidence reference as `production-verified`. Never infer either from acceptance or merge.
+A live active claim is held only while lease heartbeats succeed. On process loss, no release is fabricated; after expiry an operator or a new worker may recover according to canonical eligibility. Operators use `/viq stop` before intentional shutdown. Roll back by reinstalling the prior npm/package version of the ordinary Pi extension and restart Pi; do not delete Pi session history or Viq data. This repository has no production deploy authority: build/release/production verification remain separately recorded facts.
 
-## Migration and rollback
+## Supersession notice
 
-Forward migration adds `project_review_policies` and nullable/default deployment columns. Existing projects default to `human-readable`; old pool-state v1 and exact `/viq continue` remain readable; legacy unstructured submissions remain acceptable. Rollback requires the existing offline SQLite snapshot/binary pairing because older binaries ignore, but do not understand, new facts. Stop the lane first; restore the prior binary and database snapshot together. Session JSONL and submitted artifact references are never deleted. No live deployment is part of this candidate.
+The prior ADR text described pool state, owner-only worker roots, `continue_ticket`, a continuation timer, explicit `/viq continue`, and global rotation context as current design. Those statements are superseded by this accepted ADR and must not be used as operational guidance.
