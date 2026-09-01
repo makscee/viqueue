@@ -155,6 +155,9 @@ export async function createPhoneGateway({authDb,origin,upstream,upstreamAddress
  // failed spends it, so a legitimate agent never touches it and a credential sweep stops asking upstream.
  // Per IP, because at this step there is no device yet — that is the whole point of the step.
  const PROBE_LIMIT=10,IDENTITY_FAILURES=new Set(['identity_unresolved','identity_lookup_failed','identity_mismatch']);
+ // The window reset inside is unreachable: prune(t) walks the same map with the same WINDOW a statement
+ // earlier, so a stale bucket is already gone by the time we look it up. It stays as a guard for whoever
+ // changes prune, and it is deliberately uncovered — no test can reach it without breaking prune first.
  const probeBucket=(req)=>{const key=`probe:${req.socket.remoteAddress||'unknown'}`,t=Date.now();prune(t);const bucket=buckets.get(key)||{t,n:0,noted:false};if(t-bucket.t>=WINDOW){bucket.t=t;bucket.n=0;bucket.noted=false}buckets.delete(key);buckets.set(key,bucket);return bucket};
  const spendProbe=(req)=>{probeBucket(req).n++};
  // One row per bucket per window. A flood is one fact repeated, and a row for every copy would push the
