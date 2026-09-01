@@ -50,13 +50,12 @@ MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/stat
 /viq pair WORKER_CODE
 /viq status
 /viq poll
-/viq once [TICKET-ID]
-/viq continue TICKET-ID
-/viq pause|resume|stop
+/viq once
+/viq stop
 /viq unpair
 ```
 
-The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` starts a persistent worker pool that atomically considers generic `Agent` tickets across all projects; any active paired Agent machine is eligible, while `Unassigned` and `Human` tickets are never claimed. Blocking questions and terminal/release boundaries rotate the ordinary Pi process to a genuinely fresh model session; a small owner-only atomic checkpoint remembers only pool mode. A blocking question durably releases that ticket, so the fresh persistent lane may claim other eligible work while the human answers. `/viq continue TICKET-ID` remains an exact, provenance-fenced compatibility recovery command. `/viq once [TICKET-ID]` performs one claim attempt without persisting the lane. `viq_submit` records a structured backend-neutral Review Bundle already produced elsewhere. The Board shows its summary, safe links/assets, tests, steps, caveats, source identity, and release boundary before Human Accept. Missing visual proof is prominent and requires explicit acknowledgement where applicable. The adapter does not synchronize repositories, execute artifact tooling, publish artifacts, merge, release, or deploy.
+The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` turns one interactive Pi process into one persistent worker lane that atomically considers generic `Agent` tickets across all projects; `Unassigned` and `Human` tickets are never claimed. Every ticket execution uses a new preserved Pi session, so no session contains two ticket IDs. A settled model turn does not free the lane: the extension first reads canonical Viq state and may only continue its same fenced claim. Blocking questions and terminal/release boundaries end that episode; later eligible work is reconstructed from canonical history in a fresh session. `/viq once` performs one diagnostic claim attempt without persistence. The Machines view shows worker state, heartbeats, and any current ticket without secrets. `viq_submit` records a structured backend-neutral Review Bundle already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, publish artifacts, merge, release, or deploy.
 
 ## Migration and rollback
 
