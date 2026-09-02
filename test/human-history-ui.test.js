@@ -111,7 +111,7 @@ test('board declares a dark palette for browser chrome and every surface', async
   const [html, css] = await Promise.all([readFile('web/index.html', 'utf8'), readFile('web/app.css', 'utf8')]);
   assert.match(html, /name="color-scheme" content="dark"/);
   assert.match(css, /:root\{color-scheme:dark/);
-  for (const token of ['--ink:#eef4f0', '--panel:#18201c', '--edge:#35423a', '--soft:#202b24']) assert.ok(css.includes(token), `missing dark theme token: ${token}`);
+  for (const token of ['--ink:#eef4f0', '--panel:#18201c', '--edge:#64766b', '--soft:#202b24']) assert.ok(css.includes(token), `missing dark theme token: ${token}`);
   assert.doesNotMatch(css, /background:#(?:fff|f6f7f4|eef1ed|f0f3ef|f7f8f6)(?:[;}])/i);
 });
 
