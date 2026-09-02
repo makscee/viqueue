@@ -28,6 +28,8 @@ test('meaningful control boundaries and links pass contrast or use a distinct fi
   assert.ok(contrast(token(css, '--control-edge'), token(css, '--panel')) >= 3, 'input boundary must reach 3:1');
   assert.ok(contrast(token(css, '--edge'), token(css, '--lane')) >= 3, 'surface boundary must reach 3:1');
   assert.ok(contrast(token(css, '--link'), token(css, '--panel')) >= 4.5, 'link text must reach AA');
+  assert.ok(contrast(token(css, '--danger'), token(css, '--panel')) >= 3, 'destructive control fill must reach 3:1');
+  assert.ok(contrast(token(css, '--danger'), token(css, '--ink')) >= 4.5, 'destructive control text must reach AA');
   const selected = declaration(css, '.filter-chip[aria-pressed=true]');
   assert.equal(property(selected, 'background'), 'var(--accent)');
   assert.equal(property(selected, 'color'), 'var(--accent-ink)');
