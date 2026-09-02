@@ -47,6 +47,15 @@ test('Human and Agent pairing choices are compact semantic segmented controls', 
   assert.match(css, /\.role-choice input:checked\+\.role-choice-label \.role-choice-check\{display:inline/);
 });
 
+test('ticket history separates event labels, provenance, and messages at both viewports', async () => {
+  const css = await readFile('web/app.css', 'utf8');
+  assert.match(declaration(css, '.event-timeline'), /display:grid/);
+  assert.match(declaration(css, '.event-head'), /display:flex/);
+  assert.match(declaration(css, '.event-head'), /gap:8px/);
+  assert.match(declaration(css, '.event-head span'), /color:var\(--muted\)/);
+  assert.match(css, /@media\(max-width:600px\)[\s\S]*\.event-head\{display:grid;gap:3px\}/);
+});
+
 test('focus, invalid, disabled, and hover states remain visually explicit', async () => {
   const css = await readFile('web/app.css', 'utf8');
   assert.match(css, /:user-invalid/);
