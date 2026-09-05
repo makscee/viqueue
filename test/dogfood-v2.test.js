@@ -53,10 +53,11 @@ test('unscoped claimNext crosses projects for generic Agent work and exact creat
   await f.store.close();
 });
 
-test('claimNext honors an explicit project while unscoped next keeps authoritative global order', async () => {
+test('next and claimNext honor explicit projects while unscoped next keeps authoritative global order', async () => {
   const f = await fixture(); for (const key of ['ONE','TWO']) await f.store.createProject(key);
   const ticket = await f.store.createTicket({ project: 'ONE', title: 'canonical membership', assignment: 'Agent', actor: 'mair' });
-  assert.equal((await f.store.next({ project: 'TWO', device: 'worker-one' })).id, ticket.id);
+  assert.equal(await f.store.next({ project: 'TWO', device: 'worker-one' }), null);
+  assert.equal((await f.store.next({ device: 'worker-one' })).id, ticket.id);
   assert.equal(await claimNextWithSession(f.store, { project: 'TWO', device: 'worker-one' }), null);
   assert.equal((await claimNextWithSession(f.store, { project: 'ONE', device: 'worker-one' })).ticket.id, ticket.id);
   await f.store.close();

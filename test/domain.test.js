@@ -93,6 +93,17 @@ test('submit review, accept done, and reopen open are explicit state transitions
   assert.equal(reopened.claim, null);
 });
 
+test('next scopes eligible work by project while preserving global reads and canonical project errors', async () => {
+  const { store } = await fixture();
+  for (const key of ['AAA', 'BBB']) await store.createProject(key);
+  await store.createTicket({ project: 'AAA', title: 'Scoped first', assignment: 'Agent', actor: 'maks' });
+  await store.createTicket({ project: 'BBB', title: 'Global newest', assignment: 'Agent', actor: 'maks' });
+  assert.equal((await store.next({ project: 'AAA', device: 'worker-a' })).id, 'AAA-1');
+  assert.equal((await store.next({ device: 'worker-a' })).id, 'BBB-1');
+  await assert.rejects(store.next({ project: 'bad key!', device: 'worker-a' }), (error) => error.code === 'invalid_project');
+  await assert.rejects(store.next({ project: 'ZZZ', device: 'worker-a' }), (error) => error.code === 'project_not_found');
+});
+
 test('Agent assignment is launch authorization and atomic claimNext skips Unassigned work', async () => {
   const { store, file } = await fixture(); await store.createProject('ABC');
   await store.createTicket({ project: 'ABC', title: 'Unassigned', actor: 'maks' });
