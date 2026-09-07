@@ -87,7 +87,10 @@ test('Bearer VC delegation fails closed before admin mutation for every denied c
   for (const attempt of denied) { const before = f.mutationHits; assert.notEqual((await attempt()).status, 200); assert.equal(f.mutationHits, before); }
   f.setProject('OTHER'); let before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 403); assert.equal(f.mutationHits, before);
   f.setProject(null); f.setTicketId('VC-2'); before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 403); assert.equal(f.mutationHits, before);
-  f.setTicketId(null); f.failLookup(true); before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 403); assert.equal(f.mutationHits, before);
+  // The lookup now fails with 503, and an upstream that could not answer is reported as 502, not as a refusal.
+  // What this test guards is named in its own title — fails closed *before admin mutation* — and that guarantee is
+  // the assertion beside it: mutationHits is unchanged. The response code moved; the mutation still does not happen.
+  f.setTicketId(null); f.failLookup(true); before = f.mutationHits; assert.equal((await f.bearer('core_artem_token')).status, 502); assert.equal(f.mutationHits, before);
   assert.ok(f.upstreamRequests.filter(({ authorization }) => authorization === 'Bearer core_artem_token').every(({ url }) => url === '/v1/devices/me'));
 });
 
