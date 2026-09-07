@@ -5,6 +5,9 @@ cd "$script_dir"
 prefix="${VIQ_PREFIX:-$HOME/.local}"
 root="$prefix/lib/viqueue"
 bin="$prefix/bin"
+atomic_replace_pointer(){
+  node --input-type=module -e "import{renameSync}from'node:fs';renameSync(process.argv[1],process.argv[2])" "$1" "$2"
+}
 if [[ -f SOURCE_COMMIT ]]; then release_id=$(tr -d '\n' < SOURCE_COMMIT); else release_id=$(sha256sum src/store.js | cut -d' ' -f1); fi
 [[ "$release_id" =~ ^[0-9a-f]{40,64}$ ]] || { echo 'invalid release identity' >&2; exit 1; }
 if [[ -n "${VIQ_STORAGE:-}" && -f "$VIQ_STORAGE" && "${VIQ_SNAPSHOT_CONFIRMED_OFFLINE:-}" != 1 ]]; then echo 'existing VIQ_STORAGE requires VIQ_SNAPSHOT_CONFIRMED_OFFLINE=1' >&2; exit 1; fi
@@ -46,8 +49,8 @@ EOF
 ln -sfn viq-mcp "$bin/viqueue-mcp"
 chmod +x "$release/bin/viq.js" "$release/bin/viq-bootstrap.js" "$release/bin/viq-recover-coordinator.js" "$release/bin/viq-import.js" "$bin/viqueue-server" "$bin/viq-mcp"
 old=$(readlink -f "$root/current" 2>/dev/null || true)
-if [[ -n "$old" && "$old" != "$release" ]]; then ln -sfn "$old" "$root/previous.tmp"; mv -Tf "$root/previous.tmp" "$root/previous"; fi
-ln -sfn "$release" "$root/current.tmp"; mv -Tf "$root/current.tmp" "$root/current"
+if [[ -n "$old" && "$old" != "$release" ]]; then ln -sfn "$old" "$root/previous.tmp"; atomic_replace_pointer "$root/previous.tmp" "$root/previous"; fi
+ln -sfn "$release" "$root/current.tmp"; atomic_replace_pointer "$root/current.tmp" "$root/current"
 complete=1
 trap - EXIT
 printf 'installed viqueue release %s under %s\n' "$release_id" "$prefix"
