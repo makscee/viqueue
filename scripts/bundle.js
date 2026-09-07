@@ -43,7 +43,7 @@ await chmod(path.join(stage, 'sqlite-backup.js'), 0o755);
 const result = spawnSync('tar', [
   '--sort=name', '--mtime=@0', '--owner=0', '--group=0', '--numeric-owner',
   '-czf', archive, '-C', root, releaseName
-], { encoding: 'utf8' });
+], { encoding: 'utf8', env: { ...process.env, GZIP: '-n' } });
 if (result.status !== 0) throw new Error(result.stderr);
 const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
 await writeFile(`${archive}.sha256`, `${digest}  ${path.basename(archive)}\n`);

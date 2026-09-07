@@ -4,6 +4,7 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 ## [Unreleased]
 
+- Make gzip release bundles reproducible across build times.
 - Add CLI commands for one-time Worker pairing redemption and worker session open/close.
 - Add claim-fenced progress, question list/ask, coordinator text-answer, and direct completion commands.
 - Cover the CLI-first blocking-question lifecycle: claim release to Waiting, idempotent coordinator answer to Open, and reclaim from a fresh worker session.
