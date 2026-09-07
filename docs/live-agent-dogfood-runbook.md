@@ -1,49 +1,101 @@
 # Live-agent dogfood runbook
 
-This is the operator checklist for a bounded Viq worker canary. Viq coordinates the ticket lifecycle; it does not start or supervise the worker, execute work, publish artifacts, or accept the result. [ADR 0013](adr-0013-product-charter.md) is authoritative.
+This checklist defines a bounded, CLI-first Viq canary. It exercises public CLI commands only. It does not verify a live deployment or claim adapter integration. Viq records authorized completion and provenance; it does not start or supervise workers, certify correctness, or publish artifacts. [ADR 0013](adr-0013-product-charter.md) is authoritative.
 
-## Prerequisites
+## Preconditions and secret handling
 
-- Use an ordinary interactive Pi session and the repository's required toolchain; no worker-root layout is required.
-- Confirm the worker is already paired and authorized for the intended assignment with `/viq status`. Pairing is an operator-controlled, one-time setup and **must not be repeated during this canary**.
-- Confirm no credential, pairing code, private endpoint, or private provenance will enter source, prompts, progress, questions, or evidence.
-- Read the ticket contract and history before changing files. Treat the claim as fenced execution authority, not proof of worker health.
+- Use one pre-created `Agent` ticket in `Open` with no claim or unresolved blocker. Record its project and ticket IDs as `PROJECT` and `TICKET_ID`.
+- Use an already paired coordinator and worker. Pairing is operator-controlled setup, not part of each canary. If a one-time worker pairing is explicitly in scope, redeem it once with `viq device pair CODE`; never place the code in a prompt or file.
+- Put `VIQ_URL` and each shell's `VIQ_DEVICE_TOKEN` only in that shell's environment. Disable persistent shell history for the canary. Keep device credentials, session capabilities, claim tokens, private endpoints, and private provenance out of prompts, files, ticket text, questions, outcomes, and evidence.
+- Run the coordinator and worker steps in separate shells. Do not copy raw CLI output into prompts or durable files.
 
-## Acquire the right work
+The examples name values as shell variables for clarity. Populate secret variables from CLI responses only in the ephemeral worker shell. Claim tokens are required CLI inputs; do not log or persist the expanded command line.
 
-Choose exactly one entry path:
+## 1. Open a worker session and claim
 
-- **Persistent lane:** run `/viq poll` once. It atomically considers eligible generic Agent tickets across all projects and keeps this ordinary Pi process in worker mode across fresh preserved model sessions. Inspect `/viq status` and the delivered contract before work.
-- **Answered blocking question:** the blocking release ends its session. When canonical state makes work eligible again, a later pull claims it in a new session reconstructed from Viq history; no local checkpoint or special continuation command exists.
+In worker shell A:
 
-Expected initial state is `Open` with no claim. A successful claim projects as `Working` and carries a durable, generation-fenced claim bound to the worker session. If acquisition fails or returns an unexpected ticket, make no changes and stop; never take over or work without the exact claim.
+```text
+viq session open
+export VIQ_SESSION_CAPABILITY=<returned session capability>
+viq ticket claim-next --project "$PROJECT"
+export CLAIM_ID=<returned claim ID>
+export CLAIM_TOKEN=<returned claim token>
+export GENERATION=<returned generation>
+```
 
-## Work and report
+Confirm the returned ticket is exactly `$TICKET_ID`, its state is `Working`, and its claim fence matches the captured values. If acquisition fails or returns another ticket, make no changes and stop. Assignment is claim eligibility, not an instruction from Viq to launch work.
 
-1. Reconcile the delivered contract, answered questions, ADR 0013, and current source. Fail closed on conflicts.
-2. Make only the authorized changes. Keep credentials and other secrets out of files and Viq messages.
-3. Use `viq_progress` only for a factual, non-secret milestone useful to an external reviewer. Silence is not health or completion.
-4. Use `viq_question` when a reviewer decision is genuinely needed:
-   - non-blocking keeps the ticket `Working` and retains the claim;
-   - blocking releases the claim, moves the ticket to `Waiting`, ends the worker turn, and automatically rotates to a fresh session. After the answer reopens the ticket, the pool continues that exact ticket automatically.
-5. Use `viq_block` for an actionable blocker when the claim must be retained; the ticket remains claimed and the worker pauses. Do not claim other work from that session.
-6. Run focused checks and inspect the final diff. Produce immutable evidence in the worker's own toolchain; Viq neither creates nor publishes it.
-7. When publication and immutable references already exist, call `viq_submit` once with a concise outcome and at least one **backend-neutral immutable evidence reference**. Suitable references include a commit plus tree identity, a content digest, an immutable object identifier, or a stable immutable report URL. Do not use a mutable branch name, local path, credential-bearing URL, or claim secret as evidence.
+Optional factual progress uses the same fence:
 
-Submission releases the claim, moves the ticket to `Waiting`, creates the approval request, ends the worker turn, and rotates the pool to a fresh idle session before another ticket can be acquired. A human or authorized policy reviewer—not the worker—then accepts it to `Done` or requests changes, returning it to `Open`. For requested changes, follow the explicit continuation policy presented by the ticket; do not assume old claim authority remains valid.
+```text
+viq ticket progress "$TICKET_ID" --claim-id "$CLAIM_ID" --claim-token "$CLAIM_TOKEN" --generation "$GENERATION" --request-id canary-progress-1 --message "Bounded canary started"
+```
 
-## Safe stop, release, and rollback
+## 2. Exercise the blocking-question boundary
 
-- `/viq stop` cancels future pulls and explicitly releases active work; there is no pause/resume control path.
-- `/viq stop` safely stops polling and releases a current claim. Use it only when intentionally ending the live worker path.
-- Use `viq_release` with a non-secret reason when returning unfinished work to `Open`; it releases the claim and ends the turn.
-- If a release/stop reports failure, assume the fenced claim is still held. Do not retry work through another session or device; report the exact safe error and reconcile claim status first.
-- Roll back documentation or code only in the worker workspace using the repository's normal version-control procedure. Viq does not roll back workspaces or artifacts. Never compensate with direct database, service, deployment, credential, or Board mutation.
+Still in worker shell A, ask one ordinary blocking question:
 
-## Known limits
+```text
+viq question ask "$TICKET_ID" --claim-id "$CLAIM_ID" --claim-token "$CLAIM_TOKEN" --generation "$GENERATION" --request-id canary-question-1 --text "May the bounded canary proceed?" --blocking
+```
 
-- Viq does not infer runtime liveness, supervise sessions, publish artifacts, or validate outcome correctness.
-- Claims are durable and session-fenced; there is no takeover path. Pairing or assignment establishes eligibility, not process launch.
-- `continue` is narrowly limited to a valid answered-question lineage for the same worker identity; stale, cross-device, or review-change lineage fails closed.
-- A model turn ending does not complete a ticket. Authority ends only through submission, release, or the defined blocking-question transition.
-- Transport status and machine metadata are provenance, not health signals. Use only the configured current Viq adapter; obsolete routes and historical publication workflows are not operational instructions.
+Require the response to show `Waiting` with no active claim. The blocking transition releases the claim; it does not preserve continuation authority. Close shell A's worker session and clear its secrets:
+
+```text
+viq session close
+unset VIQ_SESSION_CAPABILITY CLAIM_ID CLAIM_TOKEN GENERATION
+```
+
+If the question call or session close fails, stop and reconcile server state before any reclaim attempt.
+
+## 3. Answer through the coordinator CLI
+
+In the coordinator shell:
+
+```text
+viq question list "$TICKET_ID" --status open
+viq question answer "$TICKET_ID" <question ID> --answer "Proceed within the bounded canary." --request-id canary-answer-1
+```
+
+Require the answer response to identify the same ordinary text question and show the ticket as `Open`. Repeating the exact answer command with the same request ID is an idempotency check and must return the recorded answer. This command answers text questions only; it is not an approval Accept command.
+
+## 4. Reclaim only from a fresh worker session
+
+In a fresh worker shell B with the paired worker credential in `VIQ_DEVICE_TOKEN`:
+
+```text
+viq session open
+export VIQ_SESSION_CAPABILITY=<new returned session capability>
+viq ticket claim "$TICKET_ID"
+export CLAIM_ID=<new returned claim ID>
+export CLAIM_TOKEN=<new returned claim token>
+export GENERATION=<new returned generation>
+```
+
+Require a new session ID and a fresh claim generation. Read the ticket and answered-question history before proceeding. Never reuse shell A's capability or claim fence.
+
+## 5. Record direct completion
+
+Run focused checks in the worker's own toolchain and inspect its final diff. If they pass, record the outcome through the direct completion command:
+
+```text
+viq ticket complete "$TICKET_ID" --claim-id "$CLAIM_ID" --claim-token "$CLAIM_TOKEN" --generation "$GENERATION" --request-id canary-complete-1 --outcome "Bounded CLI canary completed" --evidence "<opaque immutable reference>"
+viq session close
+unset VIQ_SESSION_CAPABILITY CLAIM_ID CLAIM_TOKEN GENERATION
+```
+
+Use only backend-neutral immutable evidence that already exists, such as a commit/tree identity, content digest, immutable object ID, or stable immutable report URL. Omit `--evidence` when no truthful immutable reference exists. Never use a mutable branch, local path, credential-bearing URL, or secret.
+
+Require completion to show `Done` with no claim. This is a Viq record of the authorized worker's completion report and provenance, not proof of correctness, publication readiness, publication, or live adapter behavior.
+
+## Optional compatibility path
+
+`viq ticket submit` and coordinator `viq ticket accept` remain legacy compatibility commands for an external workflow that elects review. They are not required by this canary or by the Viq kernel. The external runtime or publication system owns review requirements, reviewer separation, artifact validation, and publication.
+
+## Safe stop
+
+- Before a blocking question, use `viq ticket release` with the current fence to return unfinished work to `Open`, then close the session.
+- After a blocking question, the claim is already released; close the old session and do not continue from it.
+- If release, question, answer, reclaim, completion, or close returns an unexpected result, stop. Do not compensate through direct database, browser Board, deployment, credential, or repository mutation.
+- Viq does not infer runtime liveness. Silence and machine metadata are not health signals, and there is no takeover path.

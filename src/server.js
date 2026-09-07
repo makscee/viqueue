@@ -70,13 +70,14 @@ export async function createApp({ storage, now } = {}) {
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/questions\/([^/]+)\/answer$/)) && request.method === 'POST') { requireAdmin(device); return send(response, 200, await store.answerQuestion(decodeURIComponent(match[1]), decodeURIComponent(match[2]), { ...(await json(request)), actor: device.id })); }
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/source-lifecycle$/)) && request.method === 'POST') { requireCoordinator(device); return send(response,200,{ticket:await store.recordSourceLifecycle(decodeURIComponent(match[1]),{...(await json(request)),actor:device.id})}); }
       if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/release-status$/)) && request.method === 'POST') { requireAdmin(device); return send(response,200,{ticket:await store.recordReleaseStatus(decodeURIComponent(match[1]),{...(await json(request)),actor:device.id})}); }
-      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/(claim|verify|release|events|block|submit|accept|reopen)$/)) && request.method === 'POST') {
+      if ((match = url.pathname.match(/^\/v1\/tickets\/([^/]+)\/(claim|verify|release|events|block|complete|submit|accept|reopen)$/)) && request.method === 'POST') {
         const id = decodeURIComponent(match[1]); const action = match[2]; const body = await json(request);
         if (action === 'claim') { requireKind(device, 'worker'); return send(response, 200, await store.claim(id, sessionClaim(request, body, device))); }
         if (action === 'verify') { requireKind(device, 'worker'); return send(response, 200, { ticket: await store.verify(id, claimIdentity(request, body, device)) }); }
         if (action === 'release') { requireKind(device, 'worker'); return send(response, 200, { ticket: await store.release(id, claimIdentity(request, body, device)) }); }
         if (action === 'events') { requireKind(device, 'worker'); return send(response, 201, await store.postEvent(id, claimIdentity(request, body, device))); }
         if (action === 'block') { requireKind(device, 'worker'); return send(response, 201, await store.blockTicket(id, claimIdentity(request, body, device))); }
+        if (action === 'complete') { requireKind(device, 'worker'); return send(response, 200, await store.complete(id, claimIdentity(request, body, device))); }
         if (action === 'submit') { requireKind(device, 'worker'); const human = (await store.listActors({ active: true })).find((actor) => actor.kind === 'human' && actor.admin); if (!human) throw new DomainError(409, 'human_reviewer_unavailable', 'an active coordinator is required'); return send(response, 200, await store.submit(id, claimIdentity(request, { ...body, reviewer: { type: 'actor', id: human.id } }, device))); }
         requireAdmin(device);
         if (action === 'accept') return send(response, 200, { ticket: await store.accept(id, { actor: device.id, message: body.message,proof_acknowledged:body.proof_acknowledged }) });

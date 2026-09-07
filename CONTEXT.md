@@ -21,7 +21,7 @@ A question whose answer is required before Agent execution can continue. Asking 
 _Avoid_: Separate blocker, inferred stall, promoted question, claim grace period
 
 **Approval question**:
-A blocking question created when a worker submits completed work. Its answer is either acceptance or a request for changes, so review uses the same interface as every other coordinator decision.
+An optional compatibility question created by legacy submit. It moves the ticket to Waiting; acceptance moves it to Done, while requested changes return it to Open. VIQ records the decision and provenance but does not certify correctness or publication.
 _Avoid_: Separate review queue, review inbox
 
 **Open questions**:
@@ -61,7 +61,7 @@ The immutable identifier formed from the ticket’s project key and that project
 _Avoid_: Global sequence, mutable ticket ID
 
 **Board state**:
-A ticket’s explicit position in Open, Working, Waiting, or Done. Backlog is Unassigned + Open; review is Waiting with an open approval question. Humans move Human work by drag; Agent lifecycle moves Agent work: claim to Working, blocking question or submission to Waiting, and acceptance to Done. Blocking answers, release, or requested changes return Agent work to Open.
+A ticket’s explicit position in Open, Working, Waiting, or Done. Backlog is Unassigned + Open. Humans move Human work by drag; an Agent worker claims work to Working and may directly complete it to Done. A blocking question moves Agent work to Waiting; its answer or release returns it to Open. Legacy submit optionally creates an approval question and moves work to Waiting; acceptance moves it to Done, while requested changes return it to Open.
 _Avoid_: To do column, Review column, state dropdown, board-owned Agent process control
 
 **Waiting**:
