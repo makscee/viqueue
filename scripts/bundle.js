@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { copyBuiltReleaseOutputs, releaseNameFor } from './release-layout.js';
 
 const root = path.resolve('release');
-const releaseName = `viqueue-v${JSON.parse(await readFile('package.json', 'utf8')).version}-rc`;
+const releaseName = releaseNameFor(JSON.parse(await readFile('package.json', 'utf8')));
 const stage = path.join(root, releaseName);
 const archive = path.join(root, `${releaseName}.tar.gz`);
 await rm(root, { recursive: true, force: true });
@@ -21,9 +22,7 @@ const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }
 if (revision.status !== 0 || tree.status !== 0 || !/^[0-9a-f]{40}\n?$/.test(revision.stdout) || !/^[0-9a-f]{40}\n?$/.test(tree.stdout)) throw new Error(revision.stderr || tree.stderr || 'cannot determine source identity');
 await writeFile(path.join(stage, 'SOURCE_COMMIT'), `${revision.stdout.trim()}\n`);
 await writeFile(path.join(stage, 'SOURCE_TREE'), `${tree.stdout.trim()}\n`);
-for (const file of ['bin/viq.js', 'bin/viq-bootstrap.js', 'bin/viq-recover-coordinator.js', 'bin/viq-import.js', 'src/server.js', 'src/operator-server.js', 'src/operator-cli.js', 'src/store.js', 'src/review-bundle.js', 'src/local-coordinator-recovery.js', 'src/http-client.js', 'src/mcp-server.js', 'package.json']) {
-  await cp(path.join('dist', file), path.join(stage, file));
-}
+await copyBuiltReleaseOutputs('dist', stage);
 await cp('dist/web', path.join(stage, 'web'), { recursive: true });
 await cp('dist/extensions', path.join(stage, 'extensions'), { recursive: true });
 for (const file of ['README.md', 'LICENSE', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md']) {
