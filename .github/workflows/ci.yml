@@ -42,10 +42,18 @@ jobs:
       - name: Build deterministic release candidate twice
         shell: bash
         run: |
+          release_name="$(node -p "'viqueue-v' + require('./package.json').version + '-rc'")"
+          archive="release/${release_name}.tar.gz"
           npm run bundle
-          first="$(sha256sum release/viqueue-v0.4.1-rc.tar.gz | cut -d' ' -f1)"
+          first="$(sha256sum "$archive" | cut -d' ' -f1)"
           sleep 2
           npm run bundle
-          second="$(sha256sum release/viqueue-v0.4.1-rc.tar.gz | cut -d' ' -f1)"
+          second="$(sha256sum "$archive" | cut -d' ' -f1)"
           test "$first" = "$second"
-          (cd release && sha256sum -c viqueue-v0.4.1-rc.tar.gz.sha256)
+          (cd release && sha256sum -c "${release_name}.tar.gz.sha256")
+          while IFS= read -r target; do
+            tar -tzf "$archive" "${release_name}/${target}" >/dev/null
+          done < <(node -e "for (const target of Object.values(require('./package.json').bin)) console.log(target)")
+          for target in src/server.js src/phone-gateway.js; do
+            tar -tzf "$archive" "${release_name}/${target}" >/dev/null
+          done
