@@ -336,6 +336,10 @@ export class Store {
           CREATE INDEX events_project_cursor ON events(project,id); CREATE INDEX events_ticket_cursor ON events(ticket_id,id);
         `);
       }
+      const receiptColumns = this.#columns('worker_mutation_receipts');
+      if (!receiptColumns.includes('session_id')) this.#db.exec('ALTER TABLE worker_mutation_receipts ADD COLUMN session_id TEXT');
+      if (!receiptColumns.includes('claim_token_hash')) this.#db.exec('ALTER TABLE worker_mutation_receipts ADD COLUMN claim_token_hash BLOB');
+      if (!receiptColumns.includes('request_hash')) this.#db.exec('ALTER TABLE worker_mutation_receipts ADD COLUMN request_hash BLOB');
       const eventColumns = this.#columns('events');
       if (!eventColumns.includes('metadata')) this.#db.exec('ALTER TABLE events ADD COLUMN metadata TEXT');
       if (!eventColumns.includes('device_id')) this.#db.exec('ALTER TABLE events ADD COLUMN device_id TEXT REFERENCES devices(id)');
@@ -656,6 +660,32 @@ export class Store {
   #receipt(id,input,kind,work){const requestId=cleanOptional(input.request_id,'request_id');if(!requestId)return work();const prior=this.#db.prepare('SELECT * FROM worker_mutation_receipts WHERE request_id=?').get(requestId);if(prior){if(prior.ticket_id!==id||prior.claim_id!==input.claim_id||prior.generation!==input.generation||prior.device_id!==input.device||prior.kind!==kind)throw new DomainError(409,'stale_claim','mutation retry is not from its original claim');return JSON.parse(prior.result_json)}const result=work();this.#db.prepare('INSERT INTO worker_mutation_receipts(request_id,ticket_id,claim_id,generation,device_id,kind,result_json,created_at) VALUES(?,?,?,?,?,?,?,?)').run(requestId,id,input.claim_id,input.generation,input.device,kind,JSON.stringify(result),this.#now());this.#db.prepare('DELETE FROM worker_mutation_receipts WHERE created_at<?').run(this.#now()-7*86400000);return result;}
   async release(id, { release_message: releaseMessage, release_metadata: releaseMetadata = null, ...identity }) { return this.#transaction(() => this.#receipt(id,identity,'release',()=>{ const ticket = this.#ticket(id); const claim = this.#authority(id, identity); if (releaseMessage != null) this.#appendManualEvent(ticket, this.#actor(claim.actor), this.#device(claim.device_id, { kind: 'worker' }), releaseMessage, releaseMetadata); this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=?').run(this.#now(), claim.claim_id); this.#db.prepare('UPDATE tickets SET updated_at=? WHERE id=?').run(this.#now(), id); this.#event(id, ticket.project, 'released', claim.actor, null, null, identity.device ?? claim.device_id); return this.#ticket(id); })); }
   async postEvent(id, { message, metadata = null, ...identity }) { return this.#transaction(() => this.#receipt(id,identity,'progress',()=>{ const ticket = this.#mutableTicket(id); const claim = this.#authority(id, identity); const actor = this.#actor(claim.actor); const device = this.#device(claim.device_id, { kind: 'worker' }); return this.#appendManualEvent(ticket, actor, device, message, metadata); })); }
+  async complete(id, input) { return this.#transaction(() => {
+    const requestId = cleanOptional(input.request_id, 'request_id');
+    if (!requestId) throw new DomainError(400, 'invalid_request_id', 'request_id is required');
+    const outcome = cleanOptional(input.outcome, 'outcome');
+    if (!outcome || outcome.length > 1000) throw new DomainError(400, 'invalid_outcome', 'outcome must be concise non-empty text up to 1000 characters');
+    const evidence = input.evidence_references ?? [];
+    if (!Array.isArray(evidence) || evidence.length > 50 || evidence.some((reference) => typeof reference !== 'string' || !reference.trim() || reference.length > 2000)) throw new DomainError(400, 'invalid_evidence_references', 'evidence_references must contain up to 50 non-empty opaque strings');
+    const normalizedEvidence = evidence;
+    const requestHash = hash(JSON.stringify({ outcome, evidence_references: normalizedEvidence }));
+    const prior = this.#db.prepare('SELECT * FROM worker_mutation_receipts WHERE request_id=?').get(requestId);
+    if (prior) {
+      let session = null; try { session = this.#sessionCapability(input.session_capability, input.device); } catch {}
+      const tokenHash = typeof input.claim_token === 'string' ? hash(input.claim_token) : Buffer.alloc(0);
+      const same = prior.kind === 'complete' && prior.ticket_id === id && prior.claim_id === input.claim_id && prior.generation === input.generation && prior.device_id === input.device && prior.session_id === session?.id && prior.claim_token_hash && Buffer.from(prior.claim_token_hash).length === tokenHash.length && timingSafeEqual(Buffer.from(prior.claim_token_hash), tokenHash) && prior.request_hash && Buffer.from(prior.request_hash).length === requestHash.length && timingSafeEqual(Buffer.from(prior.request_hash), requestHash);
+      if (!same) throw new DomainError(409, 'stale_claim', 'completion retry is not the exact original fenced request');
+      return JSON.parse(prior.result_json);
+    }
+    const ticket = this.#ticket(id), claim = this.#authority(id, input), now = this.#now();
+    if (!['Open','Working'].includes(ticket.state)) throw new DomainError(409, 'invalid_state', 'only a currently claimed open ticket can be completed');
+    this.#db.prepare('UPDATE claims SET released_at=? WHERE claim_id=? AND released_at IS NULL').run(now, claim.claim_id);
+    this.#db.prepare("UPDATE tickets SET state='done',board_state='Done',updated_at=? WHERE id=?").run(now, id);
+    const cursor = this.#event(id, ticket.project, 'completed', claim.actor, outcome, { evidence_references: normalizedEvidence, claim_id: claim.claim_id, generation: claim.generation, session_id: claim.session_id }, claim.device_id);
+    const result = { ticket: this.#ticket(id), completion: this.#eventRow(cursor) };
+    this.#db.prepare('INSERT INTO worker_mutation_receipts(request_id,ticket_id,claim_id,generation,device_id,kind,result_json,created_at,session_id,claim_token_hash,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(requestId,id,claim.claim_id,claim.generation,claim.device_id,'complete',JSON.stringify(result),now,claim.session_id,claim.token_hash,requestHash);
+    return result;
+  }); }
   #publicBlock(row) { return { id: row.id, ticket_id: row.ticket_id, created_by: row.created_by, reason: row.reason, status: row.status, created_at: row.created_at, resolved_by: row.resolved_by, resolved_at: row.resolved_at }; }
   async blockTicket(id, { reason, ...identity }) { return this.#transaction(() => this.#receipt(id,identity,'block',()=>{ const ticket = this.#ticket(id); const claim = this.#authority(id, identity); const text = cleanOptional(reason, 'reason'); if (!text) throw new DomainError(400, 'invalid_reason', 'block reason is required'); const blockId = `b_${randomBytes(9).toString('base64url')}`; const now = this.#now(); this.#db.prepare("INSERT INTO ticket_blocks(id,ticket_id,created_by,reason,status,created_at) VALUES(?,?,?,?,'open',?)").run(blockId, id, claim.actor, text, now); this.#event(id, ticket.project, 'blocked', claim.actor, text, { block_id: blockId }, identity.device ?? claim.device_id); return { block: this.#publicBlock(this.#db.prepare('SELECT * FROM ticket_blocks WHERE id=?').get(blockId)), ticket: this.#ticket(id) }; })); }
   async listBlocks(id, { status } = {}) { this.#row(id); const where = ['ticket_id=?']; const values = [id]; if (status) { if (!['open','resolved'].includes(status)) throw new DomainError(400, 'invalid_block_status', 'status must be open or resolved'); where.push('status=?'); values.push(status); } return { blocks: this.#db.prepare(`SELECT * FROM ticket_blocks WHERE ${where.join(' AND ')} ORDER BY created_at,id`).all(...values).map((row) => this.#publicBlock(row)) }; }
