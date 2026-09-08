@@ -1,22 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 import viqWorker from '../extensions/viq-worker/index.ts';
 import { controller } from '../extensions/viq-worker/controller.mjs';
+import { isolatedViqConfig } from './helpers/isolated-viq-config.js';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 test('command take, poll, and once fence subsequent typed claims in the same native session', async t => {
-  const config = await mkdtemp(path.join(tmpdir(), 'viq-mixed-entry-'));
-  const old = Object.fromEntries(['XDG_CONFIG_HOME', 'VIQ_CREDENTIAL_FILE', 'VIQ_DEVICE_TOKEN', 'VIQ_URL'].map(key => [key, process.env[key]]));
-  Object.assign(process.env, { XDG_CONFIG_HOME: config, VIQ_CREDENTIAL_FILE: path.join(config, 'absent.json'), VIQ_DEVICE_TOKEN: '', VIQ_URL: 'http://fixture.invalid' });
+  await isolatedViqConfig(t, 'viq-mixed-entry-');
   t.after(async () => {
     await controller.runtime?.shutdown();
     controller.runtime = null; controller.adapter = null; controller.persistent = false;
-    for (const [key, value] of Object.entries(old)) value === undefined ? delete process.env[key] : process.env[key] = value;
-    await rm(config, { recursive: true, force: true });
   });
   for (const command of ['take ABC-1', 'poll', 'once']) {
     Object.assign(controller, { epoch: 0, adapter: null, persistent: false, pendingStart: false, pendingTicket: null, pendingCredentialFile: null, rotating: false, runtime: null });
