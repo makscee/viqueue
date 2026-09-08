@@ -4,6 +4,15 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 ## [Unreleased]
 
+## [0.5.2] — prerelease
+
+- Bind typed Pi ticket admission to the durable native session transcript rather than process rotation state.
+- Close exact-take sessions after definitive non-mutating claim rejection while leaving ambiguous results blocked for external reconciliation.
+- Preserve an explicitly selected credential lane across episodes and isolate adapter credential tests from host configuration.
+- Keep the product kernel unchanged; this adapter-only bridge requires no backend server deployment.
+
+Release notes: [`release-notes/v0.5.2.md`](release-notes/v0.5.2.md).
+
 ## [0.5.1] — 2026-09-07
 
 - Make local install and rollback release-pointer replacement atomic and portable across GNU/Linux and BSD/macOS.

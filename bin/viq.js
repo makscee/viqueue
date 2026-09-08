@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { HttpApplicationClient } from '../src/http-client.js';
+import { loadCredential } from '../extensions/viq-worker/credential-store.mjs';
 
 const argv = process.argv.slice(2), noun = argv[0], verb = argv[1];
 const usage = (message = 'invalid command') => { throw Object.assign(new Error(message), { usage: true, code: 'usage_error' }); };
@@ -41,6 +42,19 @@ const target = (prefix) => {
   if (Boolean(device) === Boolean(role)) usage(`exactly one --${prefix} or --${prefix}-role is required`);
   return { type: role ? 'role' : 'device', id: role ?? device };
 };
+const deviceCredential = () => {
+  const explicit = option('--device-token', { required: argv.includes('--device-token') });
+  const file = option('--credential-file', { required: argv.includes('--credential-file') });
+  if (explicit) return explicit;
+  if (process.env.VIQ_DEVICE_TOKEN) return process.env.VIQ_DEVICE_TOKEN;
+  try { return loadCredential(file); }
+  catch (error) {
+    if (file === undefined && process.env.VIQ_CREDENTIAL_FILE === undefined && error?.code === 'ENOENT') return undefined;
+    const safe = new Set(['invalid_config_root', 'invalid_device_credential_path', 'unsafe_device_credential_directory', 'unsafe_device_credential_file', 'invalid_device_credential_file']);
+    const code = safe.has(error?.message) ? error.message : 'device_credential_unavailable';
+    throw Object.assign(new Error(code), { code });
+  }
+};
 
 let method = 'GET', route, body, unauthenticated = false;
 if (noun === 'operator') {
@@ -81,7 +95,7 @@ else if (noun === 'question' && verb === 'answer' && positionals[0] && positiona
 else usage();
 
 try {
-  const client = new HttpApplicationClient({ server: option('--server') ?? process.env.VIQ_URL, deviceToken: unauthenticated ? null : (option('--device-token') ?? process.env.VIQ_DEVICE_TOKEN), sessionCapability: unauthenticated ? null : process.env.VIQ_SESSION_CAPABILITY });
+  const client = new HttpApplicationClient({ server: option('--server') ?? process.env.VIQ_URL, deviceToken: unauthenticated ? null : deviceCredential(), sessionCapability: unauthenticated ? null : process.env.VIQ_SESSION_CAPABILITY });
   const result = await client.request(method, route, body);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 } catch (error) {
