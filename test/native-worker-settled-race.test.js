@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { cp } from 'node:fs/promises';
+import { cp, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { loadCredential, saveCredential } from '../extensions/viq-worker/credential-store.mjs';
 import { isolatedViqConfig } from './helpers/isolated-viq-config.js';
 
-const credential = 'fixture-only-worker-credential-000000000000';
+const credential = 'fixture-only-worker-credential-a-000000000000';
+const replacementCredential = 'fixture-only-worker-credential-b-000000000000';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => {
   let resolve, reject;
@@ -32,15 +34,18 @@ async function freshExtension(root, label) {
 
 function fixtureFetch(ticketRead) {
   const calls = [];
-  let sessionSerial = 0, claimSerial = 0;
+  let sessionSerial = 0, claimSerial = 0, heldHeartbeat = null;
   const implementation = async (input, init = {}) => {
     const url = new URL(String(input));
     assert.equal(url.origin, 'http://fixture.invalid', 'fixtures must never forward to a real endpoint');
-    assert.equal(new Headers(init.headers).get('authorization'), `Bearer ${credential}`);
     const method = init.method ?? 'GET', route = url.pathname;
+    const authorization = new Headers(init.headers).get('authorization');
+    if (route === '/v1/devices/pair') assert.equal(authorization, null);
+    else assert.ok([`Bearer ${credential}`, `Bearer ${replacementCredential}`].includes(authorization), 'fixture request must use a fixture-only credential');
     const body = init.body === undefined ? null : JSON.parse(init.body);
-    calls.push({ method, route, body });
+    calls.push({ method, route, body, authorization });
     if (method === 'GET' && route === '/v1/devices/me') return Response.json({ device: { id: 'fixture-worker', kind: 'worker' }, actor: { id: 'fixture-agent' } });
+    if (method === 'POST' && route === '/v1/devices/pair') return Response.json({ credential: replacementCredential, device: { id: 'fixture-worker-b', kind: 'worker' } });
     if (method === 'POST' && route === '/v1/sessions') return Response.json({ session_id: `fixture-session-${++sessionSerial}`, session_capability: `fixture-capability-${sessionSerial}` });
     if (method === 'POST' && route === '/v1/sessions/close') return Response.json({});
     if (method === 'POST' && (route === '/v1/tickets/claim-next' || route === '/v1/tickets/ABC-1/claim')) {
@@ -49,11 +54,14 @@ function fixtureFetch(ticketRead) {
     }
     if (method === 'GET' && route === '/v1/events') return Response.json({ events: [] });
     if (method === 'GET' && route === '/v1/tickets/ABC-1') return ticketRead.promise;
-    if (method === 'POST' && route === '/v1/workers/heartbeat') return Response.json({});
+    if (method === 'POST' && route === '/v1/workers/heartbeat') {
+      if (heldHeartbeat) { const held = heldHeartbeat; heldHeartbeat = null; held.started = true; return held.promise; }
+      return Response.json({});
+    }
     if (method === 'POST' && /^\/v1\/tickets\/ABC-[12]\/(?:block|release|complete|questions|submit)$/.test(route)) return Response.json({});
     throw new Error(`unexpected fixture request ${method} ${route}`);
   };
-  return { calls, implementation };
+  return { calls, implementation, holdNextHeartbeat() { heldHeartbeat = deferred(); return heldHeartbeat; } };
 }
 
 function createInstance(viqWorker, id, notifications, messages) {
@@ -77,13 +85,13 @@ function createInstance(viqWorker, id, notifications, messages) {
   return { commands, ctx, handlers, tools };
 }
 
-async function startedPersistent(module, fetchImpl, notifications, messages, onRotate = async () => ({ cancelled: false })) {
+async function startedPersistent(module, fetchImpl, notifications, messages, onRotate = async () => ({ cancelled: false }), credentialFile = null) {
   const { viqWorker, controller } = module;
   let active = createInstance(viqWorker, 'initial', notifications, messages);
   await active.handlers.get('session_start')({}, active.ctx);
   const runtime = controller.runtime;
   runtime.setCredential(credential);
-  runtime.credentialFile = null;
+  runtime.credentialFile = credentialFile;
   runtime.fetch = fetchImpl;
   await active.commands.get('viq').handler('poll', {
     ...active.ctx,
@@ -241,6 +249,99 @@ test('retired settled observation cannot heartbeat a replacement claim or decide
   assert.equal(heartbeatsAfter, heartbeatsBefore, 'old observation must not heartbeat the replacement claim');
   assert.equal(rotations, 0);
   assert.equal(lane.runtime.current, replacement);
+  lane.controller.persistent = false;
+  await lane.runtime.release('test cleanup');
+});
+
+async function pairAndStartReplacement(lane, module, notifications, messages, replacementFile) {
+  lane.runtime.credentialFile = replacementFile;
+  await lane.active.commands.get('viq').handler('pair fixture-pairing-code', lane.active.ctx);
+  assert.equal(lane.runtime.credential, replacementCredential);
+  assert.equal(loadCredential(replacementFile), replacementCredential);
+  await lane.active.handlers.get('session_shutdown')({}, lane.active.ctx);
+  lane.active = createInstance(module.viqWorker, 'replacement-credential-session', notifications, messages);
+  await lane.active.handlers.get('session_start')({}, lane.active.ctx);
+  await lane.active.tools.get('viq_take').execute('replacement-take', { ticket_id: 'ABC-1', credential_file: replacementFile }, undefined, undefined, lane.active.ctx);
+  assert.equal(lane.runtime.status().ticket, 'ABC-1');
+  return lane.runtime.current;
+}
+
+const revokedResponse = () => Response.json({ error: { code: 'device_revoked' } }, { status: 401 });
+
+test('retired settled 401 cannot invalidate a replacement credential selected through the extension', async t => {
+  const root = await realpath(await isolatedViqConfig(t, 'viq-settled-retired-401-'));
+  const initialFile = path.join(root, 'lane-a.json'), replacementFile = path.join(root, 'lane-b.json');
+  saveCredential(credential, initialFile);
+  const module = await freshExtension(root, 'retired-401-replacement');
+  const ticketRead = deferred(), fixture = fixtureFetch(ticketRead), notifications = [], messages = [];
+  const lane = await startedPersistent(module, fixture.implementation, notifications, messages, undefined, initialFile);
+
+  lane.active.handlers.get('agent_settled')({}, lane.active.ctx);
+  await eventually(() => fixture.calls.some(call => call.method === 'GET' && call.route === '/v1/tickets/ABC-1' && call.authorization === `Bearer ${credential}`), 'settled GET under credential A did not start');
+  await lane.active.tools.get('viq_release').execute('release', { message: 'Replace fixture credential' });
+  const replacement = await pairAndStartReplacement(lane, module, notifications, messages, replacementFile);
+  const replacementClaimToken = replacement.claim_token;
+
+  ticketRead.resolve(revokedResponse());
+  await flush();
+  await flush();
+  assert.equal(lane.runtime.current, replacement, 'retired GET must preserve the replacement claim identity');
+  assert.equal(lane.runtime.current.claim_token, replacementClaimToken, 'retired GET must preserve the replacement claim token');
+  assert.equal(lane.runtime.credential, replacementCredential, 'retired GET must preserve the replacement in-memory credential');
+  assert.equal(loadCredential(replacementFile), replacementCredential, 'retired GET must preserve the replacement credential file');
+  assert.equal(notifications.filter(item => item.level === 'error').length, 0, 'retired 401 has no active episode to alarm');
+
+  lane.controller.persistent = false;
+  await lane.runtime.release('test cleanup');
+});
+
+test('active settled 401 invalidates its exact credential file and remains visible', async t => {
+  const root = await realpath(await isolatedViqConfig(t, 'viq-settled-active-401-'));
+  const activeFile = path.join(root, 'active-lane.json');
+  saveCredential(credential, activeFile);
+  const module = await freshExtension(root, 'active-401');
+  const ticketRead = deferred(), fixture = fixtureFetch(ticketRead), notifications = [], messages = [];
+  const lane = await startedPersistent(module, fixture.implementation, notifications, messages, undefined, activeFile);
+
+  lane.active.handlers.get('agent_settled')({}, lane.active.ctx);
+  await eventually(() => fixture.calls.some(call => call.method === 'GET' && call.route === '/v1/tickets/ABC-1'), 'active settled GET did not start');
+  ticketRead.resolve(revokedResponse());
+  await eventually(() => lane.runtime.credential === null && notifications.some(item => item.level === 'error'), 'active credential revocation was not invalidated and surfaced');
+  assert.equal(lane.runtime.status().ticket, 'ABC-1', 'credential invalidation must not conceal the active claim');
+  assert.throws(() => loadCredential(activeFile), /ENOENT/, 'active 401 must remove the exact credential file');
+  assert.match(notifications.find(item => item.level === 'error').message, /device_revoked/, 'active 401 must remain visible');
+
+  lane.runtime.setCredential(credential);
+  lane.controller.persistent = false;
+  await lane.runtime.release('test cleanup');
+});
+
+test('retired settlement heartbeat 401 cannot invalidate a replacement credential', async t => {
+  const root = await realpath(await isolatedViqConfig(t, 'viq-settled-heartbeat-401-'));
+  const initialFile = path.join(root, 'lane-a.json'), replacementFile = path.join(root, 'lane-b.json');
+  saveCredential(credential, initialFile);
+  const module = await freshExtension(root, 'retired-heartbeat-401');
+  const ticketRead = deferred(), fixture = fixtureFetch(ticketRead), notifications = [], messages = [];
+  const lane = await startedPersistent(module, fixture.implementation, notifications, messages, undefined, initialFile);
+
+  lane.active.handlers.get('agent_settled')({}, lane.active.ctx);
+  await eventually(() => fixture.calls.some(call => call.method === 'GET' && call.route === '/v1/tickets/ABC-1'), 'settled GET did not start');
+  const heartbeatRead = fixture.holdNextHeartbeat();
+  ticketRead.resolve(Response.json({ ticket: { id: 'ABC-1', claim: { claim_id: 'fixture-claim-1', generation: 1 } } }));
+  await eventually(() => heartbeatRead.started, 'settlement-triggered heartbeat did not start');
+  await lane.active.tools.get('viq_release').execute('release', { message: 'Replace fixture credential during heartbeat' });
+  const replacement = await pairAndStartReplacement(lane, module, notifications, messages, replacementFile);
+  const replacementClaimToken = replacement.claim_token;
+
+  heartbeatRead.resolve(revokedResponse());
+  await flush();
+  await flush();
+  assert.equal(lane.runtime.current, replacement, 'retired heartbeat must preserve the replacement claim identity');
+  assert.equal(lane.runtime.current.claim_token, replacementClaimToken, 'retired heartbeat must preserve the replacement claim token');
+  assert.equal(lane.runtime.credential, replacementCredential, 'retired heartbeat must preserve the replacement in-memory credential');
+  assert.equal(loadCredential(replacementFile), replacementCredential, 'retired heartbeat must preserve the replacement credential file');
+  assert.equal(notifications.filter(item => item.level === 'error').length, 0, 'retired heartbeat 401 has no active episode to alarm');
+
   lane.controller.persistent = false;
   await lane.runtime.release('test cleanup');
 });
