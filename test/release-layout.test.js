@@ -9,7 +9,7 @@ const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 
 test('release name is derived from package metadata', () => {
   assert.equal(releaseNameFor({ version: '9.8.7' }), 'viqueue-v9.8.7-rc');
-  assert.equal(releaseNameFor(packageJson), 'viqueue-v0.5.1-rc');
+  assert.equal(releaseNameFor(packageJson), 'viqueue-v0.5.2-rc');
 });
 
 test('release staging copies every built bin and src output', async () => {

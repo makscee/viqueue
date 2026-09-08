@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -8,10 +8,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
 import { createApp } from '../src/server.js';
 import { Store } from '../src/store.js';
+import { loadCredential, removeCredential, saveCredential } from '../extensions/viq-worker/credential-store.mjs';
+
+const isolatedConfig=await mkdtemp(path.join(tmpdir(),'viq-cli-adoption-config-'));
+process.env.XDG_CONFIG_HOME=isolatedConfig;process.env.VIQ_CREDENTIAL_FILE=path.join(isolatedConfig,'missing-credential.json');process.env.VIQ_DEVICE_TOKEN='';
 
 const exec = promisify(execFile), cli = path.resolve('bin/viq.js');
 const auth = (credential, session) => ({ authorization: `Bearer ${credential}`, 'x-viq-session-capability': session, 'content-type': 'application/json' });
-const run = async (args, env = {}) => exec(process.execPath, [cli, ...args], { cwd: path.resolve('.'), env: { ...process.env, VIQ_DEVICE_TOKEN: '', VIQ_SESSION_CAPABILITY: '', ...env } });
+const run = async (args, env = {}) => {const childEnv={...process.env,XDG_CONFIG_HOME:isolatedConfig,VIQ_CREDENTIAL_FILE:path.join(isolatedConfig,'missing-credential.json'),VIQ_DEVICE_TOKEN:'',VIQ_SESSION_CAPABILITY:'',...env};for(const[key,value]of Object.entries(childEnv))if(value===undefined)delete childEnv[key];return exec(process.execPath,[cli,...args],{cwd:path.resolve('.'),env:childEnv})};
 
 async function fixture(t) {
   const file = path.join(await mkdtemp(path.join(tmpdir(), 'viq-cli-adoption-')), 'db.sqlite');
@@ -79,6 +83,30 @@ test('CLI blocking question releases claim, coordinator answer retries, and a fr
   assert.equal(reclaimed.ticket.state, 'Working'); assert.equal(reclaimed.ticket.claim.generation, firstClaim.ticket.claim.generation + 1);
   const completed = JSON.parse((await run(['ticket', 'complete', 'ABC-1', ...fenceArgs(reclaimed), '--request-id', 'completion-after-answer-1', '--outcome', 'Answered, reclaimed, and completed.', '--server', f.base, '--device-token', paired.credential], freshEnv)).stdout);
   assert.equal(completed.ticket.state, 'Done'); assert.equal(completed.ticket.claim, null);
+});
+
+test('credential store load, save, and remove honor VIQ_CREDENTIAL_FILE', async (t) => {
+  const root = await mkdtemp(path.join(await realpath(tmpdir()), 'viq-env-credential-'));
+  const file = path.join(root, 'lane', 'worker.json'), credential = `worker.${'x'.repeat(40)}`;
+  const previous = process.env.VIQ_CREDENTIAL_FILE;process.env.VIQ_CREDENTIAL_FILE = file;
+  t.after(() => { if (previous === undefined) delete process.env.VIQ_CREDENTIAL_FILE; else process.env.VIQ_CREDENTIAL_FILE = previous; });
+  assert.equal(saveCredential(credential), file);assert.equal(loadCredential(), credential);assert.equal(removeCredential(), true);assert.equal(removeCredential(), false);
+});
+
+test('CLI safely loads the default paired credential and an explicit coordinator credential file', async (t) => {
+  const f = await fixture(t);
+  const paired = JSON.parse((await run(['device', 'pair', f.code, '--server', f.base])).stdout);
+  const configRoot = await mkdtemp(path.join(await realpath(tmpdir()), 'viq-cli-credentials-'));
+  const defaultFile = path.join(configRoot, 'viq', 'credential.json');
+  saveCredential(paired.credential, defaultFile);
+  const workerResult = await run(['device', 'me', '--server', f.base], { XDG_CONFIG_HOME: configRoot, VIQ_CREDENTIAL_FILE: undefined });
+  assert.equal(JSON.parse(workerResult.stdout).device.id, 'worker');assert.equal(workerResult.stderr, '');
+
+  const coordinatorFile = path.join(configRoot, 'viq', 'coordinator.json');
+  saveCredential(f.coordinator, coordinatorFile);
+  const coordinatorResult = await run(['project', 'list', '--credential-file', coordinatorFile, '--server', f.base], { XDG_CONFIG_HOME: path.join(configRoot, 'unused') });
+  assert.deepEqual(JSON.parse(coordinatorResult.stdout).projects.map((project) => project.key), ['ABC']);assert.equal(coordinatorResult.stderr, '');
+  for (const secret of [paired.credential, f.coordinator]) { assert.doesNotMatch(workerResult.stdout + workerResult.stderr + coordinatorResult.stdout + coordinatorResult.stderr, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))); }
 });
 
 test('Store.init migrates pre-completion receipts and completion remains retryable', async () => {

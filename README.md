@@ -1,6 +1,6 @@
 # viqueue
 
-viqueue is a minimalist pull-based ticket board for a private, single-operator dogfood environment. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.5.1 remains a prerelease and is not production-ready.
+viqueue is a minimalist pull-based ticket board for a private, single-operator dogfood environment. The CLI is `viq`; ticket IDs look like `ABC-123`. v0.5.2 remains a prerelease and is not production-ready.
 
 **Product-boundary authority:** [ADR 0013: Viq product charter](docs/adr-0013-product-charter.md). Viq coordinates work, not workers: independently started workers request fenced claims, while their runtimes and artifact systems execute and publish outside the Viq kernel. See the [documentation index](docs/README.md).
 
@@ -31,7 +31,7 @@ viq-bootstrap --storage ./data/viqueue.sqlite --id coord --name "Coordinator"
 node dist/src/server.js --storage=./data/viqueue.sqlite
 ```
 
-`viq-bootstrap` is a local install action and prints the first coordinator credential once. Supply a credential with `--device-token` or `VIQ_DEVICE_TOKEN`. Worker pairing binds an existing worker actor to the supplied device ID and name:
+`viq-bootstrap` is a local install action and prints the first coordinator credential once. Credential precedence for authenticated `viq` commands is explicit `--device-token`, non-empty `VIQ_DEVICE_TOKEN`, then the owner-only paired credential file. The default file is `$XDG_CONFIG_HOME/viq/credential.json` when that variable is set, otherwise `~/.config/viq/credential.json`; select a separate coordinator or worker identity with `--credential-file /absolute/path` or `VIQ_CREDENTIAL_FILE`. The selector is transport-neutral and the file must use the paired `{"credential":"..."}` format enforced by the safe loader; credentials are never printed by authenticated commands. Worker pairing binds an existing worker actor to the supplied device ID and name:
 
 ```text
 viq project create ABC --device-token COORDINATOR_CREDENTIAL
@@ -73,12 +73,17 @@ MCP uses `VIQ_URL` and `VIQ_DEVICE_TOKEN` and exposes read-only device/task/stat
 /viq pair WORKER_CODE
 /viq status
 /viq poll
+/viq take PROJECT-N
 /viq once
 /viq stop
 /viq unpair
 ```
 
-The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` turns one interactive Pi process into one persistent worker lane that atomically considers generic `Agent` tickets across all projects; `Unassigned` and `Human` tickets are never claimed. Every ticket execution uses a new preserved Pi session, so no session contains two ticket IDs. A settled model turn does not free the lane: the extension first reads canonical Viq state and may only continue its same fenced claim. Blocking questions and terminal/release boundaries end that episode; later eligible work is reconstructed from canonical history in a fresh session. `/viq once` performs one diagnostic claim attempt without persistence. The Machines view shows worker state, heartbeats, and any current ticket without secrets. `viq_submit` records a structured backend-neutral Review Bundle already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, publish artifacts, merge, release, or deploy.
+The bundled Pi adapter is a neutral Viq edge client. Ordinary `/viq poll` turns one interactive Pi process into one persistent worker lane that atomically considers generic `Agent` tickets across all projects; `Unassigned` and `Human` tickets are never claimed. `/viq take PROJECT-N [--credential-file /absolute/path]` instead creates a fresh preserved Pi session and claims only that exact ticket through the same HTTP session and claim-fence runtime path, with no fallback selection. Every ticket execution uses a new preserved Pi session, so no session contains two ticket IDs. A settled model turn does not free the lane: the extension first reads canonical Viq state and may only continue its same fenced claim. Blocking questions and terminal/release boundaries end that episode; later eligible work is reconstructed from canonical history in a fresh session. `/viq once` performs one diagnostic claim attempt without persistence.
+
+For a runtime that already creates a fresh native Pi episode, typed `viq_take` accepts `ticket_id` and an optional absolute `credential_file`—never a token—and returns canonical non-secret ticket/history without injecting a duplicate prompt. It denies an active episode and denies reuse after completion, release, or another terminal boundary. `viq_complete` calls the existing public direct-completion API with a concise outcome and optional immutable opaque evidence references, then ends the episode under the same cleanup contract. Legacy `viq_submit` remains available for compatibility. One device may hold only one active claim, so concurrent lanes need distinct paired device identities and owner-only credential files; set `VIQ_CREDENTIAL_FILE` per Pi process or pass the explicit selector where supported. There is no automatic pairing or identity selection.
+
+The Machines view shows worker state, heartbeats, and any current ticket without secrets. `viq_submit` records a structured backend-neutral Review Bundle already produced elsewhere. The adapter does not synchronize repositories, execute artifact tooling, publish artifacts, merge, release, or deploy.
 
 ## Migration and rollback
 
