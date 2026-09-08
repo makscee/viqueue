@@ -3,6 +3,9 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 prefix="${VIQ_PREFIX:-$HOME/.local}"
 root="$prefix/lib/viqueue"
+atomic_replace_pointer(){
+  node --input-type=module -e "import{renameSync}from'node:fs';renameSync(process.argv[1],process.argv[2])" "$1" "$2"
+}
 current=$(readlink -f "$root/current")
 previous=$(readlink -f "$root/previous")
 [[ -d "$current" && -d "$previous" && "$current" != "$previous" ]] || { echo 'no previous release to restore' >&2; exit 1; }
@@ -40,6 +43,6 @@ if [[ "${VIQ_RESTORE_STORAGE:-}" == 1 ]]; then
   moved_main=0; moved_wal=0; moved_shm=0
   trap - ERR
 fi
-mv -Tf "$root/current.tmp" "$root/current"
-mv -Tf "$root/previous.tmp" "$root/previous"
+atomic_replace_pointer "$root/current.tmp" "$root/current"
+atomic_replace_pointer "$root/previous.tmp" "$root/previous"
 printf 'restored viqueue release %s\n' "$(basename "$previous")"

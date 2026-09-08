@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 ## [Unreleased]
 
+- Make local install and rollback release-pointer replacement atomic and portable across GNU/Linux and BSD/macOS.
+
 ## [0.5.0] — 2026-09-07
 
 - Make gzip release bundles reproducible across build times.
