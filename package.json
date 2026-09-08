@@ -1,6 +1,6 @@
 {
   "name": "viqueue",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Minimal pull-based central ticket dispatcher for agents and humans",
   "type": "module",
   "bin": {

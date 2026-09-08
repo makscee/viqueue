@@ -4,7 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-09-07
+
 - Make local install and rollback release-pointer replacement atomic and portable across GNU/Linux and BSD/macOS.
+
+Release notes: [`release-notes/v0.5.1.md`](release-notes/v0.5.1.md).
 
 ## [0.5.0] — 2026-09-07
 
