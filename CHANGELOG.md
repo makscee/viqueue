@@ -4,6 +4,14 @@ This project follows [Semantic Versioning](https://semver.org/) for package meta
 
 ## [Unreleased]
 
+## [0.5.3] — prerelease
+
+- Fence each asynchronous Pi settlement observation to its exact runtime episode, claim, and worker session before acting on its response.
+- Retire resolved or rejected observations after completion, release, blocking shutdown, or session replacement without stale heartbeats or rotation decisions.
+- Surface settlement failures that still belong to the active episode without changing polling, retry, claim, or fail-closed reconciliation semantics.
+
+Release notes: [`release-notes/v0.5.3.md`](release-notes/v0.5.3.md).
+
 ## [0.5.2] — prerelease
 
 - Bind typed Pi ticket admission to the durable native session transcript rather than process rotation state.
