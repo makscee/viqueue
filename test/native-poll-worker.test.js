@@ -20,6 +20,19 @@ test('native poll is single-flight, heartbeats waiting/working, and requires a f
 
 test('worker presence rejects stale fenced ticket heartbeat',async t=>{const f=await fixture(t),runtime=new ViqWorkerRuntime({baseUrl:f.base,credential:f.credential,pollMs:100000});await runtime.start();const bad=await fetch(`${f.base}/v1/workers/heartbeat`,{method:'POST',headers:{authorization:`Bearer ${f.credential}`,'x-viq-session-capability':'bad','content-type':'application/json'},body:JSON.stringify({mode:'working',ticket_id:'ABC-2',claim_id:'bad',generation:99,claim_token:'bad'})});assert.equal(bad.status,409);await runtime.stop()});
 
+test('independent native worker sessions on one paired device claim and release concurrently',async t=>{
+ const f=await fixture(t),first=new ViqWorkerRuntime({baseUrl:f.base,credential:f.credential,pollMs:100000}),second=new ViqWorkerRuntime({baseUrl:f.base,credential:f.credential,pollMs:100000});
+ await Promise.all([first.start(),second.start()]);
+ assert.deepEqual(new Set([first.status().ticket,second.status().ticket]),new Set(['ABC-1','ABC-2']));
+ assert.notEqual(first.session.id,second.session.id);
+ const survivor=second.status().ticket,firstTicket=first.status().ticket;
+ await first.release('first session complete');
+ assert.equal((await f.app.viqStore.getTicket(firstTicket)).claim,null);
+ assert.equal((await second.settled()).active,true);
+ assert.equal((await f.app.viqStore.getTicket(survivor)).claim.session_id,second.session.id);
+ await second.release('second session complete');
+});
+
 test('exact 404/409 claim rejection closes each new HTTP session before a later correct take',async t=>{
  const f=await fixture(t),runtime=new ViqWorkerRuntime({baseUrl:f.base,credential:f.credential,pollMs:100000});
  for(const [ticket,status,code]of[['ABC-999',404,'ticket_not_found'],['ABC-3',409,'ticket_ineligible']]){

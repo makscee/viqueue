@@ -93,7 +93,7 @@ test('VIQ-13 exact-session release reopens; stale and non-owning sessions cannot
   for (const mutation of [() => store.postEvent(ticket.id, { ...firstAuth, session_capability: otherA.session_capability, message: 'no' }), () => store.release(ticket.id, { ...firstAuth, device: b.device.id, session_capability: sessionB.session_capability })]) await assert.rejects(mutation(), (error) => error.code === 'stale_claim');
   await store.closeWorkerSession(a.device.id, sessionA.session_capability);
   await assert.rejects(store.postEvent(ticket.id, { ...firstAuth, message: 'revoked' }), (error) => error.code === 'stale_claim');
-  assert.equal((await store.getTicket(ticket.id)).state, 'Working');
+  assert.equal((await store.getTicket(ticket.id)).state, 'Open');
   const replacement = await store.openWorkerSession(a.device.id); const replacementAuth = { ...firstAuth, session_capability: replacement.session_capability };
   await assert.rejects(store.release(ticket.id, replacementAuth), (error) => error.code === 'stale_claim');
   await store.close();
